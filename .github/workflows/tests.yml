@@ -37,7 +37,9 @@ jobs:
       - name: ruff format --check
         run: poetry run ruff format --check .
 
-  # --- Job typecheck : mypy strict sur palamede_chessboard/ (code package, pas tests)
+  # --- Job typecheck : mypy sur palamede_chessboard/ (code package, pas tests)
+  # NB : ``strict = false`` dans pyproject.toml pour la Phase 0 — à durcir
+  # progressivement en Phase 1/2 au fur et à mesure de l'extraction code.
   typecheck:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

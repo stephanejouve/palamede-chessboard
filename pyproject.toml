@@ -23,8 +23,11 @@ ruff = "^0.8.0"
 mypy = "^1.13.0"
 pre-commit = "^4.0.0"
 
-[tool.poetry.scripts]
-mcp-chessboard-server = "palamede_chessboard.mcp_server:main"
+# [tool.poetry.scripts] — entry points ajoutés en Phase 1 quand le code
+# métier sera migré. Nom à finaliser pour éviter la collision avec
+# ``mcp-chessboard-server`` d'``outillages`` pendant la cohabitation
+# (cf. nit CD review #1 : préfixer ``palamede-`` ou attendre que les
+# modules outillages soient supprimés en Phase N).
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

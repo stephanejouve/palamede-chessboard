@@ -16,7 +16,7 @@ Extrait du monorepo [`outillages`](https://github.com/stephanejouve/outillages) 
 | 0 | Skeleton (pyproject, structure, CI 3 jobs, placeholder test) | **en cours** — cette PR |
 | 1 | Extraction code 1:1 depuis outillages + nettoyage PII + ajustement imports | à venir |
 | 2 | Refactor god scripts en sous-modules thématiques | à venir |
-| N | Suppression des modules chess dans outillages (fois palamede opérationnel) | à venir |
+| N | Suppression des modules chess dans outillages (une fois palamede opérationnel) | à venir |
 
 ## Développement
 
