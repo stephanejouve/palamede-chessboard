@@ -34,6 +34,12 @@ poetry run pytest
 - Reviews stale dismissées automatiquement sur chaque push.
 - Les 3 jobs CI (`lint`, `typecheck`, `pytest`) doivent être verts.
 
+## Release
+
+Auto-bump via [release-please](https://github.com/googleapis/release-please-action) sur merge vers `main`. Les Conventional Commits (`feat:`, `fix:`, `BREAKING CHANGE:`) accumulés dans les PR mergées sont reflétés dans une **PR de release** ouverte en continu — merger cette PR produit le tag `vX.Y.Z` + une release GitHub avec changelog.
+
+Pattern pilote pour généralisation cross-repos (candidate à propager vers `outillages`, `telephonIA`, `amalthee`, `mcp-proxy`).
+
 ## Licence
 
 MIT (voir [`LICENSE`](LICENSE)).

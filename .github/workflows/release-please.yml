@@ -1,0 +1,36 @@
+name: release-please
+
+# Auto-bump + tag + changelog + release GitHub depuis les Conventional Commits
+# présents dans les PR mergées vers main. Pattern pilote pour généralisation
+# cross-repos (candidat à propager vers outillages / telephonIA / amalthee /
+# mcp-proxy / etc. selon décision Stéphane).
+#
+# release-please accumule les commits mergés dans une **PR de release**
+# ouverte en continu sur main : titre ``chore: release X.Y.Z``, body avec
+# le changelog, mise à jour du ``pyproject.toml`` + ``__init__.py`` (via
+# marker ``x-release-please-version``). Merger cette PR produit le tag
+# ``vX.Y.Z`` + une release GitHub.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write          # écrire CHANGELOG + créer tags / releases
+  pull-requests: write     # ouvrir / mettre à jour la PR de release
+
+concurrency:
+  # Sérialise les runs — pas d'annulation (``cancel-in-progress: false``)
+  # pour ne pas perdre un bump au profit du suivant.
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
