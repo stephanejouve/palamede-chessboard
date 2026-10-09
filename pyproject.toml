@@ -1,0 +1,55 @@
+[tool.poetry]
+name = "palamede-chessboard"
+version = "0.0.1"
+description = "Serveur MCP de parties d'échecs multi-agents (extrait de outillages)"
+authors = ["Stéphane Jouve"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "palamede_chessboard"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+chess = "^1.10.0"
+mcp = "^1.26.0"
+fastapi = "^0.115.0"
+uvicorn = "^0.32.0"
+pydantic = "^2.8.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.0.0"
+pytest-asyncio = "^1.0.0"
+pytest-cov = "^6.0.0"
+ruff = "^0.8.0"
+mypy = "^1.13.0"
+pre-commit = "^4.0.0"
+
+# [tool.poetry.scripts] — entry points ajoutés en Phase 1 quand le code
+# métier sera migré. Nom à finaliser pour éviter la collision avec
+# ``mcp-chessboard-server`` d'``outillages`` pendant la cohabitation
+# (cf. nit CD review #1 : préfixer ``palamede-`` ou attendre que les
+# modules outillages soient supprimés en Phase N).
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "C", "B", "UP"]
+ignore = ["E501", "B008", "C901"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
