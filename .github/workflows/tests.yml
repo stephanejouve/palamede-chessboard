@@ -1,0 +1,96 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # --- Job lint : rapide (~30s), bloque les PR qui ne respectent pas ruff.
+  # Volontairement séparé de pytest pour feedback rapide et parallèle.
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install poetry
+        run: pipx install poetry
+
+      - name: Install dependencies (dev only, pas de stockfish nécessaire)
+        run: poetry install --no-interaction --only=main,dev
+
+      - name: ruff check
+        run: poetry run ruff check .
+
+      - name: ruff format --check
+        run: poetry run ruff format --check .
+
+  # --- Job typecheck : mypy strict sur palamede_chessboard/ (code package, pas tests)
+  typecheck:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: mypy
+        # Scope = package code uniquement. Les tests restent sans types
+        # stricts (fixtures/mocks produisent trop de bruit mypy).
+        run: poetry run mypy palamede_chessboard
+
+  # --- Job pytest : couverture tests + engine réel stockfish.
+  pytest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      # Stockfish via apt — teste l'intégration python-chess ↔ UCI
+      # réelle plutôt que de mocker partout. Détecte régressions UCI
+      # silencieuses qu'un mock laisserait passer.
+      - name: Install stockfish (engine)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y stockfish
+          stockfish --help 2>&1 | head -3 || true
+
+      - name: Install poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: pytest + coverage
+        run: poetry run pytest -q --cov=palamede_chessboard --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          retention-days: 7
