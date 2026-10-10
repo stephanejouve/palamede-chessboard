@@ -30,7 +30,19 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      # Token GH App (magma-leader-bot) : contourne la restriction GitHub qui
+      # empêche ``secrets.GITHUB_TOKEN`` de déclencher d'autres workflows (ex :
+      # ``tests.yml``) sur la PR de release qu'ouvre release-please. Sans ça,
+      # la PR de release resterait bloquée dès que les 3 checks CI deviennent
+      # obligatoires via ruleset ``main protection``.
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.MAGMA_LEADER_BOT_APP_ID }}
+          private-key: ${{ secrets.MAGMA_LEADER_BOT_PRIVATE_KEY }}
+
       - uses: googleapis/release-please-action@v4
         with:
+          token: ${{ steps.app-token.outputs.token }}
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
