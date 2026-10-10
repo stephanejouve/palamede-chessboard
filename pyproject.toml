@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "palamede-chessboard"
-version = "0.0.1"
+version = "0.1.0"
 description = "Serveur MCP de parties d'échecs multi-agents (extrait de outillages)"
 authors = ["Stéphane Jouve"]
 license = "MIT"
