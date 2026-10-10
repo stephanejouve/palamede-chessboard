@@ -23,273 +23,58 @@ that class of mistake impossible by construction.
 
 from __future__ import annotations
 
-import json
 import logging
-import re
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
 
 import chess
 import chess.pgn
 
+from palamede_chessboard.commentary import get_commentary, post_commentary
+from palamede_chessboard.errors import (
+    ChessboardError,
+    GameAlreadyExistsError,
+    GameNotFoundError,
+    IllegalMoveError,
+    InvalidGameStateError,
+    StalePlyError,
+)
+from palamede_chessboard.metadata import (
+    DEFAULT_TIME_CONTROL_FORMAT,
+    GameMetadata,
+    TimeControl,
+)
+from palamede_chessboard.paths import (
+    COMMENTARY_DIR_NAME,
+    GAME_ID_PATTERN,
+    GAMES_DIR,
+    _pgn_path,
+    _validate_game_id,
+)
+from palamede_chessboard.rules import ValidationResult, validate_san_strict
+
+__all__ = [
+    "COMMENTARY_DIR_NAME",
+    "ChessboardError",
+    "DEFAULT_TIME_CONTROL_FORMAT",
+    "GAMES_DIR",
+    "GAME_ID_PATTERN",
+    "GameAlreadyExistsError",
+    "GameMetadata",
+    "GameNotFoundError",
+    "GameState",
+    "IllegalMoveError",
+    "InvalidGameStateError",
+    "StalePlyError",
+    "TimeControl",
+    "ValidationResult",
+    "get_commentary",
+    "list_games",
+    "post_commentary",
+    "validate_san_strict",
+]
+
 log = logging.getLogger(__name__)
-
-GAMES_DIR = Path("/Users/Shared/games")
-COMMENTARY_DIR_NAME = "commentary"
-GAME_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]{1,64}$")
-
-
-class ChessboardError(Exception):
-    """Base error raised by chessboard_state."""
-
-
-class IllegalMoveError(ChessboardError):
-    """Raised when a SAN move is rejected by ``chess.Board.parse_san``."""
-
-
-class GameNotFoundError(ChessboardError):
-    """Raised when a referenced ``game_id`` has no PGN on disk."""
-
-
-class GameAlreadyExistsError(ChessboardError):
-    """Raised on ``create`` when the ``game_id`` PGN already exists."""
-
-
-class InvalidGameStateError(ChessboardError):
-    """Raised when an operation is illegal in the current game state.
-
-    Examples: ``resign`` after the game already ended ; ``agree_draw``
-    with no pending offer ; ``agree_draw`` on one's own offer.
-    """
-
-
-class StalePlyError(ChessboardError):
-    """Raised when ``play_move(expected_ply=…)`` is given but the board
-    is no longer at that ply (another player — or the same agent in a
-    duplicate invocation — already pushed a move since the caller read
-    the state).
-
-    Attributes ``current_ply`` and ``expected_ply`` are exposed so the
-    MCP handler can surface them in the structured error payload.
-    """
-
-    def __init__(self, current_ply: int, expected_ply: int) -> None:
-        super().__init__(f"Stale ply: expected {expected_ply}, board at {current_ply}")
-        self.current_ply = current_ply
-        self.expected_ply = expected_ply
-
-
-@dataclass(frozen=True)
-class ValidationResult:
-    """Outcome of :func:`validate_san_strict`.
-
-    Inlined in BT-001 M1 (palamede extraction) — the standalone
-    ``chess_arbiter`` module that owns strict validation + move
-    request context is extracted in BT-003 (palamede#8). Keeping the
-    rules self-contained in ``chessboard_state`` for M1 avoids a
-    cross-module dependency cycle during the bottom-up migration.
-    """
-
-    ok: bool
-    reason: str = ""
-
-
-def validate_san_strict(board: chess.Board, san: str) -> ValidationResult:
-    """Return ``ok=True`` iff ``san`` parses on ``board`` AND its suffix
-    symbols match the actual move state.
-
-    Rejected on :
-
-    - ``chess.IllegalMoveError`` / ``chess.InvalidMoveError`` /
-      ``chess.AmbiguousMoveError`` from ``parse_san``.
-    - ``'x' in san`` but ``board.is_capture(move) is False`` (ghost capture).
-    - ``'+' in san`` but ``board.gives_check(move) is False``.
-    - ``'#' in san`` but the resulting position isn't checkmate.
-    - Missing ``'+'`` or ``'#'`` when the move actually delivers check /
-      checkmate — the SAN is still ambiguous and we require the player to
-      announce what they see.
-
-    The board is not mutated. Rationale : ``python-chess`` accepts SAN
-    in tolerant mode (``Bxb6`` on an empty ``b6`` parses as ``Bb6``,
-    masking a player hallucination of the position — partie 004 round
-    16 incident).
-    """
-    try:
-        move = board.parse_san(san)
-    except (
-        chess.IllegalMoveError,
-        chess.InvalidMoveError,
-        chess.AmbiguousMoveError,
-    ) as exc:
-        return ValidationResult(False, f"illegal SAN: {exc}")
-
-    has_x = "x" in san
-    has_plus = "+" in san
-    has_hash = "#" in san
-
-    is_capture = board.is_capture(move)
-    if has_x != is_capture:
-        target = chess.square_name(move.to_square)
-        return ValidationResult(
-            False,
-            (
-                f"'x' annoncé sans capture réelle (case {target} vide ou même couleur)"
-                if has_x
-                else f"capture réelle sur {target} sans 'x' dans le SAN"
-            ),
-        )
-
-    gives_check = board.gives_check(move)
-
-    board.push(move)
-    try:
-        is_mate = board.is_checkmate()
-    finally:
-        board.pop()
-
-    if has_hash != is_mate:
-        return ValidationResult(
-            False,
-            (
-                "'#' annoncé sans échec et mat réel"
-                if has_hash
-                else "échec et mat réel sans '#' dans le SAN"
-            ),
-        )
-    if has_plus != gives_check and not has_hash:
-        return ValidationResult(
-            False,
-            ("'+' annoncé sans échec réel" if has_plus else "échec réel sans '+' dans le SAN"),
-        )
-
-    return ValidationResult(True)
-
-
-#: Default time control for new tournament games (chantier ELO volet 3a,
-#: Stéphane arbitrage 2026-10-05) : « classique » 30 min + 30 sec Fischer,
-#: adaptée à la cadence par correspondance des 4 agents. Les anciennes
-#: parties sans header TimeControl restent ``"unrated"`` grâce au
-#: ``.get("TimeControl", "unrated")`` explicite dans le parser PGN
-#: (``GameState.load``).
-DEFAULT_TIME_CONTROL_FORMAT = "30+30"
-
-
-@dataclass
-class TimeControl:
-    """Optional time-control envelope attached to a game.
-
-    ``format`` is a free-form label (``"5+3"``, ``"15+10"``,
-    ``"30+30"``, ``"unrated"``) ; the clock itself lives in
-    :mod:`palamede_chessboard.chessboard_clock` and is wired by the MCP server
-    on ``chess_create_game`` (``ClockState.init_from_time_control``).
-
-    Default = :data:`DEFAULT_TIME_CONTROL_FORMAT` so every new
-    tournament game ships with a clock unless the caller explicitly
-    overrides to ``"unrated"``. Legacy PGN loading still falls back
-    to ``"unrated"`` for backward compat.
-    """
-
-    format: str = DEFAULT_TIME_CONTROL_FORMAT
-    start_seconds: int | None = None
-    increment_seconds: int | None = None
-
-
-@dataclass
-class GameMetadata:
-    """Identity + headers carried by a game alongside its PGN."""
-
-    game_id: str
-    event: str = ""
-    site: str = ""
-    date: str = field(default_factory=lambda: datetime.now(UTC).strftime("%Y.%m.%d"))
-    round: str = "1"
-    white: str = ""
-    black: str = ""
-    arbiter: str | None = None
-    spectators: list[str] = field(default_factory=list)
-    time_control: TimeControl = field(default_factory=TimeControl)
-    result: str = "*"
-    annotator: str | None = None
-    opening: str | None = None
-    eco: str | None = None
-    #: Pending draw offer awaiting agree/decline. ``{"by": "white"|"black", "ply": int}``.
-    #: Cleared on ``agree_draw`` (result → 1/2-1/2), ``decline_draw``, or resign.
-    draw_offer: dict | None = None
-    #: Termination reason label added when the game ends via a non-checkmate
-    #: path (resign, draw agreed). E.g. ``"white resigns"``, ``"draw agreed"``.
-    #: Rendered as a PGN ``{...}`` comment before the result marker.
-    termination_note: str | None = None
-    #: Whether this game counts for Elo rating. Server games default to
-    #: ``True`` ; imports (lichess, GM databases, …) carry no ``Rated``
-    #: header and are filtered out by :func:`palamede_chessboard.chess_elo.pgn_scan._parse_rated_game`.
-    #: Stéphane arbitrage 2026-10-03 : the Elo perimeter is driven by this
-    #: dedicated marker, not by the ``Site`` header.
-    rated: bool = True
-
-    def to_pgn_headers(self) -> dict[str, str]:
-        """Return the subset of fields that map onto PGN ``[Tag "value"]`` headers."""
-        headers: dict[str, str] = {
-            "Event": self.event,
-            "Site": self.site,
-            "Date": self.date,
-            "Round": self.round,
-            "White": self.white,
-            "Black": self.black,
-            "Result": self.result,
-        }
-        if self.annotator:
-            headers["Annotator"] = self.annotator
-        if self.opening:
-            headers["Opening"] = self.opening
-        if self.eco:
-            headers["ECO"] = self.eco
-        if self.arbiter:
-            headers["Arbiter"] = self.arbiter
-        if self.spectators:
-            headers["Spectators"] = ",".join(self.spectators)
-        if self.time_control.format != "unrated":
-            headers["TimeControl"] = self.time_control.format
-        if self.draw_offer:
-            headers["DrawOffer"] = f"{self.draw_offer['by']}:{self.draw_offer['ply']}"
-        if self.termination_note:
-            headers["Termination"] = self.termination_note
-        if self.rated:
-            # Elo perimeter marker (Stéphane arbitrage 2026-10-03). Only
-            # written when True so an imported PGN that happens to pass
-            # through our writer path stays excluded without a dedicated
-            # ``rated=False`` opt-out call.
-            headers["Rated"] = "true"
-        return headers
-
-    def resolve_side(self, by: str) -> str:
-        """Return ``"white"`` or ``"black"`` given either side or player name.
-
-        Raises :class:`ChessboardError` if ``by`` cannot be resolved.
-        """
-        if by in ("white", "black"):
-            return by
-        if by and by == self.white:
-            return "white"
-        if by and by == self.black:
-            return "black"
-        raise ChessboardError(
-            f"Cannot resolve {by!r} to a side "
-            f"(expected 'white', 'black', {self.white!r}, or {self.black!r})"
-        )
-
-
-def _validate_game_id(game_id: str) -> None:
-    if not GAME_ID_PATTERN.match(game_id):
-        raise ChessboardError(f"Invalid game_id {game_id!r}: must match {GAME_ID_PATTERN.pattern}")
-
-
-def _pgn_path(games_dir: Path, game_id: str) -> Path:
-    return games_dir / f"{game_id}.pgn"
-
-
-def _commentary_path(games_dir: Path, game_id: str) -> Path:
-    return games_dir / COMMENTARY_DIR_NAME / f"{game_id}.jsonl"
 
 
 @dataclass
@@ -612,61 +397,6 @@ class GameState:
 
     def raw_pgn(self) -> str:
         return _pgn_path(self.games_dir, self.metadata.game_id).read_text(encoding="utf-8")
-
-
-# -- commentary log (independent of GameState) -------------------------------
-
-
-def post_commentary(
-    game_id: str,
-    *,
-    ply: int,
-    source: str,
-    text: str,
-    games_dir: Path | None = None,
-) -> dict:
-    """Append one commentary line to the per-game JSONL side-car."""
-    _validate_game_id(game_id)
-    games_dir = games_dir or GAMES_DIR
-    path = _commentary_path(games_dir, game_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    entry = {
-        "ts": datetime.now(UTC).isoformat(),
-        "ply": int(ply),
-        "source": source,
-        "text": text,
-    }
-    with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(entry, ensure_ascii=False))
-        f.write("\n")
-    return entry
-
-
-def get_commentary(
-    game_id: str,
-    *,
-    ply: int | None = None,
-    games_dir: Path | None = None,
-) -> list[dict]:
-    """Return commentary entries (all or filtered by ``ply``)."""
-    _validate_game_id(game_id)
-    games_dir = games_dir or GAMES_DIR
-    path = _commentary_path(games_dir, game_id)
-    if not path.exists():
-        return []
-    entries: list[dict] = []
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                entry = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if ply is None or entry.get("ply") == ply:
-                entries.append(entry)
-    return entries
 
 
 # -- game listing (independent of GameState) ---------------------------------
