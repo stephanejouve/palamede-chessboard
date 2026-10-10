@@ -28,9 +28,17 @@ def ratings_path(games_dir: Path | None = None) -> Path:
 #: Default mode when the cache file is created from scratch. ``0o664`` keeps
 #: the file group-writable so the four agents (admin, Leader, Junior, CD)
 #: can refresh ``ratings.json`` from their own MCP server without locking
-#: each other out. CD regression report 2026-10-03 : the previous
-#: :func:`tempfile.mkstemp` → ``os.replace`` chain stripped the mode down
-#: to ``0o600`` because mkstemp applies umask ``0o077``.
+#: each other out. CD regression report 2026-10-03 (outillages#283) : the
+#: previous :func:`tempfile.mkstemp` → ``os.replace`` chain stripped the
+#: mode down to ``0o600`` because mkstemp applies umask ``0o077``. The
+#: explicit ``os.chmod`` below is therefore immunised against the local
+#: umask of the viewer process (``0o077`` on the BT-001 install).
+#:
+#: ``path.parent.mkdir(exist_ok=True)`` on L60, by contrast, DOES inherit
+#: the ambient umask — in production the games directory
+#: (``/Users/Shared/games``) is pre-created by the install, so the mode
+#: of the parent is never exercised here. To keep in mind if the
+#: deployment path changes.
 _DEFAULT_SHARED_MODE = 0o664
 
 
@@ -49,11 +57,13 @@ def save_cached_ratings(board: RatingBoard, games_dir: Path | None = None) -> Pa
     partial JSON. Pretty-printed JSON for easy diffing / debugging ;
     **not** read back during normal rebuilds (we re-derive from PGNs).
 
-    **Mode preservation** (CD regression report 2026-10-03) : the mode
-    of the existing cache file is captured via :func:`os.stat` and
-    reapplied to the tmp sibling **before** the atomic replace, so a
-    concurrent reader never sees the mkstemp-default ``0o600``. First
-    creation falls back to :data:`_DEFAULT_SHARED_MODE`.
+    **Mode preservation** (CD regression report 2026-10-03,
+    outillages#283) : the mode of the existing cache file is captured
+    via :func:`os.stat` and reapplied to the tmp sibling **before** the
+    atomic replace, so a concurrent reader never sees the mkstemp-default
+    ``0o600``. First creation falls back to :data:`_DEFAULT_SHARED_MODE`
+    (``0o664`` — group-writable so the triade agents can refresh the
+    cache independently of each other's local umask).
     """
     path = ratings_path(games_dir)
     payload = json.dumps(board.to_dict(), ensure_ascii=False, indent=2) + "\n"
@@ -138,7 +148,7 @@ def _snapshot_sources(games_dir: Path) -> tuple[float, list[str]]:
 def cache_is_stale(games_dir: Path | None = None) -> bool:
     """Return ``True`` if the derived cache no longer reflects the PGN dir.
 
-    CD review cycle 3 PR #295 (2026-10-05) : the previous
+    CD review cycle 3 (outillages#295) : the previous
     ``mtime(cache) vs mtime(games_dir)`` approach required
     :func:`os.utime` after save to prevent the save itself from looking
     like a dir mutation on the next poll. That ``utime`` call fails
@@ -159,7 +169,7 @@ def cache_is_stale(games_dir: Path | None = None) -> bool:
       rebuild and the mtime of a PGN written just before the snapshot
       can coincide to the second. Strict ``>`` requires at least one
       granularity tick of actual newer writing to invalidate the cache.
-      **Known compromise** (CD review 2026-10-05 PR #295 cycle 4) : a
+      **Known compromise** (CD review cycle 4, outillages#295) : a
       PGN written in the **same second** as the snapshot — i.e. a
       file whose mtime equals ``source_mtime`` — is NOT seen as
       stale on a 1 s-grain filesystem. On HFS+ this means a game
@@ -193,7 +203,7 @@ def cache_is_stale(games_dir: Path | None = None) -> bool:
 def rebuild_and_persist_cache(games_dir: Path | None = None) -> tuple[RatingBoard, bool]:
     """Full rebuild + atomic save, with source state captured in the cache.
 
-    CD review cycle 3 PR #295 (2026-10-05) : the snapshot
+    CD review cycle 3 (outillages#295) : the snapshot
     ``(max_mtime, pgn_stems)`` is taken BEFORE the rebuild and stored
     inside the resulting board. A PGN written during the rebuild window
     will land after this snapshot and be detected stale on the next
@@ -222,7 +232,7 @@ def rebuild_and_persist_cache(games_dir: Path | None = None) -> tuple[RatingBoar
 def _warn_cache_write_failure(exc: Exception) -> None:
     """Log a single warning per process when the cache file write fails.
 
-    CD review 2 PR #295 (2026-10-05) : the previous ``except OSError:
+    CD review cycle 2 (outillages#295) : the previous ``except OSError:
     log.warning(...)`` on every poll spammed the logs if the FS was
     full. One per process is enough signal.
     """

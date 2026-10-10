@@ -59,10 +59,11 @@ class RatedGame:
     def chronology_key(self) -> tuple[str, int, str]:
         """``(date, round, game_id)`` — stable ordering INDEPENDENT of mtime.
 
-        CD review 2026-10-06 PR #297 cycle 4 : the key starts with
-        ``date`` (not ``round``) because :mod:`mcp_chessboard_server`
-        ``chess_create_game`` has a hardcoded ``Round "1"`` default,
-        while the CLI ``chess-matchmaking create`` numbers rounds
+        CD review cycle 4 (outillages#297) : the key starts with
+        ``date`` (not ``round``) because the MCP chessboard server
+        (BT-004 à venir) ``chess_create_game`` has a hardcoded
+        ``Round "1"`` default, while the CLI
+        ``chess-matchmaking create`` numbers rounds
         ``max+1``. A manual MCP game created the day AFTER a CLI
         round 3 would otherwise be sorted as "older" (round 1 < round
         3), so its freshly-played pair could be reused immediately on
@@ -118,7 +119,7 @@ class RatingUpdate:
 class RatingBoard:
     """Final state of a rating rebuild : one entry per player + the audit log.
 
-    CD review cycle 3 PR #295 (2026-10-05) : the board also persists the
+    CD review cycle 3 (outillages#295) : the board also persists the
     *source state* that produced it :
 
     * ``source_mtime`` — snapshot of ``max(mtime(*.pgn))`` taken BEFORE

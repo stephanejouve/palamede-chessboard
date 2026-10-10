@@ -48,8 +48,14 @@ def apply_single_update(
     kw = k_factor(white.games)
     kb = k_factor(black.games)
     ea = expected_score(white.rating, black.rating)
-    # Round half-away-from-zero : the FIDE regulations round half up but
-    # Python's banker's rounding is close enough for a private tourney.
+    # Python's built-in ``round`` uses banker's rounding (round-half-to-
+    # even). FIDE regulations prescribe round-half-away-from-zero, but
+    # the delta only kicks in at exact half-points — in Elo arithmetic
+    # that happens at a rate well below the system's own noise for a
+    # private tourney, so we keep ``round`` as-is. CD review palamede#13
+    # (BT-006 V1) : do NOT swap to ``math.floor(x + 0.5)`` here — a
+    # change in rounding mode would silently reshuffle every rating
+    # from the historical PGNs on the next rebuild.
     new_white = PlayerRating(
         rating=round(white.rating + kw * (white_score - ea)),
         games=white.games + 1,

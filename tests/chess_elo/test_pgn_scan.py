@@ -147,7 +147,19 @@ class TestRebuildRatings:
 
 
 class TestCollectWithRatedHeader:
-    def test_server_write_posts_rated_header(self, tmp_path: Path) -> None:
+    def test_fixture_shape(self, tmp_path: Path) -> None:
+        """Smoke test on the ``_create_finished`` fixture itself : it must
+        emit ``[Rated "true"]`` in the generated PGN so the rest of the
+        suite reasons on a realistic input.
+
+        Historical context (CD review palamede#13 BT-006 V1) : before
+        extraction this test verified ``outillages.GameState.save``
+        posted ``[Rated "true"]`` at the server layer. After extraction
+        the fixture writes the PGN directly, so the test is now a
+        fixture self-check — the real server-side contract (that
+        ``chessboard_state`` stamps ``Rated=true`` on every finished
+        game) is covered in BT-001 palamede#6 (admin owner).
+        """
         _create_finished(tmp_path, game_id="g1", white="junior", black="leader", result="1-0")
         text = (tmp_path / "g1.pgn").read_text(encoding="utf-8")
         assert f'[{RATED_HEADER} "true"]' in text

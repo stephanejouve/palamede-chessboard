@@ -12,6 +12,26 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from palamede_chessboard.chess_elo import cache as _cache_mod
+
+
+@pytest.fixture(autouse=True)
+def _cache_write_warned_reset():
+    """Reset ``_cache_write_warned`` between tests.
+
+    CD review palamede#13 (BT-006 V1) : the module-level flag that
+    ensures a single warning per process otherwise leaks across tests
+    — the second ``rebuild_and_persist_cache`` monkey-patched to raise
+    would silently stay quiet. Autouse so every test gets a clean
+    slate without opt-in. Yields control to the test, then resets on
+    teardown as well (symmetric guard).
+    """
+    _cache_mod._cache_write_warned = False
+    yield
+    _cache_mod._cache_write_warned = False
+
 
 def _write_pgn(
     games_dir: Path,

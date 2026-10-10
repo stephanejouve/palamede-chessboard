@@ -5,8 +5,8 @@ Scope (CD design constraints 2026-10-02, Stéphane arbitrage 2026-10-03) :
 * **Perimeter** : only PGNs that carry the ``[Rated "true"]`` header,
   posted at creation by the chessboard-state module. Imports (lichess,
   GM databases, …) never carry it and are filtered out. Historical
-  server games get stamped once-for-all via
-  :mod:`scripts.stamp_rated_history`.
+  server games get stamped once-for-all via the outillages
+  ``scripts.stamp_rated_history`` CLI (outillages#295).
 * **Identities** : player names are normalised via
   :func:`normalize_identity` — ``strip().lower()`` plus a canonical
   alias table (``devleader -> leader``, …) so a same agent is never
