@@ -55,6 +55,7 @@ from palamede_chessboard.chess_elo import (
     load_cached_ratings,
     normalize_identity,
     rebuild_and_persist_cache,
+    rebuild_ratings_from_games_dir,
 )
 
 #: Canonical player pool, sorted for deterministic iteration.
@@ -254,12 +255,21 @@ def _optimal_pairing(
         a, b = sorted(players)
         return [(a, b)]
     best: list[tuple[str, str]] | None = None
-    best_cost: tuple[int, tuple] | None = None
+    best_cost: tuple[int, tuple[tuple[str, str], ...]] | None = None
     for perm in permutations(players):
         # Group consecutive pairs : (p0,p1), (p2,p3), ...
-        pairs = tuple(tuple(sorted((perm[i], perm[i + 1]))) for i in range(0, len(perm), 2))
+        # ``sorted`` on a 2-tuple keeps both elements, so each entry is
+        # a ``tuple[str, str]`` — but mypy only sees ``tuple[str, ...]``
+        # from the generic ``sorted`` + ``tuple(...)`` combo, hence the
+        # explicit ``(x, y)`` unpack below (preserves the length-2
+        # invariant AND the type).
+        pair_list: list[tuple[str, str]] = []
+        for i in range(0, len(perm), 2):
+            x, y = sorted((perm[i], perm[i + 1]))
+            pair_list.append((x, y))
+        pairs: tuple[tuple[str, str], ...] = tuple(pair_list)
         # Canonical form for tie-break : sort the pair list itself.
-        canonical = tuple(sorted(pairs))
+        canonical: tuple[tuple[str, str], ...] = tuple(sorted(pairs))
         if canonical != pairs:
             continue
         total_gap = sum(abs(_rating_of(board, a) - _rating_of(board, b)) for a, b in pairs)
@@ -384,12 +394,29 @@ def schedule_round_from_disk(games_dir: Path | None = None) -> RoundSchedule:
     before the latest finished game still triggers a rebuild. The
     previous version only rebuilt when the cache was absent, which
     produced pairings on a stale Elo.
+
+    CD review 2026-10-10 msg 57604 point (a) : when the cache is
+    fresh-enough per :func:`cache_is_stale` but
+    :func:`load_cached_ratings` still returns ``None`` (missing
+    file, unreadable JSON, schema mismatch…), fall back to a direct
+    rebuild via :func:`rebuild_ratings_from_games_dir` instead of
+    propagating the ``None`` into :func:`schedule_round` (where it
+    would trip typecheck and crash at runtime).
     """
     gdir = games_dir if games_dir is not None else GAMES_DIR
+    board: RatingBoard
     if cache_is_stale(games_dir=gdir):
         board, _ = rebuild_and_persist_cache(games_dir=gdir)
     else:
-        board = load_cached_ratings(games_dir=gdir)
+        cached = load_cached_ratings(games_dir=gdir)
+        if cached is None:
+            # Cache absent / corrupt / schema mismatch → reconstruct
+            # from the raw PGNs without persisting (the stale check
+            # already succeeded so we don't want to overwrite a cache
+            # that might just be unreadable from this process).
+            board = rebuild_ratings_from_games_dir(games_dir=gdir)
+        else:
+            board = cached
     games_in_progress = _scan_active_games(gdir)
     history = collect_rated_games(games_dir=gdir)
     return schedule_round(board, games_in_progress, history)
