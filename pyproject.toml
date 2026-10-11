@@ -14,6 +14,7 @@ mcp = "^1.26.0"
 fastapi = "^0.115.0"
 uvicorn = "^0.32.0"
 pydantic = "^2.8.0"
+jinja2 = "^3.1.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.0"
@@ -22,6 +23,7 @@ pytest-cov = "^6.0.0"
 ruff = "^0.8.0"
 mypy = "^1.13.0"
 pre-commit = "^4.0.0"
+httpx = "^0.28.0"
 
 # [tool.poetry.scripts] — entry points ajoutés en Phase 1 quand le code
 # métier sera migré. Nom à finaliser pour éviter la collision avec
@@ -30,6 +32,9 @@ pre-commit = "^4.0.0"
 # modules outillages soient supprimés en Phase N).
 [tool.poetry.scripts]
 palamede-lessons = "palamede_chessboard.cli_lessons:main"
+palamede-elo = "palamede_chessboard.cli_elo:main"
+palamede-matchmaking = "palamede_chessboard.cli_matchmaking:main"
+palamede-chessboard-viewer = "palamede_chessboard.viewer.app:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
