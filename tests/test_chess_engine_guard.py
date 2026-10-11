@@ -406,3 +406,36 @@ class TestLogEngineCall:
         )
         entry = json.loads(log_path.read_text(encoding="utf-8").strip())
         assert entry["masked_plies"] == [{"ply": 15, "matched_game_id": "live"}]
+
+
+@pytest.mark.xfail(
+    reason=(
+        "palamede#19 : GameNotFoundError court-circuite le check fen "
+        "(_ALLOWED retourné sans fall-through). Bug hérité à l'identique "
+        "d'outillages/chess_engine_guard — pré-existant, pas introduit par "
+        "le découpage BT-003. Fix differé en followup non-urgent."
+    ),
+    strict=True,
+)
+def test_fen_match_still_refused_when_game_id_invalid(tmp_path: Path) -> None:
+    """Scénario : game_id='ghost' + fen d'une partie en cours → doit être refusé.
+
+    Un caller malicieux pourrait fournir un ``game_id`` inexistant pour
+    bypass le load → GameNotFoundError short-circuit → le check fen sur
+    les positions in-progress n'est jamais exécuté. Attendu : le fen
+    seul suffit à refuser indépendamment de la validité du game_id.
+    """
+    # Seed one in-progress game past opening (ply ≥ 12).
+    live = _seed(tmp_path, "live")
+    _play_sicilian(live, extra_plies=["Be2", "e5", "Nb3"])  # ply 13
+    live_fen = live.board.fen()
+
+    verdict = check_engine_call(
+        tmp_path,
+        tool="chess_analyze_position",
+        game_id="nexiste-pas",
+        fen=live_fen,
+    )
+    # Attendu si fix : refused, matched="live". Actuel : allowed=True (bug).
+    assert verdict["allowed"] is False
+    assert verdict["matched_game_id"] == "live"
