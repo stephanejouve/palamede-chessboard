@@ -35,6 +35,7 @@ palamede-lessons = "palamede_chessboard.cli_lessons:main"
 palamede-elo = "palamede_chessboard.cli_elo:main"
 palamede-matchmaking = "palamede_chessboard.cli_matchmaking:main"
 palamede-chessboard-viewer = "palamede_chessboard.viewer.app:main"
+palamede-chess-arbiter-daemon = "palamede_chessboard.chess_arbiter_daemon:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
