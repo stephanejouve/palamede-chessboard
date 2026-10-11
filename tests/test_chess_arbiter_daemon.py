@@ -205,12 +205,12 @@ def test_pidfile_lifecycle_writes_and_cleans(games_dir: Path) -> None:
     """The context manager writes our PID on entry and unlinks on exit."""
     import os as _os
 
-    from palamede_chessboard.chess_arbiter_daemon import ARBITER_DAEMON_PIDFILE, pidfile_lifecycle
+    from palamede_chessboard.chess_arbiter_daemon import arbiter_pidfile_name, pidfile_lifecycle
 
-    marker = games_dir / ARBITER_DAEMON_PIDFILE
+    marker = games_dir / arbiter_pidfile_name("g1")
     assert not marker.exists()
 
-    with pidfile_lifecycle(games_dir):
+    with pidfile_lifecycle(games_dir, "g1"):
         assert marker.exists()
         assert marker.read_text(encoding="utf-8").strip() == str(_os.getpid())
 
@@ -218,15 +218,15 @@ def test_pidfile_lifecycle_writes_and_cleans(games_dir: Path) -> None:
 
 
 def test_pidfile_lifecycle_refuses_live_holder(games_dir: Path) -> None:
-    """A second daemon on the same games_dir must refuse rather than
-    silently overwrite a live PID's marker."""
+    """A second daemon on the same (games_dir, game_id) pair must refuse
+    rather than silently overwrite a live PID's marker."""
     import os as _os
 
-    from palamede_chessboard.chess_arbiter_daemon import ARBITER_DAEMON_PIDFILE, pidfile_lifecycle
+    from palamede_chessboard.chess_arbiter_daemon import arbiter_pidfile_name, pidfile_lifecycle
 
-    (games_dir / ARBITER_DAEMON_PIDFILE).write_text(str(_os.getpid()), encoding="utf-8")
+    (games_dir / arbiter_pidfile_name("g1")).write_text(str(_os.getpid()), encoding="utf-8")
     with pytest.raises(RuntimeError, match="already holds"):
-        with pidfile_lifecycle(games_dir):
+        with pidfile_lifecycle(games_dir, "g1"):
             pass
 
 
@@ -235,13 +235,12 @@ def test_pidfile_lifecycle_overwrites_stale(games_dir: Path) -> None:
     previous daemon crashed and we're recovering."""
     import os as _os
 
-    from palamede_chessboard.chess_arbiter_daemon import ARBITER_DAEMON_PIDFILE, pidfile_lifecycle
+    from palamede_chessboard.chess_arbiter_daemon import arbiter_pidfile_name, pidfile_lifecycle
 
-    (games_dir / ARBITER_DAEMON_PIDFILE).write_text("999999999", encoding="utf-8")
-    with pidfile_lifecycle(games_dir):
-        assert (games_dir / ARBITER_DAEMON_PIDFILE).read_text(encoding="utf-8").strip() == str(
-            _os.getpid()
-        )
+    marker = games_dir / arbiter_pidfile_name("g1")
+    marker.write_text("999999999", encoding="utf-8")
+    with pidfile_lifecycle(games_dir, "g1"):
+        assert marker.read_text(encoding="utf-8").strip() == str(_os.getpid())
 
 
 def test_pidfile_lifecycle_creates_dir(tmp_path: Path) -> None:
@@ -250,8 +249,23 @@ def test_pidfile_lifecycle_creates_dir(tmp_path: Path) -> None:
 
     fresh = tmp_path / "brand-new-games-dir"
     assert not fresh.exists()
-    with pidfile_lifecycle(fresh):
+    with pidfile_lifecycle(fresh, "g1"):
         assert fresh.is_dir()
+
+
+def test_pidfile_lifecycle_two_games_cohabit(games_dir: Path) -> None:
+    """CD review PR #22 : two daemons on the same games_dir but different
+    ``game_id`` must coexist. The legacy single-file layout had them race
+    and ``KeepAlive``-loop the second one."""
+    import os as _os
+
+    from palamede_chessboard.chess_arbiter_daemon import arbiter_pidfile_name, pidfile_lifecycle
+
+    other = games_dir / arbiter_pidfile_name("other-game")
+    other.write_text(str(_os.getpid()), encoding="utf-8")
+    with pidfile_lifecycle(games_dir, "my-game"):
+        assert (games_dir / arbiter_pidfile_name("my-game")).exists()
+        assert other.exists()  # untouched
 
 
 # ---- CLI --games-dir resolution (issue #257) ----------------------------
@@ -284,10 +298,10 @@ def test_resolve_games_dir_default_fallback(monkeypatch) -> None:
 def test_pidfile_write_is_atomic(games_dir: Path) -> None:
     """The pidfile is created via a ``.tmp`` file then renamed, so a
     concurrent reader never sees an empty or partial pidfile."""
-    from palamede_chessboard.chess_arbiter_daemon import ARBITER_DAEMON_PIDFILE, pidfile_lifecycle
+    from palamede_chessboard.chess_arbiter_daemon import arbiter_pidfile_name, pidfile_lifecycle
 
-    marker = games_dir / ARBITER_DAEMON_PIDFILE
+    marker = games_dir / arbiter_pidfile_name("g1")
     tmp = marker.with_suffix(marker.suffix + ".tmp")
-    with pidfile_lifecycle(games_dir):
+    with pidfile_lifecycle(games_dir, "g1"):
         assert marker.exists()
         assert not tmp.exists(), "tmp must not linger after atomic rename"

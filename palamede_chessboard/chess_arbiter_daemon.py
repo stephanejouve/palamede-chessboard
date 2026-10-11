@@ -64,13 +64,14 @@ import chess
 from palamede_chessboard.chess_arbiter import move_request_context, validate_san_strict
 from palamede_chessboard.chessboard_state import GAMES_DIR, GameState, IllegalMoveError
 
-# Contract with ``chess_create_game`` in the MCP server : the daemon writes
-# its PID here on startup and removes it on clean shutdown. The MCP server
-# checks (via ``os.kill(pid, 0)``) that the PID is alive before it accepts a
-# ``chess_create_game`` call that omits an explicit ``arbiter`` field.
-ARBITER_DAEMON_PIDFILE = ".arbiter-daemon.pid"
-
 log = logging.getLogger("chess_arbiter_daemon")
+
+
+def arbiter_pidfile_name(game_id: str) -> str:
+    """Return the per-game pidfile basename (CD review PR #22 : the install
+    is per-partie, a shared ``.arbiter-daemon.pid`` would race the 2nd
+    daemon into a ``KeepAlive`` crash-loop)."""
+    return f".arbiter-daemon-{game_id}.pid"
 
 
 # ---- SAN extraction -----------------------------------------------------
@@ -311,7 +312,7 @@ class ArbiterDaemon:
 
     def run_forever(self) -> None:
         log.info("chess_arbiter_daemon started for game=%s", self.config.game_id)
-        with pidfile_lifecycle(self.config.games_dir):
+        with pidfile_lifecycle(self.config.games_dir, self.config.game_id):
             while True:
                 try:
                     self.poll_once()
@@ -324,16 +325,19 @@ class ArbiterDaemon:
 
 
 @contextlib.contextmanager
-def pidfile_lifecycle(games_dir: Path):
-    """Write ``<games_dir>/.arbiter-daemon.pid`` on entry, remove on exit.
+def pidfile_lifecycle(games_dir: Path, game_id: str):
+    """Write ``<games_dir>/.arbiter-daemon-<game_id>.pid`` on entry, remove on exit.
 
     Also installs SIGTERM/SIGINT handlers so the cleanup runs even when the
-    daemon is killed by launchd or ``kill <pid>``. Idempotent : if another
-    live PID already holds the file, we raise ``RuntimeError`` rather than
-    overwrite (avoid two arbiters claiming the same games dir).
+    daemon is killed by launchd or ``kill <pid>``. Idempotent per game :
+    if another live PID already holds the per-game marker, we raise
+    ``RuntimeError`` rather than overwrite (avoid two arbiters for the
+    same partie). Concurrent daemons on different ``game_id`` cohabit
+    peacefully (CD review PR #22 : fix the KeepAlive crash-loop on 2e
+    partie that shared ``.arbiter-daemon.pid``).
     """
     games_dir.mkdir(parents=True, exist_ok=True)
-    marker = games_dir / ARBITER_DAEMON_PIDFILE
+    marker = games_dir / arbiter_pidfile_name(game_id)
     if marker.exists():
         try:
             existing = int(marker.read_text(encoding="utf-8").strip())
@@ -386,19 +390,34 @@ def _resolve_games_dir(cli_value: str | None) -> Path:
     return DEFAULT_GAMES_DIR_FALLBACK
 
 
-def _run_guardian(games_dir: Path, poll_interval: float) -> None:
-    """Minimal daemon mode : hold the pidfile, idle-loop.
+def _ensure_talk_sender_importable() -> bool:
+    """Return True iff ``outillages.nextcloud_talk`` imports cleanly.
 
-    Satisfies the ``chess_create_game`` contract from PR #256 without
-    running the full Talk-polling arbiter. The idle loop just sleeps ;
-    SIGTERM/SIGINT are caught by ``pidfile_lifecycle`` for clean exit.
+    Called at startup before entering the arbiter mode loop : the daemon
+    cannot notify the next player if the Talk sender isn't installed, and
+    ``poll_once`` swallows the ImportError into the generic ``Exception``
+    handler so the failure would otherwise stay silent (CD review PR #22).
     """
-    log.info(
-        "chess-arbiter-daemon guardian mode : games_dir=%s pid=%d",
-        games_dir,
-        os.getpid(),
-    )
-    with pidfile_lifecycle(games_dir):
+    try:
+        import outillages.nextcloud_talk  # type: ignore[import-not-found]  # noqa: F401
+    except ImportError as exc:
+        log.error(
+            "fatal: outillages.nextcloud_talk unavailable (%s). Required for "
+            "arbiter mode : install ``outillages`` or run guardian mode "
+            "(``--game-id`` without ``--config``).",
+            exc,
+        )
+        return False
+    return True
+
+
+def _run_guardian(games_dir: Path, game_id: str, poll_interval: float) -> None:
+    """Hold the per-game pidfile and idle. Satisfies ``chess_create_game``
+    contract without the full Talk-polling arbiter ; SIGTERM/SIGINT exit
+    cleanly via ``pidfile_lifecycle``.
+    """
+    log.info("guardian mode : games_dir=%s game_id=%s pid=%d", games_dir, game_id, os.getpid())
+    with pidfile_lifecycle(games_dir, game_id):
         while True:
             time.sleep(poll_interval)
 
@@ -434,6 +453,16 @@ def main(argv: list[str] | None = None) -> int:
         default=1.0,
         help="Guardian idle-loop sleep interval, in seconds.",
     )
+    parser.add_argument(
+        "--game-id",
+        type=str,
+        default=None,
+        help=(
+            "Game identifier used to name the per-game pidfile in "
+            "``games_dir``. Required in guardian mode. Ignored when "
+            "``--config`` is provided (config.game_id wins)."
+        ),
+    )
     parser.add_argument("--log-level", default="INFO", help="Logging level (DEBUG/INFO/WARNING).")
     parser.add_argument(
         "--once",
@@ -448,6 +477,8 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     if args.config is not None:
+        if not _ensure_talk_sender_importable():
+            return 2
         config = DaemonConfig.from_json(args.config)
         daemon = ArbiterDaemon(config=config)
         if args.once:
@@ -456,9 +487,11 @@ def main(argv: list[str] | None = None) -> int:
         daemon.run_forever()
         return 0
 
-    # Guardian mode : no config, just hold the pidfile.
+    # Guardian mode : no config, just hold the per-game pidfile.
+    if not args.game_id:
+        parser.error("--game-id is required in guardian mode (no --config).")
     games_dir = _resolve_games_dir(args.games_dir)
-    _run_guardian(games_dir, args.poll_interval)
+    _run_guardian(games_dir, args.game_id, args.poll_interval)
     return 0
 
 

@@ -21,7 +21,13 @@ from palamede_chessboard.chessboard_state import GAMES_DIR, ChessboardError
 
 # --- games dir / arbiter contract -----------------------------------------
 
+#: Legacy pidfile name (single-daemon-per-dir). Still honored for backward
+#: compatibility, but new installs use the per-game-id suffix form
+#: ``.arbiter-daemon-<game_id>.pid`` (CD review PR #22 : the install is
+#: per-partie, so two daemons sharing the legacy name would race and
+#: ``KeepAlive``-loop the 2nd one).
 ARBITER_DAEMON_PIDFILE = ".arbiter-daemon.pid"
+ARBITER_DAEMON_PIDFILE_PATTERN = ".arbiter-daemon-*.pid"
 
 
 def _games_dir() -> Path:
@@ -29,18 +35,9 @@ def _games_dir() -> Path:
     return Path(raw) if raw else GAMES_DIR
 
 
-def _arbiter_daemon_available(games_dir: Path) -> bool:
-    """Return True iff a local arbiter daemon has claimed this games dir.
-
-    Contract : the daemon writes its PID to ``<games_dir>/.arbiter-daemon.pid``
-    on start and removes it on clean shutdown. A stale pidfile (process gone)
-    is treated as no daemon available.
-    """
-    marker = games_dir / ARBITER_DAEMON_PIDFILE
-    if not marker.exists():
-        return False
+def _pid_is_alive(path: Path) -> bool:
     try:
-        pid = int(marker.read_text(encoding="utf-8").strip())
+        pid = int(path.read_text(encoding="utf-8").strip())
     except (ValueError, OSError):
         return False
     try:
@@ -54,6 +51,26 @@ def _arbiter_daemon_available(games_dir: Path) -> bool:
     except OSError:
         return False
     return True
+
+
+def _arbiter_daemon_available(games_dir: Path) -> bool:
+    """Return True iff at least one live arbiter daemon has claimed this dir.
+
+    Contract : each daemon writes its PID to
+    ``<games_dir>/.arbiter-daemon-<game_id>.pid`` on start and removes it on
+    clean shutdown (BT-005). The legacy single-file form
+    ``.arbiter-daemon.pid`` is still accepted so the pre-split outillages
+    daemon remains usable during cohabitation. A stale pidfile (process
+    gone) is treated as no daemon.
+    """
+    legacy = games_dir / ARBITER_DAEMON_PIDFILE
+    if legacy.exists() and _pid_is_alive(legacy):
+        return True
+    try:
+        candidates = list(games_dir.glob(ARBITER_DAEMON_PIDFILE_PATTERN))
+    except OSError:
+        return False
+    return any(_pid_is_alive(c) for c in candidates)
 
 
 def _require_arbiter_or_daemon(arbiter: str | None, games_dir: Path) -> None:
