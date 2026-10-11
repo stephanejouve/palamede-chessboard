@@ -34,7 +34,7 @@ httpx = "^0.28.0"
 palamede-lessons = "palamede_chessboard.cli_lessons:main"
 palamede-elo = "palamede_chessboard.cli_elo:main"
 palamede-matchmaking = "palamede_chessboard.cli_matchmaking:main"
-palamede-chessboard-viewer = "palamede_chessboard.chessboard_viewer:main"
+palamede-chessboard-viewer = "palamede_chessboard.viewer.app:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
