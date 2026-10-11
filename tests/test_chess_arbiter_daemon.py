@@ -286,13 +286,15 @@ def test_resolve_games_dir_env_fallback(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_resolve_games_dir_default_fallback(monkeypatch) -> None:
-    from palamede_chessboard.chess_arbiter_daemon import (
-        DEFAULT_GAMES_DIR_FALLBACK,
-        _resolve_games_dir,
-    )
+    """Palamede#14 : the daemon-local ``DEFAULT_GAMES_DIR_FALLBACK`` has
+    been removed in favor of the package-wide fallback in
+    :mod:`palamede_chessboard.paths`. The daemon's ``_resolve_games_dir``
+    now defers to :func:`resolve_games_dir` for the env + fallback step."""
+    from palamede_chessboard.chess_arbiter_daemon import _resolve_games_dir
+    from palamede_chessboard.paths import _DEFAULT_GAMES_DIR
 
     monkeypatch.delenv("MCP_CHESSBOARD_GAMES_DIR", raising=False)
-    assert _resolve_games_dir(None) == DEFAULT_GAMES_DIR_FALLBACK
+    assert _resolve_games_dir(None) == _DEFAULT_GAMES_DIR
 
 
 def test_pidfile_write_is_atomic(games_dir: Path) -> None:

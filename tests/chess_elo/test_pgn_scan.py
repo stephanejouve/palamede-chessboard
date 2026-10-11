@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from palamede_chessboard.chess_elo import (
     INITIAL_RATING,
     PROVISIONAL_GAMES,
@@ -258,3 +260,22 @@ class TestRealGamesScenario:
         for name, pr in board.players.items():
             assert pr.games > 0, name
             assert pr.games < PROVISIONAL_GAMES, name
+
+
+class TestGamesDirEnvHonored:
+    """Palamede#14 : ``MCP_CHESSBOARD_GAMES_DIR`` is the single source for
+    the games directory. The regression test fige the cas CD msg 57664
+    (prérequis BT-008) : env défini, puis ``collect_rated_games()`` sans
+    argument lit bien ce dossier au lieu du fallback ``/Users/Shared/games``.
+    """
+
+    def test_collect_rated_games_honors_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("MCP_CHESSBOARD_GAMES_DIR", str(tmp_path))
+        _create_finished(
+            tmp_path, game_id="env-probe", white="junior", black="admin", result="1-0"
+        )
+        # No explicit ``games_dir`` argument — must pick up the env override.
+        games = collect_rated_games()
+        assert [g.game_id for g in games] == ["env-probe"]

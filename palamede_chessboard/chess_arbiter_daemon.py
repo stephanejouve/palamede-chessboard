@@ -63,6 +63,7 @@ import chess
 
 from palamede_chessboard.chess_arbiter import move_request_context, validate_san_strict
 from palamede_chessboard.chessboard_state import GAMES_DIR, GameState, IllegalMoveError
+from palamede_chessboard.paths import resolve_games_dir
 
 log = logging.getLogger("chess_arbiter_daemon")
 
@@ -361,19 +362,16 @@ def pidfile_lifecycle(games_dir: Path, game_id: str):
 # ---- CLI ----------------------------------------------------------------
 
 
-DEFAULT_GAMES_DIR_FALLBACK = Path("/Users/Shared/games")
-
-
 def _resolve_games_dir(cli_value: str | None) -> Path:
-    """Resolution order per issue #257 : CLI ``--games-dir``, then env
-    ``MCP_CHESSBOARD_GAMES_DIR``, then fallback ``/Users/Shared/games``.
+    """Resolution order per issue #257 : CLI ``--games-dir``, then
+    :func:`palamede_chessboard.paths.resolve_games_dir` (env
+    ``MCP_CHESSBOARD_GAMES_DIR`` → package fallback). Palamede#14 : the
+    env + fallback step is delegated so the whole package shares one
+    source of truth.
     """
     if cli_value:
         return Path(cli_value)
-    env = os.environ.get("MCP_CHESSBOARD_GAMES_DIR", "").strip()
-    if env:
-        return Path(env)
-    return DEFAULT_GAMES_DIR_FALLBACK
+    return resolve_games_dir()
 
 
 def _ensure_talk_sender_importable() -> bool:
