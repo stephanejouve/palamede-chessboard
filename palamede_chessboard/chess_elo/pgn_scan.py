@@ -25,7 +25,7 @@ from palamede_chessboard.chess_elo.models import (
     RatingBoard,
     RatingUpdate,
 )
-from palamede_chessboard.chess_elo.paths import GAMES_DIR
+from palamede_chessboard.chess_elo.paths import GAMES_DIR, resolve_games_dir
 
 
 def _parse_rated_game(pgn_path: Path) -> RatedGame | None:
@@ -86,8 +86,12 @@ def collect_rated_games(games_dir: Path | None = None) -> list[RatedGame]:
 
     The returned list is the exact order in which ratings should be applied
     for a reproducible rebuild (CD rule 3 — chronological end order).
+
+    Palamede#14 : when no ``games_dir`` is supplied, :func:`resolve_games_dir`
+    is called so a late ``MCP_CHESSBOARD_GAMES_DIR`` override (tests, process
+    env) is honored.
     """
-    games_dir = games_dir or GAMES_DIR
+    games_dir = games_dir or resolve_games_dir()
     out: list[RatedGame] = []
     for pgn_path in sorted(games_dir.glob("*.pgn")):
         rated = _parse_rated_game(pgn_path)

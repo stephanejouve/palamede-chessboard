@@ -1,14 +1,13 @@
 """Filesystem path constants for the Elo module.
 
-Isolated so the rest of the package can import ``GAMES_DIR`` without
-pulling in any ``chess`` / PGN dependency.
+Palamede#14 : previously carried its own ``GAMES_DIR`` constant
+duplicating the one in :mod:`palamede_chessboard.paths`. The constant
+is now re-exported from that module so the whole package shares a
+single source of truth that honors ``MCP_CHESSBOARD_GAMES_DIR``.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
+from palamede_chessboard.paths import GAMES_DIR, resolve_games_dir
 
-# TODO (palamede-chessboard#14) Phase 1b : unifier via env var
-# ``MAGMA_GAMES_DIR`` et sortir cette constante de la duplication plain
-# avec ``outillages.chessboard_state.GAMES_DIR``.
-GAMES_DIR = Path("/Users/Shared/games")
+__all__ = ["GAMES_DIR", "resolve_games_dir"]
