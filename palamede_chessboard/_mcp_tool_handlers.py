@@ -248,28 +248,40 @@ def _resolve_board_facts_input(
     fen = arguments.get("fen")
     game_id = arguments.get("game_id")
     if fen and game_id:
-        return None, None, {
-            "status": "error",
-            "code": "INVALID_ARG",
-            "reason": "chess_board_facts : ``game_id`` et ``fen`` sont exclusifs, fournir un seul.",
-        }
+        return (
+            None,
+            None,
+            {
+                "status": "error",
+                "code": "INVALID_ARG",
+                "reason": "chess_board_facts : ``game_id`` et ``fen`` sont exclusifs, fournir un seul.",
+            },
+        )
     if fen:
         try:
             return chess.Board(fen), None, None
         except ValueError as exc:
-            return None, None, {
-                "status": "error",
-                "code": "INVALID_ARG",
-                "reason": f"chess_board_facts : FEN invalide ({exc}).",
-            }
+            return (
+                None,
+                None,
+                {
+                    "status": "error",
+                    "code": "INVALID_ARG",
+                    "reason": f"chess_board_facts : FEN invalide ({exc}).",
+                },
+            )
     if game_id:
         state = GameState.load(game_id, games_dir=games_dir)
         return state.board, game_id, None
-    return None, None, {
-        "status": "error",
-        "code": "INVALID_ARG",
-        "reason": "chess_board_facts : fournir ``game_id`` ou ``fen``.",
-    }
+    return (
+        None,
+        None,
+        {
+            "status": "error",
+            "code": "INVALID_ARG",
+            "reason": "chess_board_facts : fournir ``game_id`` ou ``fen``.",
+        },
+    )
 
 
 async def _handle_chess_board_facts(arguments: dict, games_dir: Path) -> dict:
@@ -407,7 +419,9 @@ async def _handle_chess_get_my_mistakes(arguments: dict, games_dir: Path) -> dic
         caller=arguments.get("caller"),
         extra={"masked_plies": mask_details} if mask_details else None,
     )
-    mistakes = get_my_mistakes(walk, mover=arguments["player"], min_classification=min_classification)
+    mistakes = get_my_mistakes(
+        walk, mover=arguments["player"], min_classification=min_classification
+    )
     return {
         "status": "ok",
         "count": len(mistakes),
