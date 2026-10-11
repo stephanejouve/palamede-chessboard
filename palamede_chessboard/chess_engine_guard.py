@@ -261,12 +261,21 @@ def _check_against_game_id(
     ply: int | None,
     in_progress: dict[str, set[str]],
 ) -> dict | None:
-    """Return refusal dict if ``game_id`` triggers it, else ``None``."""
+    """Return refusal dict if ``game_id`` triggers it, else ``None``.
+
+    Fix palamede#19 : on ``GameNotFoundError``, return ``None`` so the
+    caller falls through to the ``if fen:`` check instead of
+    short-circuiting with ``_ALLOWED``. A ghost ``game_id`` combined
+    with a ``fen`` of a live game would otherwise bypass the guard —
+    behaviour inherited verbatim from ``outillages`` and preserved by
+    the BT-003 split, now closed.
+    """
     try:
         state = GameState.load(game_id, games_dir=games_dir)
     except GameNotFoundError:
-        # Downstream tool will raise GAME_NOT_FOUND — guard stays out.
-        return _ALLOWED
+        # Downstream tool will raise GAME_NOT_FOUND. Fall through to the
+        # fen check (caller receives None) so a ghost game_id doesn't bypass.
+        return None
     if state.metadata.result == "*":
         return _refuse_in_progress_game(game_id)
     # Finished game. Only analyze_position does a single-shot check
@@ -328,10 +337,10 @@ def check_engine_call(
         verdict = _check_against_game_id(
             games_dir, tool=tool, game_id=game_id, ply=ply, in_progress=in_progress
         )
-        if verdict is not None and verdict is not _ALLOWED:
+        if verdict is not None:
             return verdict
-        if verdict is _ALLOWED:
-            return _ALLOWED
+        # verdict is None → fall through to fen check (ghost game_id or
+        # finished game with no position match).
 
     if fen:
         match = _match_against_in_progress(fen, in_progress)
