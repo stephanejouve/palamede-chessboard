@@ -197,87 +197,73 @@ class ArbiterDaemon:
     def process_message(self, entry: dict) -> str:
         """Process one inbox line. Returns an outcome tag for tests.
 
-        Outcomes :
-
-        - ``"skip:not-a-player"``     — sender isn't white or black
-        - ``"skip:no-san"``           — no bold SAN token in the message
-        - ``"skip:wrong-turn"``       — sender played but it wasn't their turn
-        - ``"reject:<reason>"``       — SAN failed strict validation
-        - ``"apply"``                 — move applied, next player notified
-        - ``"game-over"``             — move ended the game
+        Outcomes : ``"skip:not-a-player"`` / ``"skip:no-san"`` /
+        ``"skip:wrong-turn"`` / ``"reject:<reason>"`` / ``"apply"`` /
+        ``"game-over"``.
         """
         actor_id = entry.get("actor_id", "")
-        message = entry.get("message", "")
-
         player = self._player_config_for(actor_id)
         if player is None:
             return "skip:not-a-player"
-
-        san = extract_san_candidate(message)
+        san = extract_san_candidate(entry.get("message", ""))
         if san is None:
             return "skip:no-san"
-
         state = self._load_state()
-
         if self._expected_player(state.board).actor_id != actor_id:
-            self.send(
-                (
-                    f"♟️ Arbitre : coup `{san}` reçu mais ce n'est pas ton "
-                    f"tour (trait aux {'blancs' if state.board.turn == chess.WHITE else 'noirs'}). "
-                    "Attends la notification arbitrage."
-                ),
-                player.room,
-            )
-            return "skip:wrong-turn"
-
+            return self._reject_wrong_turn(player, state, san)
         strict = validate_san_strict(state.board, san)
         if not strict.ok:
-            ctx = move_request_context(state.board)
-            self.send(
-                (
-                    f"♟️ Arbitre : coup `{san}` rejeté — **{strict.reason}**.\n\n"
-                    f"FEN : `{ctx['fen']}`\n\n"
-                    f"6 derniers demi-coups : `{' '.join(ctx['last_moves']) or '(aucun)'}`\n\n"
-                    "Rejeu libre."
-                ),
-                player.room,
-            )
-            self._append_log(
-                f"\n### Rejet — {san} par {actor_id}\n"
-                f"- Reason: {strict.reason}\n"
-                f"- FEN: {ctx['fen']}\n"
-            )
-            return f"reject:{strict.reason}"
-
+            return self._reject_strict(player, state, san, actor_id, strict.reason)
         try:
             outcome = state.play_move(san, by=actor_id)
         except IllegalMoveError as exc:
-            # Belt-and-braces : should not happen after validate_san_strict.
             return f"reject:{exc}"
-
         if outcome["is_game_over"]:
-            self._append_log(
-                f"\n### Fin de partie — {outcome['result']} après {san} ({actor_id})\n"
-            )
-            if self.config.team_room:
-                self.send(
-                    (
-                        f"🏁 **Chess {self.config.game_id} — {outcome['result']}** "
-                        f"(final: {san} par {actor_id})."
-                    ),
-                    self.config.team_room,
-                )
-            return "game-over"
+            return self._handle_game_over(san, actor_id, outcome)
+        return self._notify_next_player(state)
 
+    def _reject_wrong_turn(self, player: PlayerConfig, state: GameState, san: str) -> str:
+        side = "blancs" if state.board.turn == chess.WHITE else "noirs"
+        self.send(
+            f"♟️ Arbitre : coup `{san}` reçu mais ce n'est pas ton tour "
+            f"(trait aux {side}). Attends la notification arbitrage.",
+            player.room,
+        )
+        return "skip:wrong-turn"
+
+    def _reject_strict(
+        self, player: PlayerConfig, state: GameState, san: str, actor_id: str, reason: str
+    ) -> str:
+        ctx = move_request_context(state.board)
+        self.send(
+            f"♟️ Arbitre : coup `{san}` rejeté — **{reason}**.\n\n"
+            f"FEN : `{ctx['fen']}`\n\n"
+            f"6 derniers demi-coups : `{' '.join(ctx['last_moves']) or '(aucun)'}`\n\n"
+            "Rejeu libre.",
+            player.room,
+        )
+        self._append_log(
+            f"\n### Rejet — {san} par {actor_id}\n- Reason: {reason}\n- FEN: {ctx['fen']}\n"
+        )
+        return f"reject:{reason}"
+
+    def _handle_game_over(self, san: str, actor_id: str, outcome: dict) -> str:
+        result = outcome["result"]
+        self._append_log(f"\n### Fin de partie — {result} après {san} ({actor_id})\n")
+        if self.config.team_room:
+            self.send(
+                f"🏁 **Chess {self.config.game_id} — {result}** (final: {san} par {actor_id}).",
+                self.config.team_room,
+            )
+        return "game-over"
+
+    def _notify_next_player(self, state: GameState) -> str:
         next_player = self._next_player(state.board)
         ctx = move_request_context(state.board)
         self.send(
-            (
-                f"♟️ Chess {self.config.game_id} — À toi (coup "
-                f"{ctx['ply'] // 2 + 1}).\n\n"
-                f"FEN : `{ctx['fen']}`\n\n"
-                f"6 derniers demi-coups : `{' '.join(ctx['last_moves'])}`\n"
-            ),
+            f"♟️ Chess {self.config.game_id} — À toi (coup {ctx['ply'] // 2 + 1}).\n\n"
+            f"FEN : `{ctx['fen']}`\n\n"
+            f"6 derniers demi-coups : `{' '.join(ctx['last_moves'])}`\n",
             next_player.room,
         )
         return "apply"
