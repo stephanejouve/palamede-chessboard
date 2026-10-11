@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+Template LaunchAgent pour palamede-chess-arbiter-daemon.
+
+Posé par scripts/install-chess-arbiter-daemon.sh qui remplace les
+placeholders __LABEL__ / __DAEMON_BIN__ / __CONFIG_PATH__ / __HOME__.
+NE PAS poser ce fichier tel quel dans ~/Library/LaunchAgents/ : les
+placeholders ne sont pas interprétés par launchd.
+
+Comportement :
+- Démarre au login (RunAtLoad), reste vivant (KeepAlive = true).
+- Threshold anti-boucle : si crash < 10s, backoff 60s (ThrottleInterval).
+- Logs : ~/Library/Logs/<LABEL>.out.log + .err.log.
+
+Référence : docs/arbiter-daemon-launchagent.md (à écrire post-BT-005).
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>__LABEL__</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__DAEMON_BIN__</string>
+        <string>--config</string>
+        <string>__CONFIG_PATH__</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/__LABEL__.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/__LABEL__.err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin</string>
+    </dict>
+</dict>
+</plist>
