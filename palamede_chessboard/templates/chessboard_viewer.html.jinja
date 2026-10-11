@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8">
+<title>Chess Viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.2.1/assets/chessground.base.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.2.1/assets/chessground.brown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chessground@9.2.1/assets/chessground.cburnett.css">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f8f7f4;
+    --surface: #fff;
+    --surface-2: #ecebe6;
+    --text: #2a2a28;
+    --text-muted: #7a7973;
+    --accent: #4a7c9d;
+    --accent-bg: #e6f0f7;
+    --border: #e0dfd9;
+    --eval-white: #f5f5f0;
+    --eval-black: #1a1a1a;
+    --warning: #d35858;
+    --ok: #4caf50;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a1a;
+      --surface: #242422;
+      --surface-2: #2e2e2c;
+      --text: #e8e7e3;
+      --text-muted: #9a998f;
+      --accent: #7eb6dc;
+      --accent-bg: #2a3a48;
+      --border: #3a3a37;
+      --eval-white: #f0f0eb;
+      --eval-black: #0a0a0a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "SF Pro Text", system-ui, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 24px;
+    /* Center the .wrap vertically when the viewport is taller than the */
+    /* content (large desktop / fullscreen). On mobile / short viewports */
+    /* the content overflows naturally — flex-start lets it scroll.     */
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+  .wrap { max-width: 820px; width: 100%; }
+  .header { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 16px; background: var(--surface-2); border-radius: 8px; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+  .header strong { font-weight: 600; }
+  .opening { font-size: 12px; color: var(--text-muted); margin-top: 4px; flex-basis: 100%; }
+  .gameid-input { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-family: ui-monospace, monospace; font-size: 13px; width: 260px; }
+  .role-select { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 12px; margin-left: 6px; }
+  .layout { display: grid; grid-template-columns: 400px 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+  /* Board container : sized precisely so chessground computes square sizes
+     correctly. If the chessground CDN fails to load, the container stays
+     empty (blank grey square) but the rest of the UI (moves, engine,
+     commentary) keeps working — degradation is graceful. */
+  #board { display: block; width: 400px; height: 400px; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.15); background: var(--surface-2); position: relative; }
+  #board.cg-wrap { background: transparent; }
+  /* Chessground default coord positioning has files at ``bottom: -4px`` and
+     ranks at ``top: -20px`` — half-outside the board box. Combined with our
+     ``overflow: hidden`` (needed to clip pieces during drag against the
+     border-radius), the labels get chopped to sliver-height. Override to
+     tuck them fully inside the board edge, and boost font-size/weight so
+     they're readable at 50px squares (400px board). */
+  /* Chessground default has ``left: 24px`` on coords.files which shifts the
+     entire row nearly half a square to the right — "A" ends up over the a/b
+     boundary and every letter looks off by one file. Reset ``left: 0`` so
+     each flex item (100%/8 = 50px wide, text-aligned center) lands centered
+     in its own file's rank-1 square. */
+  /* Position labels in the CORNERS of each square, away from where the
+     piece SVG sits (which occupies the center ~90% of the square) :
+       * ranks (numbers)  → top-left corner of a-file, rank-N square
+       * files (letters)  → bottom-right corner of file-X, rank-1 square
+     Combined with a strong contrasting text-shadow below, labels stay
+     legible even when a piece sits on the same square. ``z-index: 3``
+     guarantees we paint above the piece layer as a belt-and-braces. */
+  .cg-wrap coords { z-index: 3; opacity: 1; }
+  .cg-wrap coords.files {
+    bottom: 2px; left: 0;
+    font-size: 10px; font-weight: 600;
+    text-align: right; padding-right: 3px;
+  }
+  .cg-wrap coords.ranks {
+    top: 2px; left: 2px;
+    font-size: 10px; font-weight: 600;
+    text-align: left;
+  }
+  /* Convention Lichess / Chess.com : la couleur d'une coordonnée est
+     TOUJOURS le complément de la case sur laquelle elle est posée (texte
+     sombre sur case claire, texte clair sur case sombre). Standard chess :
+     a1 est SOMBRE.
+
+     Chessground rend les coords comme ``<coords class="files"><coord>a
+     </coord>...</coords>`` et le sélecteur natif ``coord:nth-child(...)``
+     alterne les couleurs. Il faut donc raisonner sur l'ORDRE des enfants
+     dans le DOM, qui dépend de l'orientation :
+
+     Orientation Blancs (coords.files enfants gauche→droite = a,b,c,...,h) :
+       * child(1)=a (rank 1 = a1 sombre) → texte CLAIR
+       * child(2)=b (rank 1 = b1 claire) → texte SOMBRE
+       → files : odd=CLAIR, even=SOMBRE
+     Orientation Blancs (coords.ranks enfants bas→haut = 1,2,3,4,5,6,7,8
+     depuis chessground 9.2.x — l'ordre DOM a été inversé par rapport à
+     l'ancienne version, découverte user 2026-10-05) :
+       * child(1)=rank 1 (a1 sombre) → texte CLAIR
+       * child(2)=rank 2 (a2 claire) → texte SOMBRE
+       → ranks : odd=CLAIR, even=SOMBRE
+
+     Orientation Noirs (l'échiquier est retourné) :
+       * files enfants gauche→droite = h,g,f,e,d,c,b,a
+       * ranks enfants bas→haut = 8,7,6,5,4,3,2,1
+       Les deux règles s'inversent par rapport aux blancs.
+
+     Chessground pose la classe ``.orientation-white`` ou
+     ``.orientation-black`` sur le wrap → on peut cibler l'orientation
+     directement. Selectors avec ``coord`` (au lieu de juste ``:nth-child``)
+     pour matcher la spécificité native de chessground.brown.css et éviter
+     les collisions de cascade. Pas de text-shadow : le contraste
+     complément-de-case suffit (CD 2026-09-30). */
+  /* Files letters — couleur CLAIRE (sur case sombre) */
+  .cg-wrap.orientation-white coords.files coord:nth-child(odd),
+  .cg-wrap.orientation-black coords.files coord:nth-child(even) {
+    color: rgba(255, 255, 255, 0.95);
+  }
+  /* Files letters — couleur SOMBRE (sur case claire) */
+  .cg-wrap.orientation-white coords.files coord:nth-child(even),
+  .cg-wrap.orientation-black coords.files coord:nth-child(odd) {
+    color: rgba(50, 50, 50, 0.95);
+  }
+  /* Ranks numbers — couleur CLAIRE (sur case sombre a1/a3/a5/a7) */
+  .cg-wrap.orientation-white coords.ranks coord:nth-child(odd),
+  .cg-wrap.orientation-black coords.ranks coord:nth-child(even) {
+    color: rgba(255, 255, 255, 0.95);
+  }
+  /* Ranks numbers — couleur SOMBRE (sur case claire a2/a4/a6/a8) */
+  .cg-wrap.orientation-white coords.ranks coord:nth-child(even),
+  .cg-wrap.orientation-black coords.ranks coord:nth-child(odd) {
+    color: rgba(50, 50, 50, 0.95);
+  }
+  #move-error { position: absolute; bottom: 8px; left: 8px; right: 8px; padding: 6px 10px; border-radius: 4px; background: rgba(211, 88, 88, 0.9); color: white; font-size: 12px; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+  #move-error.show { opacity: 1; }
+  .clocks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .clock { padding: 12px; border-radius: 8px; background: var(--surface-2); text-align: center; transition: background 0.15s; }
+  .clock.active { background: var(--accent-bg); box-shadow: inset 0 0 0 2px var(--accent); }
+  .clock.low { background: rgba(211, 88, 88, 0.18); animation: pulse-low 1s infinite; }
+  .clock .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .clock .time { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 26px; font-weight: 600; margin-top: 4px; }
+  @keyframes pulse-low { 50% { opacity: 0.65; } }
+  .moves { padding: 12px; background: var(--surface-2); border-radius: 8px; font-size: 13px; line-height: 1.9; max-height: 200px; overflow-y: auto; }
+  .commentary { padding: 12px; background: var(--surface-2); border-radius: 8px; font-size: 13px; line-height: 1.5; max-height: 280px; overflow-y: auto; margin-top: 10px; }
+  .commentary h3, .engine h3 { margin: 0 0 8px 0; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .commentary .entry { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .commentary .entry:last-child { border-bottom: none; }
+  .commentary .src { font-weight: 600; color: var(--accent); font-size: 11px; }
+  .commentary .ts { font-size: 10px; color: var(--text-muted); float: right; }
+  .commentary .txt { margin-top: 4px; white-space: pre-wrap; }
+  .commentary .empty, .engine .empty, .captures .empty { color: var(--text-muted); font-style: italic; font-size: 12px; }
+  .captures { padding: 12px; background: var(--surface-2); border-radius: 8px; font-size: 13px; margin-top: 10px; }
+  .captures h3 { margin: 0 0 8px 0; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .captures .row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 15px; line-height: 1.4; }
+  .captures .row .side { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; min-width: 48px; }
+  .captures .row .pieces { flex: 1; display: flex; flex-wrap: wrap; gap: 2px; align-items: center; }
+  .captures .row .pieces img { width: 22px; height: 22px; vertical-align: middle; }
+  .elo-board { padding: 12px; background: var(--surface-2); border-radius: 8px; font-size: 13px; margin-top: 10px; }
+  .elo-board h3 { margin: 0 0 8px 0; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+  .elo-board h3 .source { font-size: 10px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-muted); font-style: italic; }
+  .elo-board table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: ui-monospace, monospace; }
+  .elo-board th { text-align: left; padding: 4px 6px; color: var(--text-muted); font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+  .elo-board th.num, .elo-board td.num { text-align: right; }
+  .elo-board td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+  .elo-board tr:last-child td { border-bottom: none; }
+  .elo-board td.rank { color: var(--text-muted); width: 24px; }
+  .elo-board td.name { font-weight: 600; }
+  .elo-board td.rating { font-weight: 600; color: var(--accent); }
+  .elo-board .empty { color: var(--text-muted); font-style: italic; font-size: 12px; }
+  .captures .row .balance { font-family: ui-monospace, monospace; font-size: 13px; font-weight: 600; min-width: 36px; text-align: right; }
+  .captures .row .balance.plus { color: var(--ok); }
+  .captures .row .balance.minus { color: var(--warning); }
+  .captures .row .balance.even { color: var(--text-muted); }
+  .engine { padding: 12px; background: var(--surface-2); border-radius: 8px; font-size: 13px; margin-top: 10px; }
+  .engine .eval-bar { height: 18px; border-radius: 4px; background: linear-gradient(to right, var(--eval-black) 50%, var(--eval-white) 50%); position: relative; overflow: hidden; margin-bottom: 8px; }
+  .engine .eval-bar .indicator { position: absolute; top: 0; left: 50%; width: 2px; height: 100%; background: var(--accent); transform: translateX(-1px); transition: left 0.3s; }
+  .engine .eval-line { font-family: ui-monospace, monospace; font-size: 13px; line-height: 1.6; }
+  .engine .eval-cp { font-weight: 600; }
+  .engine .eval-best { color: var(--accent); font-weight: 600; }
+  .engine .eval-pv { color: var(--text-muted); font-size: 12px; }
+  .engine .locked { background: rgba(211, 88, 88, 0.10); padding: 8px; border-radius: 4px; color: var(--warning); font-size: 12px; }
+  .mv { display: inline-block; padding: 2px 7px; margin: 1px 2px; border: none; border-radius: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; cursor: pointer; color: var(--text); background: transparent; }
+  .mv:hover { background: var(--surface); }
+  .mv.act { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+  .num { color: var(--text-muted); padding: 0 2px 0 6px; font-family: ui-monospace, monospace; font-size: 13px; }
+  .controls { display: flex; gap: 6px; align-items: center; justify-content: center; margin-top: 12px; }
+  .controls button { padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; font-size: 14px; line-height: 1; min-width: 36px; }
+  .controls button:hover { background: var(--surface-2); }
+  .ct { font-size: 12px; min-width: 64px; text-align: center; font-family: ui-monospace, monospace; color: var(--text-muted); }
+  .status { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap; gap: 8px; }
+  .live { display: inline-flex; align-items: center; gap: 6px; }
+  .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.85); } }
+  .pulse.off { background: #888; animation: none; }
+  .err { color: var(--warning); }
+</style>
+</head><body>
+<div class="wrap">
+  <div class="header" id="hdr">
+    <div>
+      <label style="font-size:11px;color:var(--text-muted);margin-right:6px;">game:</label>
+      <input type="text" id="gameid" class="gameid-input" placeholder="game_id" list="games-list" autocomplete="off" />
+      <datalist id="games-list"></datalist>
+      <select id="role" class="role-select">
+        {% for v in viewer_roles -%}
+        <option value="{{ v }}">{{ v }}</option>
+        {% endfor -%}
+      </select>
+    </div>
+    <div id="hdr-meta" style="font-family: ui-monospace, monospace; font-size: 12px; color: var(--text-muted);">—</div>
+  </div>
+  <div class="layout">
+    <div>
+      <div id="board"><div id="move-error"></div></div>
+      <div class="clocks" id="clocks" style="display:none">
+        <div class="clock" id="clock-white"><div class="label">Blancs</div><div class="time" id="time-white">—</div></div>
+        <div class="clock" id="clock-black"><div class="label">Noirs</div><div class="time" id="time-black">—</div></div>
+      </div>
+      <div class="controls">
+        <button onclick="g('s')" title="Début (Home)">⏮</button>
+        <button onclick="g('p')" title="Précédent (←)">◀</button>
+        <span class="ct" id="ct">0 / 0</span>
+        <button onclick="g('n')" title="Suivant (→)">▶</button>
+        <button onclick="g('e')" title="Fin (End)">⏭</button>
+      </div>
+      <div class="status">
+        <span class="live"><span class="pulse" id="pulse"></span><span id="liveStatus">Connexion…</span></span>
+        <span id="trait"></span>
+      </div>
+    </div>
+    <div>
+      <div class="moves" id="moves"></div>
+      <div class="engine" id="engine">
+        <h3>
+          Analyse Stockfish
+          <label style="float:right;font-weight:normal;text-transform:none;letter-spacing:0;font-size:11px;">
+            Depth
+            <select id="engineDepth" style="font-size:11px;padding:1px 4px;margin-left:4px;">
+              {% for d in depth_options -%}
+              <option value="{{ d }}"{% if d == default_depth %} selected{% endif %}>{{ d }}</option>
+              {% endfor -%}
+            </select>
+          </label>
+        </h3>
+        <div class="empty">—</div>
+      </div>
+      <div class="commentary" id="commentary"><h3>Commentaires</h3><div class="empty">Aucun commentaire pour ce coup.</div></div>
+      <div class="captures" id="captures"><h3>Matériel capturé</h3><div class="empty">Position initiale — rien capturé.</div></div>
+      <div class="elo-board" id="elo-board"><h3><span>Classement Elo</span><span class="source" id="elo-source"></span></h3><div class="empty">Chargement…</div></div>
+    </div>
+  </div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const gameIdInput = document.getElementById('gameid');
+const roleSelect = document.getElementById('role');
+gameIdInput.value = params.get('game') || '';
+roleSelect.value = params.get('viewer') || 'spectator';
+
+let POS = [];
+let idx = 0;
+let lastResult = '*';
+let COMMENTS = [];
+let CLOCK = null;
+let clockServerTs = 0;
+let clockClientTs = 0;
+let userPinned = false;
+
+function gameId() { return gameIdInput.value.trim(); }
+function viewerRole() { return roleSelect.value; }
+function qs(extra) { return '?game_id=' + encodeURIComponent(gameId()) + (extra ? '&' + extra : ''); }
+
+gameIdInput.addEventListener('change', () => { updateUrl(); resetAndPoll(); });
+roleSelect.addEventListener('change', () => { updateUrl(); pollEngine(); });
+
+// HTML5 <input list="…"> + <datalist> filtre STRICTEMENT sur le texte
+// tapé. Si l'URL a chargé un game_id (ex : ?game=junior-vs-leader-002),
+// l'input contient déjà cette valeur → la datalist ne montre QUE les
+// options matchant ce préfixe, i.e. la partie courante toute seule et
+// impossible de naviguer. Solution : au focus, on backup la valeur et
+// on vide l'input pour laisser voir toute la liste ; au blur, si rien
+// n'a été changé, on restaure. Un `change` (nouvelle sélection) écrase
+// le backup via son propre listener au-dessus.
+let _gameIdBackup = '';
+gameIdInput.addEventListener('focus', () => {
+  _gameIdBackup = gameIdInput.value;
+  gameIdInput.value = '';
+});
+gameIdInput.addEventListener('blur', () => {
+  if (!gameIdInput.value) gameIdInput.value = _gameIdBackup;
+});
+
+// Populate the ``game_id`` datalist from /api/games. Combobox lets the
+// user pick from live games OR type a fresh id (useful right after
+// ``chess_create_game``, before mtime propagates). Refreshed on load
+// and every 30s so new games / result flips (`*` → `1-0` etc.) show up
+// without needing a page reload.
+async function refreshGamesList() {
+  try {
+    const r = await fetch('/api/games', { cache: 'no-store' });
+    if (!r.ok) return;
+    const data = await r.json();
+    const dl = document.getElementById('games-list');
+    if (!dl) return;
+    const entries = [];
+    for (const g of (data.in_progress || [])) {
+      entries.push({ value: g.game_id, label: g.game_id + ' — ' + g.white + ' vs ' + g.black + ' (ply ' + g.ply + ', en cours)' });
+    }
+    for (const g of (data.completed || [])) {
+      entries.push({ value: g.game_id, label: g.game_id + ' — ' + g.white + ' vs ' + g.black + ' (' + g.result + ')' });
+    }
+    dl.innerHTML = entries.map(e =>
+      '<option value="' + escapeHtml(e.value) + '">' + escapeHtml(e.label) + '</option>'
+    ).join('');
+  } catch (_) { /* silent — combobox falls back to free-text */ }
+}
+
+function updateUrl() {
+  const p = new URLSearchParams();
+  if (gameId()) p.set('game', gameId());
+  if (viewerRole() !== 'spectator') p.set('viewer', viewerRole());
+  history.replaceState(null, '', '?' + p.toString());
+}
+
+function resetAndPoll() {
+  POS = []; idx = 0; COMMENTS = []; CLOCK = null;
+  // chessground: reset to empty position if the ground is up.
+  if (window.__cgSetFen) window.__cgSetFen(null, null, false);
+  pollPositions(); pollClock(); pollEngine(); pollComments();
+  startEventStream();
+}
+
+async function pollPositions() {
+  if (!gameId()) return;
+  try {
+    const r = await fetch('/api/positions' + qs(), { cache: 'no-store' });
+    if (r.status === 404) { setOffline('Partie inconnue: ' + gameId()); return; }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const wasAtEnd = (POS.length === 0) || (idx === POS.length - 1);
+    const oldLen = POS.length;
+    POS = data.positions;
+    lastResult = data.result || '*';
+    const h = data.headers || {};
+    document.getElementById('hdr-meta').innerHTML =
+      '<strong>' + (h.White || '?') + '</strong> vs <strong>' + (h.Black || '?') + '</strong>'
+      + (h.Result && h.Result !== '*' ? ' · <span style="color:var(--accent);font-weight:600;">' + h.Result + '</span>' : '')
+      + (h.ECO ? ' · ' + h.ECO : '')
+      + (h.Date ? ' · ' + h.Date : '');
+    document.title = (h.White || '?') + ' vs ' + (h.Black || '?');
+    if (wasAtEnd && !userPinned) idx = POS.length - 1;
+    if (POS.length !== oldLen) { draw(); list(); upd(); pollEngine(); }
+    setOnline();
+  } catch (e) {
+    setOffline(e.message);
+  }
+}
+
+async function pollClock() {
+  if (!gameId()) return;
+  try {
+    const r = await fetch('/api/clock' + qs('viewer=' + encodeURIComponent(viewerRole())), { cache: 'no-store' });
+    if (!r.ok) return;
+    const data = await r.json();
+    CLOCK = data.clock;
+    clockServerTs = (CLOCK && CLOCK.now_ts) ? CLOCK.now_ts : 0;
+    clockClientTs = Date.now() / 1000;
+    document.getElementById('clocks').style.display = CLOCK ? 'grid' : 'none';
+    renderClocks();
+  } catch(e) { /* silent */ }
+}
+
+function renderClocks() {
+  if (!CLOCK) return;
+  // Drift must be computed from the server-side ``last_move_ts``
+  // (the moment the active side started thinking) — NOT from the
+  // client fetch time. Pre-fix, ``clockClientTs`` was reset at each
+  // /api/clock poll, so the local extrapolation snapped back every
+  // 5s (Safari iPhone visible "4:49 → 4:53 loop").
+  const refTs = CLOCK.last_move_ts || clockClientTs;
+  const driftS = Math.max(0, (Date.now() / 1000) - refTs);
+  const active = CLOCK.active;
+  let ws = CLOCK.white_seconds;
+  let bs = CLOCK.black_seconds;
+  if (CLOCK.started && active === 'white') ws -= driftS;
+  else if (CLOCK.started && active === 'black') bs -= driftS;
+  const fmt = (s) => {
+    if (s <= 0) return '0:00.0';
+    if (s < 10) return s.toFixed(1).replace('.', 's.');
+    const m = Math.floor(s / 60); const r = Math.floor(s % 60);
+    return m + ':' + (r < 10 ? '0' + r : r);
+  };
+  document.getElementById('time-white').textContent = fmt(ws);
+  document.getElementById('time-black').textContent = fmt(bs);
+  setClass('clock-white', 'active', active === 'white' && CLOCK.started);
+  setClass('clock-black', 'active', active === 'black' && CLOCK.started);
+  setClass('clock-white', 'low', ws > 0 && ws < 30);
+  setClass('clock-black', 'low', bs > 0 && bs < 30);
+}
+
+function setClass(id, cls, on) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle(cls, !!on);
+}
+
+async function pollEngine() {
+  if (!gameId() || POS.length === 0) return;
+  const fen = POS[idx] && POS[idx].fen;
+  if (!fen) return;
+  const role = viewerRole();
+  const eng = document.getElementById('engine');
+  try {
+    const depthSel = document.getElementById('engineDepth');
+    const depth = depthSel ? parseInt(depthSel.value, 10) : 15;
+    const r = await fetch('/api/engine/live' + qs('viewer=' + encodeURIComponent(role) + '&fen=' + encodeURIComponent(fen) + '&depth=' + depth), { cache: 'no-store' });
+    if (r.status === 403) {
+      eng.innerHTML = '<h3>Analyse Stockfish</h3><div class="locked">🔒 Engine masqué aux joueurs pendant la partie (fair-play). Disponible post-partie ou en mode spectator/arbiter.</div>';
+      return;
+    }
+    if (r.status === 503) {
+      eng.innerHTML = '<h3>Analyse Stockfish</h3><div class="empty">Engine indisponible (binaire Stockfish manquant).</div>';
+      return;
+    }
+    if (!r.ok) {
+      // Transient server error (Stockfish subprocess timeout / contention).
+      // Keep the previous eval bar instead of wiping it — the next poll
+      // will refresh on success. Surface the error only on initial load
+      // (eng.innerHTML still has the boot placeholder ``—``) so the user
+      // gets a signal but mid-game flicker disappears.
+      console.warn('engine fetch HTTP ' + r.status + ' — keeping previous eval');
+      if (eng.querySelector('.eval-bar') === null) {
+        eng.innerHTML = '<h3>Analyse Stockfish</h3><div class="empty">Erreur HTTP ' + r.status + ' (retry au prochain tick)</div>';
+      }
+      return;
+    }
+    const data = await r.json();
+    renderEngine(data);
+  } catch (e) {
+    console.warn('engine fetch threw: ' + e.message + ' — keeping previous eval');
+    if (eng.querySelector('.eval-bar') === null) {
+      eng.innerHTML = '<h3>Analyse Stockfish</h3><div class="empty">Erreur: ' + escapeHtml(e.message) + '</div>';
+    }
+  }
+}
+
+function renderEngine(data) {
+  const eng = document.getElementById('engine');
+  const a = data.analysis || {};
+  const cp = a.score_cp;
+  const mate = a.mate;
+  const pv = (a.pv_san || []).slice(0, 6).join(' ');
+  const best = a.best_move_san || (a.pv_san && a.pv_san[0]) || '—';
+  const depth = a.depth || '?';
+  let displayEval;
+  if (mate !== null && mate !== undefined) displayEval = (mate > 0 ? '+' : '') + '#' + mate;
+  else if (cp !== null && cp !== undefined) displayEval = (cp >= 0 ? '+' : '') + (cp / 100).toFixed(2);
+  else displayEval = '—';
+  // Eval bar: clip to [-500, +500] cp range, 50% center = 0
+  let pct = 50;
+  if (mate !== null && mate !== undefined) pct = mate > 0 ? 99 : 1;
+  else if (cp !== null && cp !== undefined) pct = 50 + Math.max(-49, Math.min(49, cp / 10));
+  eng.innerHTML =
+    '<h3>Analyse Stockfish · depth ' + depth + (data.is_over ? ' · post-mortem' : ' · live') + '</h3>'
+    + '<div class="eval-bar"><div class="indicator" style="left:' + pct + '%"></div></div>'
+    + '<div class="eval-line"><span class="eval-cp">' + displayEval + '</span> · best : <span class="eval-best">' + escapeHtml(best) + '</span></div>'
+    + (pv ? '<div class="eval-pv">PV : ' + escapeHtml(pv) + '</div>' : '');
+}
+
+async function pollComments() {
+  if (!gameId()) return;
+  try {
+    const r = await fetch('/api/commentary' + qs(), { cache: 'no-store' });
+    if (!r.ok) return;
+    const data = await r.json();
+    COMMENTS = data.entries || [];
+    renderComments();
+  } catch(e) { /* silent */ }
+}
+
+function draw() {
+  if (!POS[idx] || !gameId()) return;
+  if (window.__cgSetFen) {
+    // At-current-ply chessground update: only enable drag&drop when
+    // viewing the latest position (idx === POS.length - 1). Historic
+    // positions stay view-only to avoid users accidentally trying to
+    // "correct" a past ply.
+    const atLive = (idx === POS.length - 1) && lastResult === '*';
+    // Turn to move is derived from the FEN active-color field.
+    const fen = POS[idx].fen;
+    const turn = fen.split(' ')[1] === 'w' ? 'white' : 'black';
+    window.__cgSetFen(fen, atLive ? turn : null, atLive);
+  }
+}
+
+function list() {
+  const m = document.getElementById('moves');
+  m.innerHTML = '';
+  for (let k = 1; k < POS.length; k++) {
+    if (POS[k].color === 'w') {
+      const n = document.createElement('span');
+      n.className = 'num';
+      n.textContent = Math.floor((k-1)/2)+1 + '.';
+      m.appendChild(n);
+    }
+    const b = document.createElement('button');
+    b.className = 'mv' + (k === idx ? ' act' : '');
+    b.textContent = POS[k].san;
+    b.onclick = () => { idx = k; userPinned = (k !== POS.length-1); draw(); list(); upd(); pollEngine(); };
+    m.appendChild(b);
+  }
+  const act = m.querySelector('.mv.act');
+  if (act) act.scrollIntoView({block: 'nearest'});
+}
+
+function plyLabel(p) {
+  if (p <= 0) return '0';
+  const move = Math.ceil(p / 2);
+  return move + (p % 2 === 1 ? '.w' : '.b');
+}
+
+function upd() {
+  // Display in chess.com-style "N.w" / "N.b" — N = full move number,
+  // .w / .b = side that just played to reach this position. After
+  // 7.Nc3 (ply 13) we want "7.w". After 7...Bxc3+ (ply 14) → "7.b".
+  document.getElementById('ct').textContent = plyLabel(idx) + ' / ' + plyLabel(POS.length - 1);
+  const c = POS[idx] && POS[idx].color;
+  const next = c === 'w' ? 'noirs' : (c === 'b' ? 'blancs' : (POS.length > 1 ? 'blancs' : ''));
+  document.getElementById('trait').textContent = next ? 'Trait aux ' + next : '';
+  renderComments();
+  renderCaptures(POS[idx] && POS[idx].fen);
+}
+
+// Initial piece counts per side (standard chess start)
+const INITIAL_PIECES = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+// Material values (king ignored — can't be captured)
+const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+// SVG-based rendering via /api/piece.svg?color=w|b&type=p|n|b|r|q.
+// Previously used Unicode glyphs — but ♙♘♗♖♕ (outlined white) render
+// noticeably smaller than ♟♞♝♜♛ (filled black) on system fonts, and
+// every workaround (CSS color trick, font-size compensation) was
+// fragile cross-browser (Safari iPhone notably broken). SVG gives
+// pixel-identical sizing + native white/black distinction. Responses
+// are cached forever ("immutable") server-side, so the 12 unique
+// URLs are fetched once and reused.
+function pieceImg(color, type) {
+  return '<img src="/api/piece.svg?color=' + color + '&type=' + type +
+    '" alt="' + color + type + '" />';
+}
+
+function renderCaptures(fen) {
+  const box = document.getElementById('captures');
+  if (!fen) {
+    box.innerHTML = '<h3>Matériel capturé</h3><div class="empty">—</div>';
+    return;
+  }
+  // FEN ranks are space-delimited; the position field is the first token.
+  const placement = fen.split(' ')[0];
+  const counts = { P:0, N:0, B:0, R:0, Q:0, p:0, n:0, b:0, r:0, q:0 };
+  for (const ch of placement) {
+    if (counts.hasOwnProperty(ch)) counts[ch]++;
+  }
+  // Captured = initial - current. White's row shows black pieces taken
+  // by white (rendered as black-colored SVG); black's row shows white
+  // pieces taken by black (rendered as white-colored SVG). Native
+  // sizing — no Unicode-glyph mismatch.
+  const whiteCaptured = []; // black pieces taken → color="b" in SVG
+  const blackCaptured = []; // white pieces taken → color="w" in SVG
+  let whiteMaterial = 0, blackMaterial = 0;
+  for (const k of ['p','n','b','r','q']) {
+    const blackTaken = INITIAL_PIECES[k] - counts[k];
+    for (let i = 0; i < blackTaken; i++) whiteCaptured.push(pieceImg('b', k));
+    whiteMaterial += blackTaken * PIECE_VALUE[k];
+    const whiteTaken = INITIAL_PIECES[k] - counts[k.toUpperCase()];
+    for (let i = 0; i < whiteTaken; i++) blackCaptured.push(pieceImg('w', k));
+    blackMaterial += whiteTaken * PIECE_VALUE[k];
+  }
+  if (whiteCaptured.length === 0 && blackCaptured.length === 0) {
+    box.innerHTML = '<h3>Matériel capturé</h3><div class="empty">Position initiale — rien capturé.</div>';
+    return;
+  }
+  const balance = whiteMaterial - blackMaterial;
+  const balanceLabel = balance === 0 ? '0' : (balance > 0 ? '+' + balance : String(balance));
+  const balanceClass = balance === 0 ? 'even' : (balance > 0 ? 'plus' : 'minus');
+  const whitePieces = whiteCaptured.length ? whiteCaptured.join('') : '<span class="empty">—</span>';
+  const blackPieces = blackCaptured.length ? blackCaptured.join('') : '<span class="empty">—</span>';
+  box.innerHTML =
+    '<h3>Matériel capturé</h3>' +
+    '<div class="row"><span class="side">Blancs</span><span class="pieces">' + whitePieces +
+    '</span><span class="balance ' + balanceClass + '">' + balanceLabel + '</span></div>' +
+    '<div class="row"><span class="side">Noirs</span><span class="pieces">' + blackPieces +
+    '</span><span class="balance">&nbsp;</span></div>';
+}
+
+function renderComments() {
+  const box = document.getElementById('commentary');
+  const matches = COMMENTS.filter(e => e.ply === idx);
+  let html = '<h3>Commentaires — ply ' + idx + '</h3>';
+  if (matches.length === 0) {
+    html += '<div class="empty">Aucun commentaire pour ce coup.</div>';
+  } else {
+    matches.sort((a,b) => (a.ts || '').localeCompare(b.ts || ''));
+    for (const e of matches) {
+      let t = e.ts || '';
+      try { t = new Date(t).toLocaleTimeString(); } catch (_) {}
+      html += '<div class="entry"><span class="src">' + escapeHtml(e.source) + '</span><span class="ts">' + escapeHtml(t) + '</span><div class="txt">' + escapeHtml(e.text) + '</div></div>';
+    }
+  }
+  box.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function g(a) {
+  if (POS.length === 0) return;
+  if (a === 's') { idx = 0; userPinned = true; }
+  else if (a === 'p') { idx = Math.max(0, idx-1); userPinned = (idx !== POS.length-1); }
+  else if (a === 'n') { idx = Math.min(POS.length-1, idx+1); userPinned = (idx !== POS.length-1); }
+  else if (a === 'e') { idx = POS.length-1; userPinned = false; }
+  draw(); list(); upd(); pollEngine();
+}
+
+function setOnline() {
+  document.getElementById('pulse').classList.remove('off');
+  document.getElementById('liveStatus').textContent = 'En direct · ' + new Date().toLocaleTimeString();
+}
+function setOffline(msg) {
+  document.getElementById('pulse').classList.add('off');
+  document.getElementById('liveStatus').innerHTML = '<span class="err">Hors ligne · ' + escapeHtml(msg || '') + '</span>';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
+  if (e.key === 'ArrowLeft') { g('p'); e.preventDefault(); }
+  else if (e.key === 'ArrowRight') { g('n'); e.preventDefault(); }
+  else if (e.key === 'Home') { g('s'); e.preventDefault(); }
+  else if (e.key === 'End') { g('e'); e.preventDefault(); }
+});
+
+// SSE live-refresh (#247). Native EventSource ; on push we trigger a
+// pollPositions() to refresh the local POS array + board. If SSE is
+// unavailable (server down, proxy blocking, browser without support)
+// the interval poll below is the safety net. Idle games see ~1 keepalive
+// / 15s on the wire.
+let evtSource = null;
+
+function startEventStream() {
+  if (evtSource) { evtSource.close(); evtSource = null; }
+  if (!gameId() || !window.EventSource) return;
+  try {
+    evtSource = new EventSource('/api/games/' + encodeURIComponent(gameId()) + '/stream');
+  } catch (e) { return; }
+  evtSource.onmessage = e => {
+    let data;
+    try { data = JSON.parse(e.data); } catch (_) { return; }
+    if (data && data.error) { setOffline(data.error); return; }
+    // Full refresh — the SSE payload is a change notification, not a
+    // replacement for /api/positions (which has the full replay data
+    // the moves-list UI needs).
+    pollPositions();
+    // CD review PR #295 cycle 4 : push Elo update immediately when the
+    // SSE payload reports a terminal result ("1-0" / "0-1" / "1/2-1/2").
+    // Avoids the up-to-30-s wait of the periodic pollElo for the
+    // scoreboard to catch a freshly-finished game. Only triggers once
+    // per transition (lastResult still '*' → non-'*').
+    if (data && data.result && data.result !== '*' && lastResult === '*') {
+      pollElo();
+    }
+  };
+  evtSource.onerror = () => {
+    // Silent — the 2s interval poll below covers the gap. EventSource
+    // will auto-reconnect on its own after a few seconds.
+  };
+}
+
+async function pollElo() {
+  // Elo board is viewer-wide (independent of game_id). Cheap endpoint,
+  // but we refresh at a slow cadence : only changes after a finished
+  // game is persisted + the rebuild/cache is written.
+  try {
+    const r = await fetch('/api/elo', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    renderElo(j);
+  } catch (e) {
+    // Keep the previous render on error — the Elo board is not safety-critical.
+  }
+}
+
+function renderElo(j) {
+  // CD nit PR #295 : la ligne srcEl.textContent = ... est écrasée
+  // juste après par box.innerHTML, inutile. Le badge « (rebuild) » est
+  // reconstruit directement dans le HTML.
+  const box = document.getElementById('elo-board');
+  const sourceBadge = (j && j.source === 'rebuild') ? '(rebuild)' : '';
+  const titleHtml = '<h3><span>Classement Elo</span><span class="source" id="elo-source">' + sourceBadge + '</span></h3>';
+  const players = (j && j.players) || [];
+  if (players.length === 0) {
+    box.innerHTML = titleHtml + '<div class="empty">Aucune partie classée pour le moment.</div>';
+    return;
+  }
+  let html = titleHtml;
+  html += '<table><thead><tr><th>#</th><th>joueur</th><th class="num">elo</th><th class="num">parties</th></tr></thead><tbody>';
+  players.forEach((p, i) => {
+    html += '<tr><td class="rank">' + (i + 1) + '</td><td class="name">' + escapeHtml(p.name) + '</td><td class="num rating">' + p.rating + '</td><td class="num">' + p.games + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  box.innerHTML = html;
+}
+
+refreshGamesList();  // populate combobox on load, before user opens dropdown
+if (gameId()) resetAndPoll();
+pollElo();  // viewer-wide, independent of game_id
+// Polling is kept as a safety net for the case where SSE is blocked
+// (proxy, adblocker, network). Slower cadence than pre-SSE (was 2s).
+setInterval(pollPositions, 5000);
+setInterval(pollClock, 5000);
+setInterval(renderClocks, 100);  // smooth countdown
+setInterval(pollComments, 3000);
+setInterval(pollEngine, 6000);
+setInterval(refreshGamesList, 30000);  // new games / result flips propagate every 30s
+setInterval(pollElo, 30000);  // Elo refresh on finished-game writes (slow cadence)
+</script>
+<script type="module">
+// Chessground : drag&drop board (lichess). ESM import from CDN — falls
+// back gracefully to the static SVG board (via /api/board.svg) if the
+// CDN is blocked (offline, adblocker, DSM proxy filtering) : window.__cgSetFen
+// stays undefined and draw() no-ops, but the moves list, clocks,
+// commentary and engine panel keep working.
+import { Chessground } from 'https://cdn.jsdelivr.net/npm/chessground@9.2.1/+esm';
+
+const boardEl = document.getElementById('board');
+const errorEl = document.getElementById('move-error');
+// Chessground removes children on init, so re-parent the error overlay.
+if (errorEl && errorEl.parentNode === boardEl) boardEl.removeChild(errorEl);
+boardEl.classList.add('cg-wrap');
+
+let cg = null;
+let cgFenSnapshot = null;  // FEN before the last user drop, for revert on 422.
+
+function showMoveError(msg) {
+  if (!errorEl) return;
+  errorEl.textContent = msg;
+  errorEl.classList.add('show');
+  setTimeout(() => errorEl.classList.remove('show'), 2500);
+}
+
+async function onUserDrop(from, to) {
+  const gid = document.getElementById('gameid').value.trim();
+  if (!gid) return;
+  // Promotion : chessground doesn't ship a dialog by default. We send
+  // the drop as UCI ; if it's a pawn reaching the last rank, we append
+  // 'q' server-side (implicit queen promotion, most common case).
+  let uci = from + to;
+  const piece = cg ? cg.state.pieces.get(to) : null;
+  const isPromoRank = (piece && piece.role === 'pawn' &&
+    (to.endsWith('8') || to.endsWith('1')));
+  if (isPromoRank) uci = uci + 'q';
+  try {
+    const r = await fetch('/api/games/' + encodeURIComponent(gid) + '/move', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ uci, by: 'viewer-drag-drop' }),
+    });
+    if (!r.ok) {
+      // Revert to pre-drop FEN. The server rejected — either illegal
+      // move (422) or game state changed under us (409).
+      if (cgFenSnapshot && cg) cg.set({ fen: cgFenSnapshot });
+      const body = await r.json().catch(() => ({}));
+      showMoveError(body.detail || ('HTTP ' + r.status));
+      return;
+    }
+    // Successful move — the SSE stream will push the fresh state, and
+    // pollPositions() will refresh the moves list. Don't manually
+    // update chessground here to avoid double-update flicker.
+  } catch (e) {
+    if (cgFenSnapshot && cg) cg.set({ fen: cgFenSnapshot });
+    showMoveError('Network error');
+  }
+}
+
+// Public setter used by the classical polling loop's draw() function.
+// ``turn`` may be null → viewOnly; otherwise 'white'|'black'.
+// ``interactive`` toggles drag&drop (true at live position, false in history).
+window.__cgSetFen = function(fen, turn, interactive) {
+  if (!cg) return;
+  if (!fen) {
+    cg.set({ fen: 'start', viewOnly: true, movable: { color: undefined, free: false } });
+    return;
+  }
+  cgFenSnapshot = fen;
+  cg.set({
+    fen,
+    turnColor: turn || undefined,
+    viewOnly: !interactive,
+    movable: {
+      free: true,  // server validates via POST /move ; client is permissive
+      color: interactive ? turn : undefined,
+      showDests: false,
+      events: { after: onUserDrop },
+    },
+  });
+};
+
+cg = Chessground(boardEl, {
+  fen: 'start',
+  orientation: 'white',
+  viewOnly: true,
+  animation: { enabled: true, duration: 200 },
+  movable: { free: true, color: undefined, events: { after: onUserDrop } },
+  draggable: { showGhost: true },
+});
+
+// Re-attach the error overlay after chessground has taken over the div.
+if (errorEl) boardEl.appendChild(errorEl);
+
+// Once chessground is ready, re-trigger the classical draw() so the
+// board catches up with any positions already polled by the sibling
+// script. ``window.draw`` is populated by the classical <script>
+// (top-level function declarations are globals in non-module scripts).
+if (typeof window.draw === 'function') window.draw();
+</script>
+</body></html>
