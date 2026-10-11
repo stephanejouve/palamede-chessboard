@@ -22,6 +22,7 @@ This module exposes two helpers :
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TypedDict
 
 import chess
 
@@ -32,6 +33,19 @@ class ValidationResult:
 
     ok: bool
     reason: str = ""
+
+
+class MoveRequestContext(TypedDict):
+    """Payload returned by :func:`move_request_context`.
+
+    Typed so consumers (daemon, server) can `ctx["ply"] // 2` or
+    `' '.join(ctx["last_moves"])` without mypy complaining about `object`.
+    """
+
+    fen: str
+    last_moves: list[str]
+    ply: int
+    turn: str
 
 
 def validate_san_strict(board: chess.Board, san: str) -> ValidationResult:
@@ -105,7 +119,7 @@ def validate_san_strict(board: chess.Board, san: str) -> ValidationResult:
     return ValidationResult(True)
 
 
-def move_request_context(board: chess.Board, last_n: int = 6) -> dict[str, object]:
+def move_request_context(board: chess.Board, last_n: int = 6) -> MoveRequestContext:
     """Return the payload that MUST accompany every arbiter turn request.
 
     Keys :
