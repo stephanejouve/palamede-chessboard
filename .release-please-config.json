@@ -11,7 +11,7 @@
     {"type": "revert", "section": "Reverts"},
     {"type": "refactor", "section": "Refactor"},
     {"type": "docs", "section": "Documentation", "hidden": true},
-    {"type": "test", "section": "Tests", "hidden": true},
+    {"type": "test", "section": "Tests"},
     {"type": "ci", "section": "CI", "hidden": true},
     {"type": "chore", "section": "Chores", "hidden": true}
   ],
