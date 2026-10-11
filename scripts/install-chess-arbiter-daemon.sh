@@ -8,16 +8,22 @@
 # vivant tant que l'utilisateur est logué (``KeepAlive`` sous launchd).
 #
 # Actions :
-#   1. Preflight : vérifie que `palamede-chess-arbiter-daemon` est dans
-#      PATH (installé via `poetry install` ou `pipx install`).
+#   1. Preflight : vérifie que ``palamede-chess-arbiter-daemon`` ET
+#      ``palamede-chessboard-server`` sont dans PATH (installés via
+#      ``poetry install`` ou ``pipx install``). Les deux vont de pair :
+#      le serveur MCP (``chess_create_game``) vérifie le pidfile posé
+#      par le daemon avant d'accepter la création d'une partie.
 #   2. Génère un plist dans ~/Library/LaunchAgents/
 #      com.magma.palamede-chess-arbiter-daemon.<game_id>.plist à partir
 #      du template examples/launchagents/.
 #   3. `launchctl bootstrap gui/<uid>` du plist (bootout + bootstrap
 #      pour idempotence : rejouer == recharger la nouvelle config).
 #
-# Note (CD msg 57628) : le raccord `point d'entrée MCP server` est hors
-# scope BT-005 et sera posé après le merge BT-004 Admin.
+# Entry points installés (via pyproject.toml) :
+#   - ``palamede-chess-arbiter-daemon`` : ce service launchd.
+#   - ``palamede-chessboard-server``    : serveur MCP stdio, à brancher
+#     dans la config du client MCP (Claude Desktop/Code) pour piloter
+#     les parties d'échecs.
 #
 # Usage :
 #   install-chess-arbiter-daemon.sh --game-id admin-vs-leader-004 \
@@ -31,7 +37,7 @@
 # Exit codes :
 #   0 = OK
 #   1 = argument invalide
-#   2 = preflight failed (daemon binary not in PATH)
+#   2 = preflight failed (daemon or MCP server binary not in PATH)
 #   3 = launchctl bootstrap failed
 
 set -euo pipefail
@@ -42,6 +48,7 @@ CONFIG_PATH=""
 DRY_RUN=0
 UNINSTALL=0
 DAEMON_BIN="${DAEMON_BIN:-$(command -v palamede-chess-arbiter-daemon || true)}"
+MCP_SERVER_BIN="${MCP_SERVER_BIN:-$(command -v palamede-chessboard-server || true)}"
 LAUNCHAGENTS_DIR="${LAUNCHAGENTS_DIR:-$HOME/Library/LaunchAgents}"
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/.." && pwd -P)}"
 TEMPLATE="${TEMPLATE:-$REPO_ROOT/examples/launchagents/com.magma.palamede-chess-arbiter-daemon.plist}"
@@ -113,6 +120,14 @@ if [ -z "$DAEMON_BIN" ]; then
   exit 2
 fi
 
+if [ -z "$MCP_SERVER_BIN" ]; then
+  echo "install-chess-arbiter-daemon: palamede-chessboard-server introuvable dans PATH" >&2
+  echo "  daemon et serveur MCP vont de pair (le serveur vérifie le pidfile" >&2
+  echo "  posé par le daemon avant d'accepter chess_create_game)." >&2
+  echo "  installez-le d'abord : cd palamede-chessboard && poetry install" >&2
+  exit 2
+fi
+
 if [ ! -f "$TEMPLATE" ]; then
   echo "install-chess-arbiter-daemon: template introuvable: $TEMPLATE" >&2
   exit 2
@@ -139,6 +154,7 @@ launchctl bootout "gui/${UID_VAL}/${PLIST_LABEL}" 2>/dev/null || true
 launchctl bootstrap "gui/${UID_VAL}" "$PLIST_PATH"
 
 echo "install-chess-arbiter-daemon: installed ${PLIST_LABEL} → ${PLIST_PATH}"
-echo "  config: ${CONFIG_PATH}"
-echo "  daemon: ${DAEMON_BIN}"
-echo "  logs  : ~/Library/Logs/${PLIST_LABEL}.out.log + .err.log"
+echo "  config:     ${CONFIG_PATH}"
+echo "  daemon:     ${DAEMON_BIN}"
+echo "  mcp server: ${MCP_SERVER_BIN}  (à brancher côté client MCP)"
+echo "  logs      : ~/Library/Logs/${PLIST_LABEL}.out.log + .err.log"
