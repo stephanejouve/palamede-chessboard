@@ -30,6 +30,7 @@ from pathlib import Path
 import chess
 import chess.pgn
 
+from palamede_chessboard.chess_arbiter import ValidationResult, validate_san_strict
 from palamede_chessboard.commentary import get_commentary, post_commentary
 from palamede_chessboard.errors import (
     ChessboardError,
@@ -51,7 +52,6 @@ from palamede_chessboard.paths import (
     _pgn_path,
     _validate_game_id,
 )
-from palamede_chessboard.rules import ValidationResult, validate_san_strict
 
 __all__ = [
     "COMMENTARY_DIR_NAME",

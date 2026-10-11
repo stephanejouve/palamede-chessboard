@@ -220,6 +220,71 @@ def _position_fen_at_ply(state: GameState, ply: int) -> str | None:
     return board.fen()
 
 
+_ALLOWED: dict = {"allowed": True, "matched_game_id": None, "reason": None}
+
+
+def _refuse_in_progress_game(game_id: str) -> dict:
+    return {
+        "allowed": False,
+        "matched_game_id": game_id,
+        "reason": f"partie en cours ({game_id}), outils moteur interdits jusqu'à la fin",
+    }
+
+
+def _refuse_analyze_position_match(game_id: str, target_ply: int, match: str) -> dict:
+    return {
+        "allowed": False,
+        "matched_game_id": match,
+        "reason": (
+            f"la position du jeu {game_id} au ply {target_ply} correspond à "
+            f"une position de la partie en cours {match}, outils moteur interdits"
+        ),
+    }
+
+
+def _refuse_fen_match(match: str) -> dict:
+    return {
+        "allowed": False,
+        "matched_game_id": match,
+        "reason": (
+            f"FEN correspond à une position de la partie en cours "
+            f"{match}, outils moteur interdits jusqu'à la fin"
+        ),
+    }
+
+
+def _check_against_game_id(
+    games_dir: Path,
+    *,
+    tool: str,
+    game_id: str,
+    ply: int | None,
+    in_progress: dict[str, set[str]],
+) -> dict | None:
+    """Return refusal dict if ``game_id`` triggers it, else ``None``."""
+    try:
+        state = GameState.load(game_id, games_dir=games_dir)
+    except GameNotFoundError:
+        # Downstream tool will raise GAME_NOT_FOUND — guard stays out.
+        return _ALLOWED
+    if state.metadata.result == "*":
+        return _refuse_in_progress_game(game_id)
+    # Finished game. Only analyze_position does a single-shot check
+    # here ; the walk tools defer to mask_walk_entries.
+    if tool != "chess_analyze_position":
+        return None
+    target_ply = ply if ply is not None else state.board.ply()
+    if target_ply < OPENING_PLIES_IGNORED:
+        return None
+    target_fen = _position_fen_at_ply(state, target_ply)
+    if target_fen is None:
+        return None
+    match = _match_against_in_progress(target_fen, in_progress)
+    if match is None:
+        return None
+    return _refuse_analyze_position_match(game_id, target_ply, match)
+
+
 def check_engine_call(
     games_dir: Path,
     *,
@@ -255,57 +320,25 @@ def check_engine_call(
       mirrors). Refused on match.
     """
     if tool not in GUARDED_TOOLS:
-        return {"allowed": True, "matched_game_id": None, "reason": None}
+        return _ALLOWED
 
     in_progress = _in_progress_positions(games_dir)
 
     if game_id:
-        try:
-            state = GameState.load(game_id, games_dir=games_dir)
-        except GameNotFoundError:
-            # Downstream tool will raise GAME_NOT_FOUND — guard stays out.
-            return {"allowed": True, "matched_game_id": None, "reason": None}
-        if state.metadata.result == "*":
-            return {
-                "allowed": False,
-                "matched_game_id": game_id,
-                "reason": (
-                    f"partie en cours ({game_id}), outils moteur interdits " "jusqu'à la fin"
-                ),
-            }
-        # Finished game. Only analyze_position does a single-shot check
-        # here ; the walk tools defer to mask_walk_entries.
-        if tool == "chess_analyze_position":
-            target_ply = ply if ply is not None else state.board.ply()
-            if target_ply >= OPENING_PLIES_IGNORED:
-                target_fen = _position_fen_at_ply(state, target_ply)
-                if target_fen is not None:
-                    match = _match_against_in_progress(target_fen, in_progress)
-                    if match is not None:
-                        return {
-                            "allowed": False,
-                            "matched_game_id": match,
-                            "reason": (
-                                f"la position du jeu {game_id} au ply "
-                                f"{target_ply} correspond à une position de "
-                                f"la partie en cours {match}, outils moteur "
-                                "interdits"
-                            ),
-                        }
+        verdict = _check_against_game_id(
+            games_dir, tool=tool, game_id=game_id, ply=ply, in_progress=in_progress
+        )
+        if verdict is not None and verdict is not _ALLOWED:
+            return verdict
+        if verdict is _ALLOWED:
+            return _ALLOWED
 
     if fen:
         match = _match_against_in_progress(fen, in_progress)
         if match is not None:
-            return {
-                "allowed": False,
-                "matched_game_id": match,
-                "reason": (
-                    f"FEN correspond à une position de la partie en cours "
-                    f"{match}, outils moteur interdits jusqu'à la fin"
-                ),
-            }
+            return _refuse_fen_match(match)
 
-    return {"allowed": True, "matched_game_id": None, "reason": None}
+    return _ALLOWED
 
 
 def mask_walk_entries(walk: list, games_dir: Path) -> tuple[list, int, list[dict]]:
