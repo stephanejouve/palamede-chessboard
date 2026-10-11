@@ -273,9 +273,7 @@ class TestGamesDirEnvHonored:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.setenv("MCP_CHESSBOARD_GAMES_DIR", str(tmp_path))
-        _create_finished(
-            tmp_path, game_id="env-probe", white="junior", black="admin", result="1-0"
-        )
+        _create_finished(tmp_path, game_id="env-probe", white="junior", black="admin", result="1-0")
         # No explicit ``games_dir`` argument — must pick up the env override.
         games = collect_rated_games()
         assert [g.game_id for g in games] == ["env-probe"]
