@@ -1,0 +1,66 @@
+# Maquette palamede sur le NAS (BT-008, #28) — données de TEST uniquement.
+#
+# Stack Portainer « palamede-maquette » :
+#   PORTAINER_PROFILE=mnemosyne portainer-ctl deploy palamede-maquette \
+#     --compose docker-compose.maquette.yml --env <fichier avec PALAMEDE_IMAGE>
+#
+# - palamede-mcp    : serveur MCP en Streamable HTTP SANS ÉTAT sur :8770/mcp/
+#                     (pas de session à perdre après une veille du client ou
+#                     un redémarrage du conteneur). /healthz pour le healthcheck.
+# - palamede-viewer : viewer FastAPI sur :8765.
+# - volume palamede-games : PGN, ratings.json, analyses, monté dans les deux.
+#
+# Pas d'arbitre gardien : son contrat (pidfile + PID vivant) ne traverse pas
+# les espaces de PID de conteneurs distincts ; la maquette passe donc
+# ``arbiter=<agent>`` à ``chess_create_game``, ce que le contrat prévoit.
+#
+# ⚠ Limite assumée : AUCUNE authentification. Les ports publiés ne servent
+#   qu'aux essais depuis le LAN ; mTLS / sidecar et macvlan = étape suivante.
+#   Ne jamais y monter les vraies parties de /Users/Shared/games.
+
+services:
+  palamede-mcp:
+    image: ${PALAMEDE_IMAGE:?PALAMEDE_IMAGE manquant (ghcr.io/…@sha256:…)}
+    container_name: palamede-mcp
+    command: ["palamede-chessboard-server"]
+    environment:
+      MCP_CHESSBOARD_TRANSPORT: http
+      MCP_CHESSBOARD_HTTP_HOST: 0.0.0.0
+      MCP_CHESSBOARD_HTTP_PORT: "8770"
+    ports:
+      - "8770:8770"
+    volumes:
+      - palamede-games:/data/games
+    networks: [palamede-maquette]
+    mem_limit: 512m
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(urllib.request.urlopen('http://127.0.0.1:8770/healthz', timeout=3).status != 200)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  palamede-viewer:
+    image: ${PALAMEDE_IMAGE:?PALAMEDE_IMAGE manquant (ghcr.io/…@sha256:…)}
+    container_name: palamede-viewer
+    command: ["palamede-chessboard-viewer"]
+    environment:
+      MCP_CHESSBOARD_VIEWER_HOST: 0.0.0.0
+      MCP_CHESSBOARD_VIEWER_PORT: "8765"
+    ports:
+      - "8765:8765"
+    volumes:
+      - palamede-games:/data/games
+    networks: [palamede-maquette]
+    mem_limit: 256m
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+volumes:
+  palamede-games:
+
+networks:
+  palamede-maquette:
+    driver: bridge

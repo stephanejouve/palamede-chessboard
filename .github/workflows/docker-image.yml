@@ -1,0 +1,90 @@
+name: docker-image
+
+# Image conteneur de palamede (BT-008, #28).
+# - PR touchant l'image : construction + smoke test, SANS publication.
+# - Tag vX.Y.Z (release-please) ou lancement manuel : construction, smoke
+#   test puis publication sur ghcr.io/stephanejouve/palamede-chessboard.
+# Le NAS tire ensuite l'image par son digest (jamais par un tag flottant).
+
+on:
+  pull_request:
+    paths:
+      - Dockerfile
+      - docker-compose.maquette.yml
+      - pyproject.toml
+      - poetry.lock
+      - palamede_chessboard/**
+      - .github/workflows/docker-image.yml
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/stephanejouve/palamede-chessboard
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build (chargée localement pour le smoke test)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: palamede-chessboard:ci
+
+      - name: Smoke test — MCP Streamable HTTP + viewer + Stockfish
+        run: |
+          set -euo pipefail
+          docker run -d --name mcp -p 8770:8770 palamede-chessboard:ci
+          docker run -d --name viewer -p 8765:8765 \
+            -e MCP_CHESSBOARD_VIEWER_HOST=0.0.0.0 palamede-chessboard:ci palamede-chessboard-viewer
+          for i in $(seq 30); do curl -fsS http://127.0.0.1:8770/healthz && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8770/healthz | grep -qx ok
+          curl -fsS -X POST http://127.0.0.1:8770/mcp/ \
+            -H 'Accept: application/json, text/event-stream' -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | grep -q chess_create_game
+          for i in $(seq 30); do curl -fsS -o /dev/null http://127.0.0.1:8765/ && break; sleep 1; done
+          curl -fsS -o /dev/null -w 'viewer %{http_code}\n' http://127.0.0.1:8765/
+          docker run --rm palamede-chessboard:ci sh -c 'echo quit | /usr/games/stockfish | head -1'
+          docker exec mcp id -u | grep -qx 10001
+
+      - name: Logs en cas d'échec
+        if: failure()
+        run: docker logs mcp; docker logs viewer
+
+      - name: Login GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publication (tag + sha)
+        if: github.event_name != 'pull_request'
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.ref_name }}
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+
+      - name: Digest à utiliser dans PALAMEDE_IMAGE
+        if: github.event_name != 'pull_request'
+        run: echo "${{ env.IMAGE }}@${{ steps.push.outputs.digest }}" | tee -a "$GITHUB_STEP_SUMMARY"
