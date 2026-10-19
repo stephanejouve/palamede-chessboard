@@ -20,8 +20,11 @@ COPY palamede_chessboard ./palamede_chessboard
 # Contraintes = versions exactes de poetry.lock, puis installation du paquet.
 RUN python - <<'EOF' > /tmp/constraints.txt
 import tomllib
+# Marqueurs conservés : le lock peut porter plusieurs versions d'un même
+# paquet selon la version de Python (ex. mcp 1.27.2 / 1.30.0).
 for p in tomllib.load(open("poetry.lock", "rb"))["package"]:
-    print(f"{p['name']}=={p['version']}")
+    m = p.get("markers")
+    print(f"{p['name']}=={p['version']}" + (f"; {m}" if isinstance(m, str) else ""))
 EOF
 RUN pip install --no-cache-dir --constraint /tmp/constraints.txt . \
     && rm -rf /src /tmp/constraints.txt
