@@ -128,9 +128,81 @@ async def _run_stdio() -> None:
         )
 
 
-def main() -> None:
+#: Transport Streamable HTTP (BT-008, #28) : variables d'environnement lues
+#: par ``main`` quand aucun argument n'est passé (cas du conteneur).
+TRANSPORT_ENV = "MCP_CHESSBOARD_TRANSPORT"
+HTTP_HOST_ENV = "MCP_CHESSBOARD_HTTP_HOST"
+HTTP_PORT_ENV = "MCP_CHESSBOARD_HTTP_PORT"
+DEFAULT_HTTP_PORT = 8770
+
+
+def build_http_app():
+    """Starlette app serving the MCP server over Streamable HTTP on ``/mcp``.
+
+    **Sans état** (``stateless=True``) : chaque requête porte son contexte, il
+    n'y a pas d'identifiant de session côté serveur. Un redémarrage du
+    conteneur ou une veille du client ne laissent donc aucune session
+    orpheline (critères 4 et 5 de #28) — l'état des parties vit sur disque.
+    ``GET /healthz`` répond ``ok`` pour le healthcheck Docker.
+    """
+    import contextlib
+
+    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+    from starlette.applications import Starlette
+    from starlette.responses import PlainTextResponse
+    from starlette.routing import Mount, Route
+
+    manager = StreamableHTTPSessionManager(app=server, stateless=True)
+
+    async def handle_mcp(scope, receive, send) -> None:
+        await manager.handle_request(scope, receive, send)
+
+    async def healthz(_request) -> PlainTextResponse:
+        return PlainTextResponse("ok")
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_app):
+        async with manager.run():
+            yield
+
+    return Starlette(
+        routes=[Route("/healthz", healthz), Mount("/mcp", app=handle_mcp)],
+        lifespan=lifespan,
+    )
+
+
+def _parse_args(argv: list[str] | None):
+    import argparse
+
+    parser = argparse.ArgumentParser(description="palamede-chessboard MCP server")
+    parser.add_argument(
+        "--transport",
+        choices=("stdio", "http"),
+        default=os.environ.get(TRANSPORT_ENV, "stdio"),
+        help=f"stdio (défaut) ou http = Streamable HTTP (env {TRANSPORT_ENV}).",
+    )
+    parser.add_argument("--host", default=os.environ.get(HTTP_HOST_ENV, "127.0.0.1"))
+    parser.add_argument(
+        "--port", type=int, default=int(os.environ.get(HTTP_PORT_ENV, DEFAULT_HTTP_PORT))
+    )
+    args = parser.parse_args(argv)
+    # argparse ne valide ``choices`` que pour une valeur passée en ligne de
+    # commande, pas pour un ``default`` venu de l'environnement (review Leader
+    # #31 : MCP_CHESSBOARD_TRANSPORT=sse partait en http sans erreur).
+    if args.transport not in ("stdio", "http"):
+        parser.error(f"{TRANSPORT_ENV}={args.transport!r} invalide (attendu : stdio ou http)")
+    return args
+
+
+def main(argv: list[str] | None = None) -> None:
     """Entry point for ``python -m palamede_chessboard.mcp_chessboard_server``."""
-    asyncio.run(_run_stdio())
+    args = _parse_args(argv)
+    if args.transport == "stdio":
+        asyncio.run(_run_stdio())
+        return
+    import uvicorn
+
+    uvicorn.run(build_http_app(), host=args.host, port=args.port, log_level="info")
 
 
 if __name__ == "__main__":
