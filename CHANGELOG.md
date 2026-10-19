@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.1.0...v0.2.0) (2026-10-19)
+
+
+### Features
+
+* **docker:** maquette conteneurisée, MCP Streamable HTTP sans état et viewer (BT-008) ([#31](https://github.com/stephanejouve/palamede-chessboard/issues/31)) ([8607a73](https://github.com/stephanejouve/palamede-chessboard/commit/8607a7312f9972e7d5a5ed1b37dd5d2631b6d4a3))
+
 ## [0.1.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.0.1...v0.1.0) (2026-10-11)
 
 
