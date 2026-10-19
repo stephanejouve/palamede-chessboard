@@ -82,6 +82,15 @@ def test_parse_args_defaults_and_env(monkeypatch):
     assert (a.transport, a.host, a.port) == ("http", "0.0.0.0", 9001)
 
 
+@pytest.mark.parametrize("value", ["sse", "HTTP", ""])
+def test_invalid_transport_from_env_is_rejected(monkeypatch, capsys, value):
+    monkeypatch.setenv(srv.TRANSPORT_ENV, value)
+    with pytest.raises(SystemExit) as exc:
+        srv._parse_args([])
+    assert exc.value.code == 2
+    assert "invalide" in capsys.readouterr().err
+
+
 def _free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))

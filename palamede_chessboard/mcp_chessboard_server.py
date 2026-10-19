@@ -185,7 +185,13 @@ def _parse_args(argv: list[str] | None):
     parser.add_argument(
         "--port", type=int, default=int(os.environ.get(HTTP_PORT_ENV, DEFAULT_HTTP_PORT))
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    # argparse ne valide ``choices`` que pour une valeur passée en ligne de
+    # commande, pas pour un ``default`` venu de l'environnement (review Leader
+    # #31 : MCP_CHESSBOARD_TRANSPORT=sse partait en http sans erreur).
+    if args.transport not in ("stdio", "http"):
+        parser.error(f"{TRANSPORT_ENV}={args.transport!r} invalide (attendu : stdio ou http)")
+    return args
 
 
 def main(argv: list[str] | None = None) -> None:

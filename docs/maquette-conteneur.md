@@ -34,7 +34,7 @@ PORTAINER_PROFILE=mnemosyne portainer-ctl deploy palamede-maquette \
 ```
 
 Client MCP de test (Claude Code) :
-`claude mcp add --transport http palamede-nas http://192.168.1.79:8770/mcp/`
+`claude mcp add --transport http palamede-nas http://<ip-du-nas>:8770/mcp/`
 
 ## Limites assumées
 
