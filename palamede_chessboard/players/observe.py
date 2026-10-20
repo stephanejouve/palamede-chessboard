@@ -87,6 +87,12 @@ def _game_roles(game_id: object, games_dir: Path) -> dict | None:
         state = GameState.load(game_id, games_dir=games_dir)
     except (ChessboardError, OSError, ValueError):
         return None
+    return roles_of(state)
+
+
+def roles_of(state: Any) -> dict:
+    """Roles of an **already loaded** game : no second read, so a caller
+    that checks then plays acts on the very position it checked."""
     meta = state.metadata
     white, black = _norm(meta.white), _norm(meta.black)
     return {
@@ -148,6 +154,20 @@ def _identify(token: str | None, games_dir: Path) -> tuple[str | None, str]:
     except registry.RegistryError:
         return None, "registry_error"
     return (who, "ok") if who else (None, "invalid")
+
+
+def authorize_move(headers: Any, state: Any, games_dir: Path) -> tuple[str | None, str | None]:
+    """``(player_id, refusal_code)`` for a move on the loaded ``state``.
+
+    Strict check used by the viewer's move endpoint (#34) : the token's
+    player must be the one to move. ``refusal_code`` is ``None`` when the
+    move may be played, else one of ``UNAUTHENTICATED``,
+    ``REGISTRY_UNREADABLE``, ``NOT_YOUR_TURN``, ``NOT_A_PLAYER``.
+    """
+    who, auth = _identify(bearer_token(headers), games_dir)
+    if auth == "registry_error":
+        return None, "REGISTRY_UNREADABLE"
+    return who, evaluate("chess_play_move", {}, who, roles_of(state))
 
 
 def observe(

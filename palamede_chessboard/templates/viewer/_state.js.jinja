@@ -22,3 +22,28 @@ function qs(extra) { return '?game_id=' + encodeURIComponent(gameId()) + (extra 
 
 roleSelect.addEventListener('change', () => { updateUrl(); pollEngine(); });
 
+// Player token (#34) : pasted once, kept in sessionStorage — forgotten
+// when the tab closes, never in localStorage nor in the URL. Sent as
+// ``Authorization: Bearer`` with the moves played on the board.
+const TOKEN_KEY = 'palamede-player-token';
+function playerToken() {
+  try { return sessionStorage.getItem(TOKEN_KEY) || ''; } catch (_) { return ''; }
+}
+function showKeyState() {
+  const btn = document.getElementById('key-btn');
+  if (btn) btn.classList.toggle('on', !!playerToken());
+}
+document.getElementById('key-btn').addEventListener('click', () => {
+  const current = playerToken();
+  const value = window.prompt(
+    current ? 'Jeton enregistré pour cet onglet. Coller un nouveau jeton, ou vider pour l\'oublier :'
+            : 'Coller votre jeton de joueur (plm_…) :', '');
+  if (value === null) return;
+  try {
+    if (value.trim()) sessionStorage.setItem(TOKEN_KEY, value.trim());
+    else sessionStorage.removeItem(TOKEN_KEY);
+  } catch (_) { /* storage unavailable : the move will be refused (401) */ }
+  showKeyState();
+});
+showKeyState();
+
