@@ -447,6 +447,7 @@ def list_games(
     * ``is_game_over`` — ``True`` once the result is set or the position
       is terminal
     * ``mtime`` — PGN file mtime (seconds since epoch, sortable)
+    * ``rated`` / ``date`` — PGN headers, for the viewer's selector (#46)
 
     The list is sorted by ``mtime`` descending so the most recently
     touched game bubbles to the top. Malformed PGN files are logged
@@ -487,6 +488,8 @@ def list_games(
                 "turn": "white" if state.board.turn == chess.WHITE else "black",
                 "is_game_over": meta.result != "*" or state.board.is_game_over(),
                 "mtime": pgn.stat().st_mtime,
+                "rated": meta.rated,
+                "date": meta.date,
             }
         )
     entries.sort(key=lambda e: e["mtime"], reverse=True)

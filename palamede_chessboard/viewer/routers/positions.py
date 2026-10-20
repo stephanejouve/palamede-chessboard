@@ -25,6 +25,7 @@ from palamede_chessboard.chessboard_state import (
     GameNotFoundError,
     GameState,
 )
+from palamede_chessboard.viewer.games_query import etag_matches
 from palamede_chessboard.viewer.models import _games_dir
 
 #: Letter → ``chess.Color`` whitelist for ``/api/piece.svg?color=``.
@@ -100,7 +101,7 @@ def build_positions_router() -> APIRouter:
             raise HTTPException(400, str(exc)) from exc
 
         etag = _compute_positions_etag(game_id, state)
-        if request.headers.get("if-none-match") == etag:
+        if etag_matches(request.headers.get("if-none-match"), etag):
             return Response(status_code=304, headers={"ETag": etag})
 
         positions_payload = _walk_positions(state)

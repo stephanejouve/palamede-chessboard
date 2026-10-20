@@ -22,7 +22,7 @@ function showMoveError(msg) {
 }
 
 async function onUserDrop(from, to) {
-  const gid = document.getElementById('gameid').value.trim();
+  const gid = window.gameId();  // the displayed game, not the search box (#46)
   if (!gid) return;
   // Promotion : chessground doesn't ship a dialog by default. We send
   // the drop as UCI ; if it's a pawn reaching the last rank, we append

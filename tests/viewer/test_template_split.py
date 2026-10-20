@@ -11,7 +11,7 @@ from palamede_chessboard.viewer.models import TEMPLATES_DIR
 MARKERS = {
     "_styles.css": ".wrap",
     "_state.js": "const params = new URLSearchParams(location.search);",
-    "_games_list.js": "async function refreshGamesList()",
+    "_games_list.js": "function selectGame(id)",
     "_poll.js": "async function pollPositions()",
     "_render.js": "function renderCaptures(fen)",
     "_live.js": "function startEventStream()",
