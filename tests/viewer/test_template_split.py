@@ -6,6 +6,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 from palamede_chessboard.viewer.models import TEMPLATES_DIR
+from tests.viewer.conftest import _page_and_scripts
 
 #: One marker per include, taken from its content.
 MARKERS = {
@@ -20,7 +21,7 @@ MARKERS = {
 
 
 def test_every_include_is_rendered(client: TestClient) -> None:
-    page = client.get("/").text
+    page = _page_and_scripts(client)
     missing = [name for name, marker in MARKERS.items() if marker not in page]
     assert missing == []
     assert "{%" not in page and "{{" not in page

@@ -5,6 +5,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.viewer.conftest import _page_and_scripts
+
 
 class TestHtmlIndex:
     """Phase D : root path serves the Jinja2-rendered HTML UI."""
@@ -13,7 +15,7 @@ class TestHtmlIndex:
         r = client.get("/")
         assert r.status_code == 200
         assert "text/html" in r.headers.get("content-type", "")
-        body = r.text
+        body = _page_and_scripts(client)
         assert "<title>Chess Viewer</title>" in body
         assert "/api/board.svg" in body  # JS references the endpoint
         assert "/api/engine/live" in body
