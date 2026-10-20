@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from palamede_chessboard.chessboard_state import GameState
@@ -28,6 +29,16 @@ class TestPostMove:
     validation, same PGN write). ``uci`` is converted to SAN
     server-side so the client can send raw drag-drop coordinates.
     """
+
+    @pytest.fixture(autouse=True)
+    def _white_token(self, client: TestClient, games_dir: Path) -> None:
+        """#34 : a move needs the token of the player to move (White here)."""
+        from palamede_chessboard.players import registry
+
+        for pid in ("w", "b"):
+            registry.add_player(games_dir, pid, kind="human")
+        token = registry.issue_token(games_dir, "w", label="tests")
+        client.headers["Authorization"] = f"Bearer {token}"
 
     def test_post_san_accepted(self, client: TestClient, games_dir: Path) -> None:
         _create_game(games_dir, game_id="mv-san")
@@ -78,16 +89,17 @@ class TestPostMove:
         state = GameState.load("mv-persist", games_dir=games_dir)
         assert state.san_history == ["e4"]
 
-    def test_post_by_field_is_audit_only(self, client: TestClient, games_dir: Path) -> None:
+    def test_move_is_attributed_to_the_token_not_by(
+        self, client: TestClient, games_dir: Path
+    ) -> None:
+        """#34 : ``by`` from the payload is ignored ; the token's player plays."""
         _create_game(games_dir, game_id="mv-by")
         r = client.post(
             "/api/games/mv-by/move",
             json={"san": "e4", "by": "human-drag-drop"},
         )
         assert r.status_code == 200
-        # The ``by`` field flows through ``play_move`` but doesn't
-        # affect state — it's audit-only.
-        assert r.json()["move"]["by"] == "human-drag-drop"
+        assert r.json()["move"]["by"] == "w"
 
 
 class TestGameStreamPayload:

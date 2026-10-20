@@ -33,14 +33,17 @@ async function onUserDrop(from, to) {
     (to.endsWith('8') || to.endsWith('1')));
   if (isPromoRank) uci = uci + 'q';
   try {
+    const headers = {'Content-Type': 'application/json'};
+    const token = window.playerToken();  // #34 : the move is played by the token's player
+    if (token) headers['Authorization'] = 'Bearer ' + token;
     const r = await fetch('/api/games/' + encodeURIComponent(gid) + '/move', {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ uci, by: 'viewer-drag-drop' }),
+      headers,
+      body: JSON.stringify({ uci }),
     });
     if (!r.ok) {
-      // Revert to pre-drop FEN. The server rejected — either illegal
-      // move (422) or game state changed under us (409).
+      // Revert to pre-drop FEN. The server rejected : illegal move (422),
+      // missing / invalid token (401), not this player's turn or game (403).
       if (cgFenSnapshot && cg) cg.set({ fen: cgFenSnapshot });
       const body = await r.json().catch(() => ({}));
       showMoveError(body.detail || ('HTTP ' + r.status));
