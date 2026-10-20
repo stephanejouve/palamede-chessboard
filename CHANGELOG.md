@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.3.0...v0.4.0) (2026-10-20)
+
+
+### Features
+
+* préférence max_concurrent par joueur pour le matchmaking ([#40](https://github.com/stephanejouve/palamede-chessboard/issues/40)) ([57762bb](https://github.com/stephanejouve/palamede-chessboard/commit/57762bb278921264c5dca01985e158c3af0cbf3c))
+
+
+### Bug Fixes
+
+* **prefs:** normaliser les clés joueur à la lecture des préférences ([#42](https://github.com/stephanejouve/palamede-chessboard/issues/42)) ([b933737](https://github.com/stephanejouve/palamede-chessboard/commit/b933737f9a76112f21db93cce21faa205c489c33))
+* **viewer:** partir de la position de départ de la partie, pas de la position standard ([#44](https://github.com/stephanejouve/palamede-chessboard/issues/44)) ([abf21a5](https://github.com/stephanejouve/palamede-chessboard/commit/abf21a54f44a45a1f0d168e5811d06dcbe8b3257)), closes [#43](https://github.com/stephanejouve/palamede-chessboard/issues/43)
+
 ## [0.3.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.2.0...v0.3.0) (2026-10-20)
 
 
