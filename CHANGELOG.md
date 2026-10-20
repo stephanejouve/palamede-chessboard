@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.6.0...v0.6.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **viewer:** embarquer chessground au lieu du CDN ([#60](https://github.com/stephanejouve/palamede-chessboard/issues/60)) ([a3d52a6](https://github.com/stephanejouve/palamede-chessboard/commit/a3d52a618e6f917b3f1c917a92e18ff74dd58346))
+
 ## [0.6.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.5.0...v0.6.0) (2026-10-20)
 
 
