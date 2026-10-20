@@ -65,7 +65,7 @@
   .layout { display: grid; grid-template-columns: 400px 1fr; gap: 18px; align-items: start; }
   @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
   /* Board container : sized precisely so chessground computes square sizes
-     correctly. If the chessground CDN fails to load, the container stays
+     correctly. If the chessground module fails to load, the container stays
      empty (blank grey square) but the rest of the UI (moves, engine,
      commentary) keeps working — degradation is graceful. */
   #board { display: block; width: 400px; height: 400px; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.15); background: var(--surface-2); position: relative; }

@@ -17,12 +17,14 @@ from __future__ import annotations
 import logging
 import os
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from fastapi.templating import Jinja2Templates
 
 from palamede_chessboard.chessboard_engine import DEFAULT_DEPTH
 from palamede_chessboard.viewer.models import (
+    CHESSGROUND_DIR,
+    CHESSGROUND_VERSION,
     DEPTH_OPTIONS,
     TEMPLATES_DIR,
     VIEWER_ROLES,
@@ -59,6 +61,7 @@ def build_app() -> FastAPI:
                 "viewer_roles": VIEWER_ROLES,
                 "depth_options": DEPTH_OPTIONS,
                 "default_depth": DEFAULT_DEPTH,
+                "chessground_version": CHESSGROUND_VERSION,
             },
         )
 
@@ -77,6 +80,27 @@ def build_app() -> FastAPI:
             favicon,
             media_type="image/svg+xml",
             headers={"Cache-Control": "public, max-age=86400"},
+        )
+
+    # chessground, embedded in the package (issue #59) : the page holds the
+    # player token, so no script may come from a third-party origin. Fixed
+    # list of files read at build time, versioned URL, hence immutable.
+    vendor_types = {".js": "text/javascript", ".css": "text/css"}
+    vendor = {
+        f.name: (f.read_bytes(), vendor_types[f.suffix])
+        for f in CHESSGROUND_DIR.iterdir()
+        if f.suffix in vendor_types
+    }
+
+    @app.get(f"/vendor/chessground@{CHESSGROUND_VERSION}/{{name}}", include_in_schema=False)
+    def chessground_file(name: str) -> Response:
+        if name not in vendor:
+            raise HTTPException(status_code=404)
+        content, media_type = vendor[name]
+        return Response(
+            content,
+            media_type=media_type,
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
         )
 
     app.include_router(build_games_router())
