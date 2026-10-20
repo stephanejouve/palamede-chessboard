@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.4.0...v0.5.0) (2026-10-20)
+
+
+### Features
+
+* **viewer:** sélecteur de parties paginé, filtrable, sans rechargement global ([#52](https://github.com/stephanejouve/palamede-chessboard/issues/52)) ([21929a3](https://github.com/stephanejouve/palamede-chessboard/commit/21929a369a42feeea74548e6ad7fee86b5c35305)), closes [#46](https://github.com/stephanejouve/palamede-chessboard/issues/46)
+
+
+### Bug Fixes
+
+* corrections de [#46](https://github.com/stephanejouve/palamede-chessboard/issues/46) (pendule, game_id, garde moteur, fsync) ([#47](https://github.com/stephanejouve/palamede-chessboard/issues/47)) ([21ff75b](https://github.com/stephanejouve/palamede-chessboard/commit/21ff75b974a818229ba237852e3cb7ada56dbc52))
+* **lessons:** suivis de [#46](https://github.com/stephanejouve/palamede-chessboard/issues/46) sur le carnet de leçons ([#49](https://github.com/stephanejouve/palamede-chessboard/issues/49)) ([34874a3](https://github.com/stephanejouve/palamede-chessboard/commit/34874a39c0f86ce78852f565401f4efda8f43f11))
+* **lessons:** un PGN illisible fait sauter l'analyse, sans repli sur le .md ([#53](https://github.com/stephanejouve/palamede-chessboard/issues/53)) ([47e2bcc](https://github.com/stephanejouve/palamede-chessboard/commit/47e2bcc6441addb4068e2ad442ea63096ae1fdc9)), closes [#46](https://github.com/stephanejouve/palamede-chessboard/issues/46)
+
+
+### Refactor
+
+* **mcp:** découper _mcp_tool_schemas par famille d'outils, seuils vérifiés en CI ([#50](https://github.com/stephanejouve/palamede-chessboard/issues/50)) ([5cdcb44](https://github.com/stephanejouve/palamede-chessboard/commit/5cdcb4444706eac8c38afda080535fd3bd5a3fa8)), closes [#46](https://github.com/stephanejouve/palamede-chessboard/issues/46)
+* **viewer:** découper le template en includes (861 → 78 lignes) ([#51](https://github.com/stephanejouve/palamede-chessboard/issues/51)) ([b97eef7](https://github.com/stephanejouve/palamede-chessboard/commit/b97eef736ad9323a50f9d63c4973e081dea50880)), closes [#46](https://github.com/stephanejouve/palamede-chessboard/issues/46)
+
 ## [0.4.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.3.0...v0.4.0) (2026-10-20)
 
 
