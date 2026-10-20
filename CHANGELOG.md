@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.5.0...v0.6.0) (2026-10-20)
+
+
+### Features
+
+* **players:** mode observation de l'authentification ([#55](https://github.com/stephanejouve/palamede-chessboard/issues/55)) ([7d045b4](https://github.com/stephanejouve/palamede-chessboard/commit/7d045b4b64310a6893d395cbb4f6529ad0f850ac))
+* **players:** registre natif des joueurs et jetons d'API ([#54](https://github.com/stephanejouve/palamede-chessboard/issues/54)) ([613a2e3](https://github.com/stephanejouve/palamede-chessboard/commit/613a2e333553031512210eb01d01a61ca6eea902))
+* **viewer:** favicon cavalier sur case bicolore ([#56](https://github.com/stephanejouve/palamede-chessboard/issues/56)) ([a3f9f2f](https://github.com/stephanejouve/palamede-chessboard/commit/a3f9f2fff4d093d33cbe889eb48cc1140feb3a2e))
+* **viewer:** un coup joué depuis le viewer exige le jeton du joueur au trait ([#58](https://github.com/stephanejouve/palamede-chessboard/issues/58)) ([4122e5b](https://github.com/stephanejouve/palamede-chessboard/commit/4122e5b0d33d4cc7776745dac7d1ea2d0d677d33))
+
 ## [0.5.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.4.0...v0.5.0) (2026-10-20)
 
 
