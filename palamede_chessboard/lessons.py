@@ -197,18 +197,34 @@ def _iter_lesson_lines(md_text: str) -> list[str]:
 
 
 def _pgn_result(game_id: str, games_dir: Path) -> str | None:
-    """Result tag of the game's PGN, or ``None`` if there is no such game.
+    """Result tag of the game's PGN ; ``None`` only if there is no such game.
+
+    * No PGN — unknown game, or an id taken from the ``.md`` stem that
+      cannot even be a ``game_id`` : ``None``, the caller falls back on
+      the ``.md``.
+    * A PGN that exists but cannot be read : ``"*"``, so the analysis is
+      **skipped**. Falling back on the ``.md`` would let an announced
+      « 1-0 » through for a game that may still be in progress
+      (fair-play, review Junior #49).
 
     Imported lazily so ``import palamede_chessboard`` does not load the
     whole game-state stack (#46).
     """
     from palamede_chessboard.chessboard_state import GameState
-    from palamede_chessboard.errors import ChessboardError
+    from palamede_chessboard.errors import ChessboardError, GameNotFoundError
+    from palamede_chessboard.paths import _validate_game_id
 
     try:
-        return GameState.load(game_id, games_dir=games_dir).metadata.result
-    except (ChessboardError, OSError, ValueError):
+        _validate_game_id(game_id)
+    except ChessboardError:
         return None
+    try:
+        return GameState.load(game_id, games_dir=games_dir).metadata.result
+    except GameNotFoundError:
+        return None
+    except (ChessboardError, OSError, ValueError) as exc:
+        log.warning("lessons : PGN de %s illisible (%s), analyse ignorée", game_id, exc)
+        return "*"
 
 
 def extract_lessons(md_path: Path, games_dir: Path | None = None) -> list[Lesson]:

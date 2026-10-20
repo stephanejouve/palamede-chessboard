@@ -165,3 +165,27 @@ def test_package_import_is_light_and_lazy() -> None:
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     ).stdout.splitlines()
     assert out == ["[]", "palamede_chessboard.lessons"]
+
+
+# ---- PGN illisible : on saute, on ne retombe pas sur le .md (revue Junior #49)
+
+
+@pytest.mark.parametrize("corrupt", [b"", b"\xff\xfe[Event \xe9]"])
+def test_unreadable_pgn_skips_analysis(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, corrupt: bytes
+) -> None:
+    """Le .md annonce 1-0 mais le PGN est illisible : la partie est peut-être en cours."""
+    (tmp_path / "g-corrompu.pgn").write_bytes(corrupt)
+    md = _write_analysis_md(
+        tmp_path, filename="a.md", game_id="g-corrompu", result="1-0", lessons=LESSON
+    )
+    with caplog.at_level("WARNING"):
+        assert extract_lessons(md, tmp_path) == []
+    assert "illisible" in caplog.text
+
+
+def test_stem_that_cannot_be_a_game_id_falls_back_on_md(tmp_path: Path) -> None:
+    """Sans URL de visionneuse, le game_id vient du nom du fichier : pas de PGN possible."""
+    md = tmp_path / "analyse du 20 octobre.md"
+    md.write_text("Résultat 1-0.\n\n## Leçons\n" + LESSON[0] + "\n", encoding="utf-8")
+    assert [lesson.game_id for lesson in extract_lessons(md, tmp_path)] == ["analyse du 20 octobre"]
