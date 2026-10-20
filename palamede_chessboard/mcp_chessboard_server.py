@@ -52,6 +52,7 @@ from palamede_chessboard.chessboard_state import (
     InvalidGameStateError,
     StalePlyError,
 )
+from palamede_chessboard.players.observe import observe
 
 __all__ = [
     "ARBITER_DAEMON_PIDFILE",
@@ -84,9 +85,21 @@ async def list_tools() -> list[Tool]:
     return list(TOOL_SCHEMAS)
 
 
+def _request_headers():
+    """Headers of the HTTP request carrying this call ; ``None`` over stdio."""
+    try:
+        request = server.request_context.request
+    except LookupError:
+        return None
+    return getattr(request, "headers", None)
+
+
 @server.call_tool()
 async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     games_dir = _games_dir()
+    headers = _request_headers()
+    # #34 step 2 : PALAMEDE_AUTH_MODE=observe journals the verdict, never refuses.
+    observe(name, arguments, headers, games_dir, transport="stdio" if headers is None else "http")
     try:
         handler = TOOL_HANDLERS.get(name)
         if handler is None:
