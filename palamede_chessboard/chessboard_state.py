@@ -77,6 +77,26 @@ __all__ = [
 log = logging.getLogger(__name__)
 
 
+def _movetext(san_history: list[str], root: chess.Board) -> str:
+    """Number ``san_history`` from the root position (issue #36).
+
+    A standard game gives ``1. e4 e5 2. Nf3``. A game started from a FEN
+    keeps its own move number, and opens with ``N...`` when Black moves
+    first, so the PGN stays valid for the viewer and external tools.
+    """
+    number = root.fullmove_number
+    white_to_move = root.turn == chess.WHITE
+    tokens: list[str] = []
+    for san in san_history:
+        if white_to_move:
+            tokens.append(f"{number}. {san}")
+        else:
+            tokens.append(f"{number}... {san}" if not tokens else san)
+            number += 1
+        white_to_move = not white_to_move
+    return " ".join(tokens)
+
+
 @dataclass
 class GameState:
     """In-memory state of a single game (board + metadata + paths).
@@ -355,21 +375,22 @@ class GameState:
         self.games_dir.mkdir(parents=True, exist_ok=True)
         path = _pgn_path(self.games_dir, self.metadata.game_id)
         tmp = path.with_suffix(".pgn.tmp")
+        root = self.board.root()
         with tmp.open("w", encoding="utf-8") as f:
             for tag, value in self.metadata.to_pgn_headers().items():
                 f.write(f'[{tag} "{value}"]\n')
+            # Issue #36 : a game created from ``starting_fen`` must keep
+            # its root position, or ``load`` (``game.board()``) restarts
+            # from the initial position on the next MCP call.
+            if root.fen() != chess.STARTING_FEN:
+                f.write('[SetUp "1"]\n')
+                f.write(f'[FEN "{root.fen()}"]\n')
             f.write("\n")
             tail = self.metadata.result
             if self.metadata.termination_note:
                 tail = f"{{{self.metadata.termination_note}}} {tail}"
             if self.san_history:
-                lines: list[str] = []
-                for idx, san in enumerate(self.san_history):
-                    if idx % 2 == 0:
-                        lines.append(f"{idx // 2 + 1}. {san}")
-                    else:
-                        lines[-1] += f" {san}"
-                f.write(" ".join(lines))
+                f.write(_movetext(self.san_history, root))
                 f.write(f" {tail}\n")
             else:
                 f.write(f"{tail}\n")
