@@ -14,6 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from palamede_chessboard.viewer.models import CHESSGROUND_DIR, CHESSGROUND_VERSION
+from tests.viewer.conftest import _page_and_scripts
 
 SHA256 = {
     "chessground.min.js": "915457e1a6b84abd9778d3ea5317a9fccaf59f4caa78196efbd92f586c0f0e9b",
@@ -79,7 +80,7 @@ def test_other_version_is_not_served(client: TestClient) -> None:
 
 
 def test_page_loads_nothing_from_a_third_party_origin(client: TestClient) -> None:
-    html = client.get("/").text
+    html = _page_and_scripts(client)
     assert not re.search(r"""(src|href)=["']?(https?:)?//""", html)
     assert not re.search(r"""from\s+["'](https?:)?//""", html)
     assert f"from '{BASE}/chessground.min.js'" in html
