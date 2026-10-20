@@ -21,6 +21,7 @@ wires the two together so ``chess_play_move`` updates both atomically.
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -114,7 +115,9 @@ class ClockState:
         wall-move consumes 15s of clock.
 
         Sets :attr:`flag_fall` if the mover's clock goes negative ;
-        callers can read it to translate into a result tag.
+        callers can read it to translate into a result tag. A move made
+        after the flag fell earns **no** increment (CD 57603, #46) : the
+        flag is checked before the increment, which must stay that way.
         """
         if not self.started or self.last_move_ts is None:
             return self
@@ -125,13 +128,15 @@ class ClockState:
             self.white_seconds -= delta
             if self.white_seconds <= 0:
                 self.flag_fall = "white"
-            self.white_seconds += self.increment_seconds
+            else:
+                self.white_seconds += self.increment_seconds
             self.active = "black"
         elif mover == "black":
             self.black_seconds -= delta
             if self.black_seconds <= 0:
                 self.flag_fall = "black"
-            self.black_seconds += self.increment_seconds
+            else:
+                self.black_seconds += self.increment_seconds
             self.active = "white"
         else:
             raise ValueError(f"Unknown mover: {mover!r}")
@@ -157,6 +162,8 @@ def save_clock(state: ClockState, games_dir: Path | None = None) -> Path:
     tmp = path.with_suffix(".json.tmp")
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(asdict(state), f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())  # durable before the swap (#46)
     tmp.replace(path)
     return path
 

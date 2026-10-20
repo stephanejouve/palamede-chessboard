@@ -24,6 +24,7 @@ that class of mistake impossible by construction.
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -394,6 +395,8 @@ class GameState:
                 f.write(f" {tail}\n")
             else:
                 f.write(f"{tail}\n")
+            f.flush()
+            os.fsync(f.fileno())  # durable before the swap (#46)
         tmp.replace(path)
         return path
 
