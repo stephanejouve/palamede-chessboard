@@ -12,6 +12,10 @@
 #
 # Versions alignées avec les dev deps pyproject.toml.
 
+# Fichiers tiers embarqués (chessground, #59) : copies exactes de l'archive
+# npm, empreintes figées par les tests. Aucun hook ne doit les réécrire.
+exclude: ^palamede_chessboard/viewer/vendor/
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.8.6

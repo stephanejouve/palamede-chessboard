@@ -22,6 +22,21 @@ l'empreinte correspond à l'`integrity` du registre :
 | `chessground.brown.css`    | `assets/chessground.brown.css` | `80de613fe928a947e88b983835286f21c723738d9319b1f8868442bb56fb1577` |
 | `chessground.cburnett.css` | `assets/chessground.cburnett.css` | `f9216192b5383a83e62a81de1cf58520f7c251f6f24930f5710a3c797f78ced4` |
 | `LICENSE`                  | `LICENSE`                      | `8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903` |
+| `package.json`             | `package.json`                 | `d81e01041b7bf64bc7e5d77a84b46f0b7f1fb7ab9d41e6b260ace9c33ea8f28e` |
+| `src/` (20 fichiers `.ts`) | `src/`                         | voir le test |
+
+## Source correspondante (GPL)
+
+`src/` est la source TypeScript de `chessground.min.js`, livrée avec lui
+comme l'exige la GPL. Le viewer ne la sert pas. Reconstruction vérifiée le
+20/10/2026, sortie **identique octet pour octet** au `.min.js` embarqué :
+
+```sh
+npm i esbuild@0.25.0
+npx esbuild src/chessground.ts --bundle --format=esm --minify --outfile=chessground.min.js
+```
+
+(script `bundle` de `package.json`.)
 
 `tests/viewer/test_vendor_chessground.py` vérifie ces empreintes. Pour
 monter de version : remplacer les fichiers depuis la nouvelle archive,
