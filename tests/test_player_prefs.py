@@ -70,6 +70,48 @@ def test_set_refuses_invalid_player(tmp_path: Path, bad_player) -> None:
         set_max_concurrent(tmp_path, bad_player, 2)
 
 
+@pytest.mark.parametrize("corrupt", ['{"players": {"leader": {"max_concurrent": 2},}}', "[]"])
+def test_set_refuses_to_overwrite_unreadable_file(tmp_path: Path, corrupt: str) -> None:
+    """Review Junior #40 : an unreadable file must not be rewritten from scratch,
+    or every other player's preference would be lost silently."""
+    path = tmp_path / PREFS_FILENAME
+    path.write_text(corrupt, encoding="utf-8")
+    with pytest.raises(PlayerPrefsError, match="nothing written"):
+        set_max_concurrent(tmp_path, "junior", 2)
+    assert path.read_text(encoding="utf-8") == corrupt  # left intact
+
+
+def test_set_keeps_unknown_keys_and_mode(tmp_path: Path) -> None:
+    path = tmp_path / PREFS_FILENAME
+    path.write_text(
+        '{"version": 1, "players": {"admin": {"max_concurrent": 3, "note": "x"}, "leader": 5}}',
+        encoding="utf-8",
+    )
+    path.chmod(0o640)
+    set_max_concurrent(tmp_path, "leader", 2)
+    on_disk = json.loads(path.read_text(encoding="utf-8"))
+    assert on_disk["version"] == 1
+    assert on_disk["players"]["admin"] == {"max_concurrent": 3, "note": "x"}
+    assert on_disk["players"]["leader"] == {"max_concurrent": 2}
+    assert path.stat().st_mode & 0o777 == 0o640
+
+
+def test_new_file_is_world_readable(tmp_path: Path) -> None:
+    set_max_concurrent(tmp_path, "leader", 2)
+    assert (tmp_path / PREFS_FILENAME).stat().st_mode & 0o777 == 0o644
+
+
+def test_concurrent_sets_keep_every_update(tmp_path: Path) -> None:
+    """Review Junior #40 : sets in parallel threads must not drop each other."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    players = [f"player{i}" for i in range(8)]
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(lambda p: set_max_concurrent(tmp_path, p, 2), players))
+    prefs = load_prefs(tmp_path)
+    assert all(max_concurrent_for(prefs, p) == 2 for p in players)
+
+
 def test_env_override_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     custom = tmp_path / "elsewhere" / "prefs.json"
     monkeypatch.setenv(PREFS_ENV, str(custom))

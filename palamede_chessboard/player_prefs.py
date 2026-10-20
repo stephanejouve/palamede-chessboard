@@ -21,9 +21,12 @@ audit field of ``chess_play_move``).
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import logging
 import os
+import tempfile
 from pathlib import Path
 
 from palamede_chessboard.chess_elo import normalize_identity
@@ -84,11 +87,43 @@ def max_concurrent_for(prefs: dict[str, dict], player: str) -> int:
     return DEFAULT_MAX_CONCURRENT
 
 
+@contextlib.contextmanager
+def _locked(path: Path):
+    """Exclusive ``flock`` on ``<prefs>.lock`` for the read-modify-write."""
+    lock_path = path.with_name(path.name + ".lock")
+    with lock_path.open("a") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
+def _read_for_update(path: Path) -> dict:
+    """Strict read before a write (review Junior #40).
+
+    Unlike :func:`load_prefs`, an existing but unreadable or malformed
+    file is an error : rewriting it from ``{}`` would silently drop the
+    other players' preferences. A missing file starts empty. Unknown
+    keys are preserved as-is.
+    """
+    if not path.exists():
+        return {"players": {}}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise PlayerPrefsError(f"{path} is unreadable ({exc}) : nothing written") from exc
+    if not isinstance(raw, dict) or not isinstance(raw.get("players"), dict):
+        raise PlayerPrefsError(f"{path} has no 'players' object : nothing written")
+    return raw
+
+
 def set_max_concurrent(games_dir: Path, player: object, value: object) -> dict:
     """Validate then persist ``max_concurrent`` for ``player``.
 
     Strict integer in ``1..MAX_CONCURRENT_LIMIT`` (a bool or a string
-    such as ``"2"`` is refused). Other players and other keys are kept.
+    such as ``"2"`` is refused). Other players and other keys are kept ;
+    an existing but unreadable file is refused rather than overwritten.
     """
     name = normalize_identity(player) if isinstance(player, str) else ""
     if not name:
@@ -97,11 +132,26 @@ def set_max_concurrent(games_dir: Path, player: object, value: object) -> dict:
         raise PlayerPrefsError(
             f"max_concurrent must be an integer in 1..{MAX_CONCURRENT_LIMIT}, got {value!r}"
         )
-    prefs = load_prefs(games_dir)
-    prefs.setdefault(name, {})["max_concurrent"] = value
     path = prefs_path(games_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps({"players": prefs}, indent=2, sort_keys=True), encoding="utf-8")
-    tmp.replace(path)
+    # Read-modify-write under an exclusive lock, so two concurrent sets
+    # cannot drop each other's update (review Junior #40).
+    with _locked(path):
+        raw = _read_for_update(path)
+        entry = raw["players"].get(name)
+        if not isinstance(entry, dict):
+            entry = raw["players"][name] = {}
+        entry["max_concurrent"] = value
+        # mkstemp creates 0600 : keep the existing file's mode (0644 if new).
+        mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
+        fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(raw, f, indent=2, sort_keys=True)
+            os.chmod(tmp_name, mode)
+            os.replace(tmp_name, path)
+        except BaseException:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(tmp_name)
+            raise
     return {"player": name, "max_concurrent": value}

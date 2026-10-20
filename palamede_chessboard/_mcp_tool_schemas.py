@@ -495,9 +495,10 @@ TOOL_SCHEMAS: list[Tool] = [
     Tool(
         name="chess_set_player_preferences",
         description=(
-            "Set a player's ``max_concurrent`` (integer 1..10). Stored outside "
-            "the PGNs. Identity is not verified yet (registry of #34) : set "
-            "only your own preference."
+            "Set a player's ``max_concurrent`` (integer 1..10). Only affects "
+            "the matchmaking busy check : creating games stays unlimited. "
+            "Stored outside the PGNs. Identity is not verified yet (registry "
+            "of #34) : set only your own preference."
         ),
         inputSchema={
             "type": "object",
