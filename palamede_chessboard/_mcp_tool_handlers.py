@@ -54,6 +54,13 @@ from palamede_chessboard.chessboard_state import (
     list_games,
     post_commentary,
 )
+from palamede_chessboard.player_prefs import (
+    DEFAULT_MAX_CONCURRENT,
+    PlayerPrefsError,
+    load_prefs,
+    max_concurrent_for,
+    set_max_concurrent,
+)
 
 
 async def _handle_chess_create_game(arguments: dict, games_dir: Path) -> dict:
@@ -438,6 +445,30 @@ async def _handle_chess_get_my_mistakes(arguments: dict, games_dir: Path) -> dic
     }
 
 
+async def _handle_chess_get_player_preferences(arguments: dict, games_dir: Path) -> dict:
+    prefs = load_prefs(games_dir)
+    player = arguments.get("player")
+    if player:
+        name = normalize_identity(player)
+        return {
+            "status": "ok",
+            "player": name,
+            "max_concurrent": max_concurrent_for(prefs, name),
+            "default": DEFAULT_MAX_CONCURRENT,
+        }
+    return {"status": "ok", "players": prefs, "default": DEFAULT_MAX_CONCURRENT}
+
+
+async def _handle_chess_set_player_preferences(arguments: dict, games_dir: Path) -> dict:
+    try:
+        saved = set_max_concurrent(
+            games_dir, arguments.get("player"), arguments.get("max_concurrent")
+        )
+    except PlayerPrefsError as exc:
+        raise ChessboardError(str(exc)) from exc
+    return {"status": "ok", **saved}
+
+
 TOOL_HANDLERS: dict[str, Callable[[dict, Path], Awaitable[dict]]] = {
     "chess_create_game": _handle_chess_create_game,
     "chess_view_state": _handle_chess_view_state,
@@ -457,4 +488,6 @@ TOOL_HANDLERS: dict[str, Callable[[dict, Path], Awaitable[dict]]] = {
     "chess_analyze_position": _handle_chess_analyze_position,
     "chess_analyze_game": _handle_chess_analyze_game,
     "chess_get_my_mistakes": _handle_chess_get_my_mistakes,
+    "chess_get_player_preferences": _handle_chess_get_player_preferences,
+    "chess_set_player_preferences": _handle_chess_set_player_preferences,
 }
