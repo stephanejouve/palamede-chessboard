@@ -33,17 +33,30 @@ Design :
   (``?game=<id>``) qui est la source la plus fiable du format .md
   (ligne « Visionneuse: ... »), avec fallback sur le stem du fichier
   si l'URL est absente.
-* L'extraction du résultat cherche d'abord une mention explicite
-  ``Résultat <X>`` dans les premières lignes (format CD stable),
+* Le résultat fait foi **dans le PGN** de la partie (#46) quand
+  ``games_dir`` est fourni et que le PGN existe : une analyse qui
+  annonce « 1-0 » sur une partie encore en cours reste ignorée. Sans
+  PGN, on retombe sur le ``.md`` : mention explicite ``Résultat <X>``,
   sinon le token de résultat à la fin de la section ``## Partie
-  complète`` (``1-0`` / ``0-1`` / ``1/2-1/2`` / ``*``).
+  complète``.
+* Robustesse (#46) : une analyse illisible (non UTF-8) est sautée avec
+  un avertissement au lieu d'interrompre tout l'agrégat ; un carnet
+  cumulé illisible lève :class:`LessonsError` (le relire comme vide
+  ferait tout réajouter en double) ; lecture et ajout se font sous
+  ``flock`` pour que deux exécutions simultanées ne dupliquent rien.
 """
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
+import logging
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 #: Résultats PGN qui comptent comme « partie terminée » — tout le reste
 #: (notamment ``*``) fait skipper l'analyse entière, conformément à la
@@ -82,6 +95,10 @@ RESULT_FALLBACK_RE: re.Pattern[str] = re.compile(r"\b(1-0|0-1|1/2-1/2)\b")
 
 #: Nom par défaut du fichier cumulé.
 DEFAULT_OUTPUT_FILENAME: str = "lessons_cumulative.md"
+
+
+class LessonsError(RuntimeError):
+    """The cumulative file cannot be read : nothing is appended."""
 
 
 @dataclass(frozen=True)
@@ -179,12 +196,28 @@ def _iter_lesson_lines(md_text: str) -> list[str]:
     return section
 
 
-def extract_lessons(md_path: Path) -> list[Lesson]:
+def _pgn_result(game_id: str, games_dir: Path) -> str | None:
+    """Result tag of the game's PGN, or ``None`` if there is no such game.
+
+    Imported lazily so ``import palamede_chessboard`` does not load the
+    whole game-state stack (#46).
+    """
+    from palamede_chessboard.chessboard_state import GameState
+    from palamede_chessboard.errors import ChessboardError
+
+    try:
+        return GameState.load(game_id, games_dir=games_dir).metadata.result
+    except (ChessboardError, OSError, ValueError):
+        return None
+
+
+def extract_lessons(md_path: Path, games_dir: Path | None = None) -> list[Lesson]:
     """Return the list of :class:`Lesson` carried by one analysis ``.md``.
 
     * Returns ``[]`` if the file is missing, cannot be decoded, has no
       ``## Leçons`` section, or if its result is non-terminal (``*``) —
-      CD rule 2.
+      CD rule 2. With ``games_dir``, the result comes from the game's
+      PGN when it exists ; the ``.md`` is only the fallback.
     * Each line of the Leçons section is tested against
       :data:`LESSON_LINE_RE`. Non-matching lines (blank, prose,
       alternative formats) are silently skipped — the strict tag format
@@ -192,11 +225,17 @@ def extract_lessons(md_path: Path) -> list[Lesson]:
     """
     try:
         md_text = md_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        log.warning("lessons : %s n'est pas en UTF-8, ignoré (%s)", md_path, exc)
+        return []
     except OSError:
         return []
-    if _extract_result(md_text) not in TERMINAL_RESULTS:
-        return []
     game_id = _extract_game_id(md_text, md_path)
+    result = _pgn_result(game_id, games_dir) if games_dir is not None else None
+    if result is None:
+        result = _extract_result(md_text)
+    if result not in TERMINAL_RESULTS:
+        return []
     out: list[Lesson] = []
     for raw_line in _iter_lesson_lines(md_text):
         match = LESSON_LINE_RE.match(raw_line)
@@ -225,16 +264,16 @@ def _read_existing_game_ids(output: Path) -> set[str]:
 
     An existing file is parsed line-by-line : every ``## <game_id>``
     heading contributes one entry. Returns ``set()`` if the file does
-    not exist yet. A read error returns ``set()`` as well so a corrupt
-    output falls back to a full rebuild on next run — safer than
-    raising mid-aggregation.
+    not exist yet. A file that exists but cannot be read raises
+    :class:`LessonsError` (#46) : reading it as empty would make the
+    next append duplicate every game already in it.
     """
     if not output.exists():
         return set()
     try:
         text = output.read_text(encoding="utf-8")
-    except OSError:
-        return set()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise LessonsError(f"{output} est illisible ({exc}) : rien n'est ajouté") from exc
     seen: set[str] = set()
     for line in text.splitlines():
         if line.startswith(GAME_HEADER_PREFIX):
@@ -264,7 +303,19 @@ def _group_by_game(lessons: list[Lesson]) -> dict[str, list[Lesson]]:
     return grouped
 
 
-def aggregate_lessons(analyses_dir: Path, output: Path) -> int:
+@contextlib.contextmanager
+def _locked(output: Path) -> Iterator[None]:
+    """Exclusive ``flock`` on ``<output>.lock`` for the read + append (#46)."""
+    lock_path = output.with_name(output.name + ".lock")
+    with lock_path.open("a") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
+def aggregate_lessons(analyses_dir: Path, output: Path, games_dir: Path | None = None) -> int:
     """Scan ``analyses_dir`` for ``*.md`` and append new lessons to ``output``.
 
     Idempotent — a second invocation without new ``.md`` files writes
@@ -277,15 +328,25 @@ def aggregate_lessons(analyses_dir: Path, output: Path) -> int:
 
     * ``.md`` files are scanned in sorted order so the cumulative file
       grows deterministically.
-    * Parent directory of ``output`` is created if needed.
+    * ``games_dir`` : where the PGN live, so the result is read there
+      (see :func:`extract_lessons`).
+    * Parent directory of ``output`` is created if needed. Reading the
+      existing game ids and appending happen under one ``flock``.
     * Returns the count of newly appended lessons (0 if nothing to do).
     """
     if not analyses_dir.exists():
         return 0
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with _locked(output):
+        return _aggregate_locked(analyses_dir, output, games_dir)
+
+
+def _aggregate_locked(analyses_dir: Path, output: Path, games_dir: Path | None) -> int:
+    """Body of :func:`aggregate_lessons`, run under the output lock."""
     existing_game_ids = _read_existing_game_ids(output)
     new_lessons: list[Lesson] = []
     for md_path in sorted(analyses_dir.glob("*.md")):
-        lessons = extract_lessons(md_path)
+        lessons = extract_lessons(md_path, games_dir)
         if not lessons:
             continue
         # Every lesson from a single .md shares the same game_id by
@@ -297,7 +358,6 @@ def aggregate_lessons(analyses_dir: Path, output: Path) -> int:
         existing_game_ids.add(game_id)
     if not new_lessons:
         return 0
-    output.parent.mkdir(parents=True, exist_ok=True)
     blocks = [
         _format_game_block(game_id, group) for game_id, group in _group_by_game(new_lessons).items()
     ]

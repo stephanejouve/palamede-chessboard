@@ -13,6 +13,11 @@ Usage ::
 
 Entry point : ``palamede-lessons`` (voir ``pyproject.toml``). Peut
 aussi être lancé via ``python -m palamede_chessboard.cli_lessons``.
+
+Les chemins par défaut dérivent du dossier des parties
+(``MCP_CHESSBOARD_GAMES_DIR``, #14 / #46) : ``<games>/analyses`` et
+``<games>/lessons_cumulative.md``, résolus au lancement. Le résultat
+de chaque partie est lu dans son PGN de ce même dossier.
 """
 
 from __future__ import annotations
@@ -21,14 +26,18 @@ import argparse
 import sys
 from pathlib import Path
 
-from palamede_chessboard.lessons import DEFAULT_OUTPUT_FILENAME, aggregate_lessons
+from palamede_chessboard.lessons import DEFAULT_OUTPUT_FILENAME, LessonsError, aggregate_lessons
+from palamede_chessboard.paths import resolve_games_dir
 
-#: Répertoire par défaut des analyses CD.
-DEFAULT_ANALYSES_DIR: Path = Path("/Users/Shared/games/analyses")
+#: Sous-dossier des analyses CD dans le dossier des parties.
+ANALYSES_SUBDIR: str = "analyses"
 
-#: Fichier cumulé par défaut : vit à côté des analyses pour que les
-#: joueurs retrouvent les deux au même endroit (``/Users/Shared/games``).
-DEFAULT_OUTPUT_PATH: Path = Path("/Users/Shared/games") / DEFAULT_OUTPUT_FILENAME
+_EPILOG = (
+    "L'ajout est idempotent : une partie déjà présente dans le carnet "
+    "(titre « ## <game_id> ») n'est pas réécrite, même si son analyse a "
+    "changé. Pour régénérer une partie, supprimer son bloc du carnet "
+    "puis relancer."
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -39,18 +48,19 @@ def _build_parser() -> argparse.ArgumentParser:
             "Agrège les sections '## Leçons' des analyses .md CD dans un "
             "fichier Markdown cumulé idempotent."
         ),
+        epilog=_EPILOG,
     )
     parser.add_argument(
         "--analyses",
         type=Path,
-        default=DEFAULT_ANALYSES_DIR,
-        help=f"Répertoire des analyses .md (défaut : {DEFAULT_ANALYSES_DIR}).",
+        default=None,
+        help=f"Répertoire des analyses .md (défaut : <dossier des parties>/{ANALYSES_SUBDIR}).",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=DEFAULT_OUTPUT_PATH,
-        help=f"Fichier Markdown cumulé (défaut : {DEFAULT_OUTPUT_PATH}).",
+        default=None,
+        help=f"Fichier Markdown cumulé (défaut : <dossier des parties>/{DEFAULT_OUTPUT_FILENAME}).",
     )
     return parser
 
@@ -65,8 +75,15 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
-    added = aggregate_lessons(analyses_dir=args.analyses, output=args.output)
-    print(f"{added} nouvelles leçons ajoutées à {args.output}")
+    games_dir = resolve_games_dir()
+    analyses = args.analyses or games_dir / ANALYSES_SUBDIR
+    output = args.output or games_dir / DEFAULT_OUTPUT_FILENAME
+    try:
+        added = aggregate_lessons(analyses_dir=analyses, output=output, games_dir=games_dir)
+    except LessonsError as exc:
+        print(f"Erreur : {exc}", file=sys.stderr)
+        return 1
+    print(f"{added} nouvelles leçons ajoutées à {output}")
     return 0
 
 
