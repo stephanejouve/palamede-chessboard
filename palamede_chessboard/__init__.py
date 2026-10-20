@@ -1,16 +1,14 @@
 """palamede-chessboard — serveur MCP de parties d'échecs multi-agents.
 
-Phase 0 skeleton. Les modules métier seront extraits de ``outillages``
-en Phase 1 et refactorés en Phase 2.
+L'import du paquet reste léger (#46) : l'API du carnet de leçons
+(:mod:`palamede_chessboard.lessons`) est réexportée à la demande, au
+premier accès à l'un de ses noms.
 """
 
-from palamede_chessboard.lessons import (
-    DEFAULT_OUTPUT_FILENAME,
-    TERMINAL_RESULTS,
-    Lesson,
-    aggregate_lessons,
-    extract_lessons,
-)
+from __future__ import annotations
+
+import importlib
+from typing import Any
 
 __version__ = "0.4.0"  # x-release-please-version
 
@@ -21,3 +19,10 @@ __all__ = [
     "aggregate_lessons",
     "extract_lessons",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    """Lazy re-export of the lessons API (PEP 562)."""
+    if name in __all__:
+        return getattr(importlib.import_module("palamede_chessboard.lessons"), name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
