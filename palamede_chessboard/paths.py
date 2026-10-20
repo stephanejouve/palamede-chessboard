@@ -47,7 +47,9 @@ def resolve_games_dir() -> Path:
 #: palamede#14).
 GAMES_DIR = resolve_games_dir()
 COMMENTARY_DIR_NAME = "commentary"
-GAME_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_.-]{1,64}$")
+#: No leading dot (#46) : rules out ``.`` / ``..`` and hidden names that
+#: would collide with the data dir's own dotfiles (``.player_prefs.json``).
+GAME_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-][a-zA-Z0-9_.-]{0,63}$")
 
 
 def _validate_game_id(game_id: str) -> None:

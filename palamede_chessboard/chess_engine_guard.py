@@ -220,7 +220,9 @@ def _position_fen_at_ply(state: GameState, ply: int) -> str | None:
     return board.fen()
 
 
-_ALLOWED: dict = {"allowed": True, "matched_game_id": None, "reason": None}
+def _allowed() -> dict:
+    """A fresh "allowed" verdict : never a shared dict a caller could mutate (#46)."""
+    return {"allowed": True, "matched_game_id": None, "reason": None}
 
 
 def _refuse_in_progress_game(game_id: str) -> dict:
@@ -265,7 +267,7 @@ def _check_against_game_id(
 
     Fix palamede#19 : on ``GameNotFoundError``, return ``None`` so the
     caller falls through to the ``if fen:`` check instead of
-    short-circuiting with ``_ALLOWED``. A ghost ``game_id`` combined
+    short-circuiting with ``_allowed()``. A ghost ``game_id`` combined
     with a ``fen`` of a live game would otherwise bypass the guard —
     behaviour inherited verbatim from ``outillages`` and preserved by
     the BT-003 split, now closed.
@@ -329,7 +331,7 @@ def check_engine_call(
       mirrors). Refused on match.
     """
     if tool not in GUARDED_TOOLS:
-        return _ALLOWED
+        return _allowed()
 
     in_progress = _in_progress_positions(games_dir)
 
@@ -347,7 +349,7 @@ def check_engine_call(
         if match is not None:
             return _refuse_fen_match(match)
 
-    return _ALLOWED
+    return _allowed()
 
 
 def mask_walk_entries(walk: list, games_dir: Path) -> tuple[list, int, list[dict]]:

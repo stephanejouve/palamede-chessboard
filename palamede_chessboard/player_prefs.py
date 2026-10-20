@@ -181,6 +181,8 @@ def set_max_concurrent(games_dir: Path, player: object, value: object) -> dict:
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump(raw, f, indent=2, sort_keys=True)
+                f.flush()
+                os.fsync(f.fileno())  # durable before the swap (#46)
             os.chmod(tmp_name, mode)
             os.replace(tmp_name, path)
         except BaseException:
