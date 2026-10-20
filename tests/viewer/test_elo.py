@@ -48,6 +48,24 @@ class TestElo:
         assert body["players"][0]["name"] == "junior"
         assert body["players"][0]["rating"] > body["players"][1]["rating"]
 
+    def test_elo_ignores_unrated_game(self, client: TestClient, games_dir: Path) -> None:
+        """Issue #33 : a finished ``rated=False`` game never reaches /api/elo."""
+        state = GameState.create(
+            GameMetadata(
+                game_id="exo",
+                white="stephane",
+                black="claude-desktop",
+                time_control=TimeControl(format="unrated"),
+                rated=False,
+            ),
+            games_dir=games_dir,
+        )
+        state.metadata.result = "1-0"
+        state.save()
+        r = client.get("/api/elo")
+        assert r.status_code == 200
+        assert r.json()["players"] == []
+
     def test_elo_sort_rating_desc_then_games_desc(
         self, client: TestClient, games_dir: Path
     ) -> None:

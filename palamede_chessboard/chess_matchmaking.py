@@ -49,6 +49,8 @@ from palamede_chessboard.chess_elo import (
     CANONICAL_IDENTITIES,
     GAMES_DIR,
     INITIAL_RATING,
+    RATED_HEADER,
+    RATED_HEADER_TRUE,
     RatingBoard,
     cache_is_stale,
     collect_rated_games,
@@ -124,6 +126,10 @@ def _scan_active_games(games_dir: Path) -> list[dict]:
     not blind the caller to the rest of its games. Non-existent dir
     returns an empty list.
 
+    Issue #33 : only **rated** games (``[Rated "true"]``) make a player
+    busy. An exercise or friendly game created with ``rated=false``
+    stays out of the matchmaking, like it stays out of the Elo.
+
     TODO (palamede-chessboard#14) : unify with the future
     ``palamede_chessboard.chessboard_state.list_games`` once that
     module is extracted (BT-006 V2-bis / BT-007).
@@ -142,6 +148,8 @@ def _scan_active_games(games_dir: Path) -> list[dict]:
         headers = game.headers
         result = headers.get("Result", "").strip()
         if result != "*":
+            continue
+        if headers.get(RATED_HEADER, "").strip().lower() != RATED_HEADER_TRUE:
             continue
         entries.append(
             {
