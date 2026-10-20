@@ -1,9 +1,10 @@
-// Chessground : drag&drop board (lichess). ESM import from CDN — falls
-// back gracefully to the static SVG board (via /api/board.svg) if the
-// CDN is blocked (offline, adblocker, DSM proxy filtering) : window.__cgSetFen
+// Chessground : drag&drop board (lichess). ESM module embedded in the
+// package and served by the viewer itself (issue #59 : no third-party
+// script on a page that holds the player token). Falls back gracefully to
+// the static SVG board (via /api/board.svg) if the import fails : window.__cgSetFen
 // stays undefined and draw() no-ops, but the moves list, clocks,
 // commentary and engine panel keep working.
-import { Chessground } from 'https://cdn.jsdelivr.net/npm/chessground@9.2.1/+esm';
+import { Chessground } from '/vendor/chessground@{{ chessground_version }}/chessground.min.js';
 
 const boardEl = document.getElementById('board');
 const errorEl = document.getElementById('move-error');

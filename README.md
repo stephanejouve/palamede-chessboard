@@ -43,3 +43,5 @@ Pattern pilote pour généralisation cross-repos (candidate à propager vers `ou
 ## Licence
 
 MIT (voir [`LICENSE`](LICENSE)).
+
+Exception : le viewer embarque [chessground](https://github.com/lichess-org/chessground) 9.2.1, sous **GPL-3.0-or-later**. Ses fichiers et sa licence sont dans [`palamede_chessboard/viewer/vendor/chessground/`](palamede_chessboard/viewer/vendor/chessground/).

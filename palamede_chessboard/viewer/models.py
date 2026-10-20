@@ -61,6 +61,11 @@ DEPTH_OPTIONS: tuple[int, ...] = (8, 12, 15, 20)
 #: package root (one dir up from ``viewer/``).
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
+#: chessground files embedded in the package (GPL-3.0-or-later, licence in
+#: the same directory), served by the viewer instead of a CDN (issue #59).
+CHESSGROUND_VERSION = "9.2.1"
+CHESSGROUND_DIR = Path(__file__).resolve().parent / "vendor" / "chessground"
+
 #: SSE heartbeat interval (seconds). DSM reverse proxies typically close
 #: idle connections after 60s ; a 15s keepalive stays well under that.
 SSE_HEARTBEAT_SECONDS = 15.0
