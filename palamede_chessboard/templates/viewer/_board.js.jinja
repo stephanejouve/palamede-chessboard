@@ -96,6 +96,15 @@ cg = Chessground(boardEl, {
 // Re-attach the error overlay after chessground has taken over the div.
 if (errorEl) boardEl.appendChild(errorEl);
 
+// #67 : chessground mémorise la position du plateau (s.dom.bounds) et ne la
+// recalcule qu'au scroll, au resize de la fenêtre ou si le plateau change de
+// TAILLE. Si la page bouge au-dessus du plateau, un lâcher tombe sur une case
+// voisine. On vide donc ces bornes au début de chaque geste, en capture sur le
+// conteneur, avant les écouteurs de chessground sur cg-board.
+for (const type of ['pointerdown', 'mousedown', 'touchstart']) {
+  boardEl.addEventListener(type, () => cg.state.dom.bounds.clear(), { capture: true, passive: true });
+}
+
 // Once chessground is ready, re-trigger the classical draw() so the
 // board catches up with any positions already polled by the sibling
 // script. ``window.draw`` is populated by the classical <script>
