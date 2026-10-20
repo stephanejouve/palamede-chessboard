@@ -32,6 +32,16 @@ def test_modules_stay_under_budget() -> None:
     assert over == {}
 
 
+def test_templates_stay_under_budget() -> None:
+    """Same 500-line budget for the viewer templates (#46 : 861 → includes)."""
+    over = {
+        str(p.relative_to(PACKAGE)): n
+        for p in sorted((PACKAGE / "templates").rglob("*.jinja"))
+        if (n := len(p.read_text(encoding="utf-8").splitlines())) > MODULE_MAX_LINES
+    }
+    assert over == {}
+
+
 def test_functions_stay_under_budget() -> None:
     over = []
     for path in _modules():

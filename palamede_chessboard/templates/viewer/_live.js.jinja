@@ -1,0 +1,91 @@
+document.addEventListener('keydown', e => {
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
+  if (e.key === 'ArrowLeft') { g('p'); e.preventDefault(); }
+  else if (e.key === 'ArrowRight') { g('n'); e.preventDefault(); }
+  else if (e.key === 'Home') { g('s'); e.preventDefault(); }
+  else if (e.key === 'End') { g('e'); e.preventDefault(); }
+});
+
+// SSE live-refresh (#247). Native EventSource ; on push we trigger a
+// pollPositions() to refresh the local POS array + board. If SSE is
+// unavailable (server down, proxy blocking, browser without support)
+// the interval poll below is the safety net. Idle games see ~1 keepalive
+// / 15s on the wire.
+let evtSource = null;
+
+function startEventStream() {
+  if (evtSource) { evtSource.close(); evtSource = null; }
+  if (!gameId() || !window.EventSource) return;
+  try {
+    evtSource = new EventSource('/api/games/' + encodeURIComponent(gameId()) + '/stream');
+  } catch (e) { return; }
+  evtSource.onmessage = e => {
+    let data;
+    try { data = JSON.parse(e.data); } catch (_) { return; }
+    if (data && data.error) { setOffline(data.error); return; }
+    // Full refresh — the SSE payload is a change notification, not a
+    // replacement for /api/positions (which has the full replay data
+    // the moves-list UI needs).
+    pollPositions();
+    // CD review PR #295 cycle 4 : push Elo update immediately when the
+    // SSE payload reports a terminal result ("1-0" / "0-1" / "1/2-1/2").
+    // Avoids the up-to-30-s wait of the periodic pollElo for the
+    // scoreboard to catch a freshly-finished game. Only triggers once
+    // per transition (lastResult still '*' → non-'*').
+    if (data && data.result && data.result !== '*' && lastResult === '*') {
+      pollElo();
+    }
+  };
+  evtSource.onerror = () => {
+    // Silent — the 2s interval poll below covers the gap. EventSource
+    // will auto-reconnect on its own after a few seconds.
+  };
+}
+
+async function pollElo() {
+  // Elo board is viewer-wide (independent of game_id). Cheap endpoint,
+  // but we refresh at a slow cadence : only changes after a finished
+  // game is persisted + the rebuild/cache is written.
+  try {
+    const r = await fetch('/api/elo', { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    renderElo(j);
+  } catch (e) {
+    // Keep the previous render on error — the Elo board is not safety-critical.
+  }
+}
+
+function renderElo(j) {
+  // CD nit PR #295 : la ligne srcEl.textContent = ... est écrasée
+  // juste après par box.innerHTML, inutile. Le badge « (rebuild) » est
+  // reconstruit directement dans le HTML.
+  const box = document.getElementById('elo-board');
+  const sourceBadge = (j && j.source === 'rebuild') ? '(rebuild)' : '';
+  const titleHtml = '<h3><span>Classement Elo</span><span class="source" id="elo-source">' + sourceBadge + '</span></h3>';
+  const players = (j && j.players) || [];
+  if (players.length === 0) {
+    box.innerHTML = titleHtml + '<div class="empty">Aucune partie classée pour le moment.</div>';
+    return;
+  }
+  let html = titleHtml;
+  html += '<table><thead><tr><th>#</th><th>joueur</th><th class="num">elo</th><th class="num">parties</th></tr></thead><tbody>';
+  players.forEach((p, i) => {
+    html += '<tr><td class="rank">' + (i + 1) + '</td><td class="name">' + escapeHtml(p.name) + '</td><td class="num rating">' + p.rating + '</td><td class="num">' + p.games + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  box.innerHTML = html;
+}
+
+refreshGamesList();  // populate combobox on load, before user opens dropdown
+if (gameId()) resetAndPoll();
+pollElo();  // viewer-wide, independent of game_id
+// Polling is kept as a safety net for the case where SSE is blocked
+// (proxy, adblocker, network). Slower cadence than pre-SSE (was 2s).
+setInterval(pollPositions, 5000);
+setInterval(pollClock, 5000);
+setInterval(renderClocks, 100);  // smooth countdown
+setInterval(pollComments, 3000);
+setInterval(pollEngine, 6000);
+setInterval(refreshGamesList, 30000);  // new games / result flips propagate every 30s
+setInterval(pollElo, 30000);  // Elo refresh on finished-game writes (slow cadence)
