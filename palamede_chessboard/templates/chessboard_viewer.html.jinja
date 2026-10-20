@@ -14,8 +14,18 @@
   <div class="header" id="hdr">
     <div>
       <label style="font-size:11px;color:var(--text-muted);margin-right:6px;">game:</label>
-      <input type="text" id="gameid" class="gameid-input" placeholder="game_id" list="games-list" autocomplete="off" />
-      <datalist id="games-list"></datalist>
+      <span class="gsel" id="gsel">
+        <input type="text" id="gameid" class="gameid-input" placeholder="game_id ou recherche" autocomplete="off"
+               role="combobox" aria-expanded="false" aria-controls="gsel-panel" />
+        <div class="gsel-panel" id="gsel-panel" role="listbox" hidden>
+          <label class="gsel-opt"><input type="checkbox" id="gsel-exos" checked /> exercices terminés</label>
+          <div class="gsel-sec">En cours</div>
+          <div id="gsel-live"></div>
+          <div class="gsel-sec">Terminées récemment</div>
+          <div id="gsel-done"></div>
+          <button type="button" class="gsel-more" id="gsel-more" hidden>Plus anciennes…</button>
+        </div>
+      </span>
       <select id="role" class="role-select">
         {% for v in viewer_roles -%}
         <option value="{{ v }}">{{ v }}</option>

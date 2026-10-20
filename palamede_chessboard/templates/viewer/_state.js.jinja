@@ -1,7 +1,10 @@
 const params = new URLSearchParams(location.search);
 const gameIdInput = document.getElementById('gameid');
 const roleSelect = document.getElementById('role');
-gameIdInput.value = params.get('game') || '';
+// The displayed game is explicit state (#46) : typing a search in the
+// selector must not change which game the polls follow.
+let CURRENT_GAME = (params.get('game') || '').trim();
+gameIdInput.value = CURRENT_GAME;
 roleSelect.value = params.get('viewer') || 'spectator';
 
 let POS = [];
@@ -13,10 +16,9 @@ let clockServerTs = 0;
 let clockClientTs = 0;
 let userPinned = false;
 
-function gameId() { return gameIdInput.value.trim(); }
+function gameId() { return CURRENT_GAME; }
 function viewerRole() { return roleSelect.value; }
 function qs(extra) { return '?game_id=' + encodeURIComponent(gameId()) + (extra ? '&' + extra : ''); }
 
-gameIdInput.addEventListener('change', () => { updateUrl(); resetAndPoll(); });
 roleSelect.addEventListener('change', () => { updateUrl(); pollEngine(); });
 

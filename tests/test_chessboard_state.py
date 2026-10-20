@@ -409,6 +409,8 @@ class TestListGames:
             "turn",
             "is_game_over",
             "mtime",
+            "rated",  # #46 : viewer selector badge
+            "date",
         }
         assert e["game_id"] == "g1"
         assert e["white"] == "junior"

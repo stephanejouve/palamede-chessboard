@@ -77,7 +77,6 @@ function renderElo(j) {
   box.innerHTML = html;
 }
 
-refreshGamesList();  // populate combobox on load, before user opens dropdown
 if (gameId()) resetAndPoll();
 pollElo();  // viewer-wide, independent of game_id
 // Polling is kept as a safety net for the case where SSE is blocked
@@ -87,5 +86,5 @@ setInterval(pollClock, 5000);
 setInterval(renderClocks, 100);  // smooth countdown
 setInterval(pollComments, 3000);
 setInterval(pollEngine, 6000);
-setInterval(refreshGamesList, 30000);  // new games / result flips propagate every 30s
+setInterval(refreshGamesList, 30000);  // only while the selector is open (#46)
 setInterval(pollElo, 30000);  // Elo refresh on finished-game writes (slow cadence)

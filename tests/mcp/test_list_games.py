@@ -48,6 +48,8 @@ class TestListGamesTool:
                 "turn",
                 "is_game_over",
                 "mtime",
+                "rated",  # #46 : viewer selector badge
+                "date",
             }
             assert g["turn"] == "white"
 

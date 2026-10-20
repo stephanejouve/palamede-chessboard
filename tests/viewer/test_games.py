@@ -140,7 +140,12 @@ class TestGamesList:
         r = client.get("/api/games")
         assert r.status_code == 200
         body = r.json()
-        assert body == {"in_progress": [], "completed": []}
+        assert body == {
+            "in_progress": [],
+            "completed": [],
+            "completed_total": 0,
+            "has_more": False,
+        }
 
     def test_games_lists_in_progress_and_completed(
         self, client: TestClient, games_dir: Path

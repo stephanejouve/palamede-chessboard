@@ -1,42 +1,96 @@
-// HTML5 <input list="…"> + <datalist> filtre STRICTEMENT sur le texte
-// tapé. Si l'URL a chargé un game_id (ex : ?game=junior-vs-leader-002),
-// l'input contient déjà cette valeur → la datalist ne montre QUE les
-// options matchant ce préfixe, i.e. la partie courante toute seule et
-// impossible de naviguer. Solution : au focus, on backup la valeur et
-// on vide l'input pour laisser voir toute la liste ; au blur, si rien
-// n'a été changé, on restaure. Un `change` (nouvelle sélection) écrase
-// le backup via son propre listener au-dessus.
-let _gameIdBackup = '';
-gameIdInput.addEventListener('focus', () => {
-  _gameIdBackup = gameIdInput.value;
-  gameIdInput.value = '';
-});
-gameIdInput.addEventListener('blur', () => {
-  if (!gameIdInput.value) gameIdInput.value = _gameIdBackup;
-});
+// Game selector (#46). Replaces the <datalist> that listed every game
+// ever played, reloaded every 30 s. The panel asks /api/games for the
+// games in progress and one page of finished games, filtered by the
+// text typed in the box ; it is only fetched while the panel is open.
+// Typing never changes the displayed game : a game is opened by a click
+// on the list, or by Enter on a game_id typed in full.
+const gselPanel = document.getElementById('gsel-panel');
+const gselLive = document.getElementById('gsel-live');
+const gselDone = document.getElementById('gsel-done');
+const gselMore = document.getElementById('gsel-more');
+const gselExos = document.getElementById('gsel-exos');
+const GSEL_PAGE = 20;
+let gselOffset = 0;
+let gselTimer = null;
 
-// Populate the ``game_id`` datalist from /api/games. Combobox lets the
-// user pick from live games OR type a fresh id (useful right after
-// ``chess_create_game``, before mtime propagates). Refreshed on load
-// and every 30s so new games / result flips (`*` → `1-0` etc.) show up
-// without needing a page reload.
-async function refreshGamesList() {
-  try {
-    const r = await fetch('/api/games', { cache: 'no-store' });
-    if (!r.ok) return;
-    const data = await r.json();
-    const dl = document.getElementById('games-list');
-    if (!dl) return;
-    const entries = [];
-    for (const g of (data.in_progress || [])) {
-      entries.push({ value: g.game_id, label: g.game_id + ' — ' + g.white + ' vs ' + g.black + ' (ply ' + g.ply + ', en cours)' });
-    }
-    for (const g of (data.completed || [])) {
-      entries.push({ value: g.game_id, label: g.game_id + ' — ' + g.white + ' vs ' + g.black + ' (' + g.result + ')' });
-    }
-    dl.innerHTML = entries.map(e =>
-      '<option value="' + escapeHtml(e.value) + '">' + escapeHtml(e.label) + '</option>'
-    ).join('');
-  } catch (_) { /* silent — combobox falls back to free-text */ }
+function gselOpen() { return !gselPanel.hidden; }
+
+function gselShow(open) {
+  gselPanel.hidden = !open;
+  gameIdInput.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
 
+function gselDate(d) {
+  // PGN "YYYY.MM.DD" → "DD/MM/YYYY" ; anything else shown as is.
+  const m = /^(\d{4})\.(\d{2})\.(\d{2})$/.exec(d || '');
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : (d || '');
+}
+
+function gselItem(g) {
+  const status = g.result === '*' ? 'ply ' + g.ply + ', en cours' : g.result;
+  const exo = g.rated === false ? '<span class="gsel-badge">exercice</span>' : '';
+  return '<button type="button" class="gsel-item' + (g.game_id === gameId() ? ' current' : '') +
+    '" data-id="' + escapeHtml(g.game_id) + '">' +
+    '<span class="gsel-id">' + escapeHtml(g.game_id) + '</span>' + exo +
+    '<span class="gsel-meta">' + escapeHtml(g.white + ' – ' + g.black) + ' · ' +
+    escapeHtml(gselDate(g.date)) + ' · ' + escapeHtml(status) + '</span></button>';
+}
+
+async function gselLoad(append) {
+  const p = new URLSearchParams();
+  const q = gameIdInput.value.trim();
+  if (q && q !== gameId()) p.set('q', q);
+  if (!gselExos.checked) p.set('exercises', 'false');
+  p.set('limit', String(GSEL_PAGE));
+  p.set('offset', String(append ? gselOffset : 0));
+  try {
+    const r = await fetch('/api/games?' + p.toString(), { cache: 'no-store' });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!append) {
+      gselOffset = 0;
+      gselLive.innerHTML = (data.in_progress || []).map(gselItem).join('') ||
+        '<div class="gsel-empty">Aucune partie en cours.</div>';
+      gselDone.innerHTML = '';
+    }
+    gselDone.insertAdjacentHTML('beforeend', (data.completed || []).map(gselItem).join(''));
+    if (!gselDone.innerHTML) gselDone.innerHTML = '<div class="gsel-empty">Aucune partie terminée.</div>';
+    gselOffset += (data.completed || []).length;
+    gselMore.hidden = !data.has_more;
+  } catch (_) { /* silent — the box still accepts a typed game_id */ }
+}
+
+function selectGame(id) {
+  gselShow(false);
+  id = (id || '').trim();
+  gameIdInput.value = id || gameId();
+  if (!id || id === gameId()) return;
+  CURRENT_GAME = id;
+  gameIdInput.value = id;
+  updateUrl();
+  resetAndPoll();
+}
+
+// Called every 30 s by _live.js : only refreshes an open panel.
+function refreshGamesList() { if (gselOpen()) gselLoad(false); }
+
+gameIdInput.addEventListener('focus', () => { gameIdInput.select(); gselShow(true); gselLoad(false); });
+gameIdInput.addEventListener('input', () => {
+  clearTimeout(gselTimer);
+  gselTimer = setTimeout(() => gselLoad(false), 250);
+});
+gameIdInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); selectGame(gameIdInput.value); gameIdInput.blur(); }
+  if (e.key === 'Escape') { selectGame(''); gameIdInput.blur(); }
+});
+// mousedown, not click : it runs before the input's blur.
+gselPanel.addEventListener('mousedown', e => {
+  const item = e.target.closest('.gsel-item');
+  if (item) { e.preventDefault(); selectGame(item.dataset.id); gameIdInput.blur(); }
+  else if (e.target === gselMore) { e.preventDefault(); gselLoad(true); }
+  else if (e.target !== gselExos && !e.target.closest('label')) e.preventDefault();
+});
+gselExos.addEventListener('change', () => gselLoad(false));
+document.addEventListener('mousedown', e => {
+  if (gselOpen() && !e.target.closest('#gsel')) selectGame('');
+});

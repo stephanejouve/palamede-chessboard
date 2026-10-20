@@ -2,7 +2,8 @@
 
 Three endpoints covered :
 
-* ``GET /api/games`` — list in-progress + completed games (viewer combobox).
+* ``GET /api/games`` — in-progress games and a page of finished ones
+  (viewer game selector, #46), with filters and ETag/304.
 * ``GET /api/raw`` — raw PGN text for a game.
 * ``POST /api/games/{game_id}/move`` — drag&drop move from the viewer UI.
 
@@ -13,13 +14,19 @@ preserve the exact URL contract of the pre-split monolith.
 from __future__ import annotations
 
 import chess
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
 from palamede_chessboard.chessboard_state import (
     GameNotFoundError,
     GameState,
     IllegalMoveError,
     list_games,
+)
+from palamede_chessboard.viewer.games_query import (
+    DEFAULT_LIMIT,
+    MAX_LIMIT,
+    listing_etag,
+    select_games,
 )
 from palamede_chessboard.viewer.models import MovePayload, _games_dir
 
@@ -28,23 +35,39 @@ def build_games_router() -> APIRouter:
     """Return the ``games`` ``APIRouter`` ready to mount on ``build_app``."""
     router = APIRouter(tags=["games"])
 
-    @router.get("/api/games")
-    def games_endpoint() -> dict:
-        """Enumerate ``<games_dir>/*.pgn`` for the viewer's game combobox.
+    @router.get("/api/games", response_model=None)
+    def games_endpoint(
+        request: Request,
+        response: Response,
+        q: str = Query("", max_length=64),
+        player: str = Query("", max_length=64),
+        exercises: bool = True,
+        limit: int = Query(DEFAULT_LIMIT, ge=0, le=MAX_LIMIT),
+        offset: int = Query(0, ge=0),
+    ) -> dict | Response:
+        """Games for the viewer's selector : all in progress, a page of finished.
 
-        Returns two lists : ``in_progress`` (games with ``Result "*"``)
-        and ``completed`` (finished), each sorted by mtime desc so the
-        most recently touched game bubbles to the top. Malformed PGN
-        files are silently skipped rather than 500-ing the whole
-        listing. Delegates the scan to
-        :py:func:`palamede_chessboard.chessboard_state.list_games` so
-        the MCP tool ``chess_list_games`` and this endpoint share one
-        source of truth.
+        Both lists are sorted by mtime desc. Filters and paging are
+        described in :func:`~palamede_chessboard.viewer.games_query.select_games`.
+        Malformed PGN files are skipped by
+        :py:func:`palamede_chessboard.chessboard_state.list_games`, the
+        same scan as the MCP tool ``chess_list_games``. An unchanged
+        directory answers **304** from a ``stat``-only ETag.
         """
-        entries = list_games(_games_dir())
-        in_progress = [e for e in entries if e["result"] == "*"]
-        completed = [e for e in entries if e["result"] != "*"]
-        return {"in_progress": in_progress, "completed": completed}
+        gdir = _games_dir()
+        etag = listing_etag(gdir, str(request.url.query))
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers={"ETag": etag})
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = "no-cache"
+        return select_games(
+            list_games(gdir),
+            q=q,
+            player=player,
+            exercises=exercises,
+            limit=limit,
+            offset=offset,
+        )
 
     @router.get("/api/raw")
     def raw(game_id: str) -> dict:
