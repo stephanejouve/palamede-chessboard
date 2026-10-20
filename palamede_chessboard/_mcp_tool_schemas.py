@@ -55,6 +55,17 @@ TOOL_SCHEMAS: list[Tool] = [
                 "opening": {"type": "string"},
                 "eco": {"type": "string"},
                 "starting_fen": {"type": "string", "description": "Optional FEN override"},
+                "rated": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": (
+                        "Elo perimeter (default true). Pass false for test, "
+                        "exercise or friendly games : no ``[Rated]`` header is "
+                        "written, so the game stays out of chess_get_elo, "
+                        "/api/elo and the matchmaking busy check. Strict JSON "
+                        'boolean only (a string like ``"false"`` is refused).'
+                    ),
+                },
             },
             "required": ["game_id", "white", "black"],
         },
