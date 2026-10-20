@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.2.0...v0.3.0) (2026-10-20)
+
+
+### Features
+
+* **mcp:** paramètre rated dans chess_create_game, parties non classées hors matchmaking ([#33](https://github.com/stephanejouve/palamede-chessboard/issues/33)) ([a9649ba](https://github.com/stephanejouve/palamede-chessboard/commit/a9649baee12e42682600ce11a450871917338a33))
+* **mcp:** paramètre rated dans chess_create_game, parties non classées hors matchmaking ([#35](https://github.com/stephanejouve/palamede-chessboard/issues/35)) ([8999021](https://github.com/stephanejouve/palamede-chessboard/commit/899902171b99e77f5d7407adf2be0b27e59d932c))
+
+
+### Bug Fixes
+
+* **state:** persister starting_fen (SetUp/FEN) et numéroter les coups depuis la position de départ ([#36](https://github.com/stephanejouve/palamede-chessboard/issues/36)) ([61cea6c](https://github.com/stephanejouve/palamede-chessboard/commit/61cea6c469b6a9553b2cdde2dfcfd95a21c34874))
+* **state:** persister starting_fen et numéroter les coups depuis la position de départ ([#37](https://github.com/stephanejouve/palamede-chessboard/issues/37)) ([04ffc97](https://github.com/stephanejouve/palamede-chessboard/commit/04ffc97091849a9348956dce2d0d94d8f0cba927))
+
 ## [0.2.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.1.0...v0.2.0) (2026-10-19)
 
 
