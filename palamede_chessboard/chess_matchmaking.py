@@ -59,6 +59,7 @@ from palamede_chessboard.chess_elo import (
     rebuild_and_persist_cache,
     rebuild_ratings_from_games_dir,
 )
+from palamede_chessboard.player_prefs import load_prefs, max_concurrent_for
 
 #: Canonical player pool, sorted for deterministic iteration.
 PLAYER_POOL: tuple[str, ...] = tuple(sorted(CANONICAL_IDENTITIES))
@@ -160,19 +161,25 @@ def _scan_active_games(games_dir: Path) -> list[dict]:
     return entries
 
 
-def _available_players(games_in_progress: list[dict]) -> tuple[list[str], list[str]]:
+def _available_players(
+    games_in_progress: list[dict], prefs: dict[str, dict] | None = None
+) -> tuple[list[str], list[str]]:
     """Split :data:`PLAYER_POOL` into (available, excluded_busy).
 
-    An agent is "busy" if any entry in ``games_in_progress`` has them
-    on either side, normalised via :func:`normalize_identity` (so a
-    PGN that spelled "DevLeader" still maps to the canonical "leader").
+    An agent is "busy" once the number of entries in ``games_in_progress``
+    that have them on either side reaches their ``max_concurrent``
+    preference (issue #38, default 1 = any game in progress). Names are
+    normalised via :func:`normalize_identity` (so a PGN that spelled
+    "DevLeader" still maps to the canonical "leader").
     """
-    busy: set[str] = set()
+    prefs = prefs or {}
+    counts: dict[str, int] = {}
     for g in games_in_progress:
         for side in ("white", "black"):
             name = normalize_identity(g.get(side, ""))
             if name in CANONICAL_IDENTITIES:
-                busy.add(name)
+                counts[name] = counts.get(name, 0) + 1
+    busy = {name for name, n in counts.items() if n >= max_concurrent_for(prefs, name)}
     available = [p for p in PLAYER_POOL if p not in busy]
     excluded = sorted(busy & set(PLAYER_POOL))
     return available, excluded
@@ -351,6 +358,7 @@ def schedule_round(
     board: RatingBoard,
     games_in_progress: list[dict],
     history: list,
+    prefs: dict[str, dict] | None = None,
 ) -> RoundSchedule:
     """Compute the next round of matches for the four-agent tournament.
 
@@ -360,8 +368,11 @@ def schedule_round(
       :func:`load_cached_ratings` or :func:`rebuild_and_persist_cache`).
     * ``games_in_progress`` : list of dicts with ``white``/``black``
       keys (output of :func:`_scan_active_games` or the equivalent
-      upstream ``list_games`` filtered to in-progress). Agents on
-      either side of any entry are excluded from the round.
+      upstream ``list_games`` filtered to in-progress). An agent is
+      excluded from the round once its count of entries reaches its
+      ``max_concurrent`` preference.
+    * ``prefs`` : output of :func:`palamede_chessboard.player_prefs.load_prefs`
+      (``None`` = defaults, ceiling 1 for everyone).
     * ``history`` : output of
       :func:`palamede_chessboard.chess_elo.collect_rated_games`.
       Drives the color-alternation decision.
@@ -369,7 +380,7 @@ def schedule_round(
     Output : one :class:`RoundSchedule` with the matches, the bye (if
     any) and the list of agents excluded for being busy.
     """
-    available, excluded = _available_players(games_in_progress)
+    available, excluded = _available_players(games_in_progress, prefs)
     bye: str | None = None
     if len(available) % 2 == 1:
         bye, available = _choose_bye(board, available)
@@ -427,4 +438,4 @@ def schedule_round_from_disk(games_dir: Path | None = None) -> RoundSchedule:
             board = cached
     games_in_progress = _scan_active_games(gdir)
     history = collect_rated_games(games_dir=gdir)
-    return schedule_round(board, games_in_progress, history)
+    return schedule_round(board, games_in_progress, history, load_prefs(gdir))
