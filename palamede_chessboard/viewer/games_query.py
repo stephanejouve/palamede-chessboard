@@ -72,6 +72,20 @@ def select_games(
     }
 
 
+def etag_matches(if_none_match: str | None, etag: str) -> bool:
+    """RFC 9110 weak comparison of ``If-None-Match`` against ``etag``.
+
+    A reverse proxy (nginx behind DSM) may turn the strong ETag into a
+    weak one (``W/"…"``) and the client then sends that form back : a
+    strict string equality would never answer 304 (review Admin #52).
+    Handles ``*`` and comma-separated lists.
+    """
+    if not if_none_match:
+        return False
+    tags = [t.strip() for t in if_none_match.split(",")]
+    return "*" in tags or etag.removeprefix("W/") in (t.removeprefix("W/") for t in tags)
+
+
 def listing_etag(games_dir: Path, query: str) -> str:
     """Quoted ETag of the listing : PGN names, sizes and mtimes, plus the query.
 

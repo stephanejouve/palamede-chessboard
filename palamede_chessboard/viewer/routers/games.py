@@ -25,6 +25,7 @@ from palamede_chessboard.chessboard_state import (
 from palamede_chessboard.viewer.games_query import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
+    etag_matches,
     listing_etag,
     select_games,
 )
@@ -56,7 +57,7 @@ def build_games_router() -> APIRouter:
         """
         gdir = _games_dir()
         etag = listing_etag(gdir, str(request.url.query))
-        if request.headers.get("if-none-match") == etag:
+        if etag_matches(request.headers.get("if-none-match"), etag):
             return Response(status_code=304, headers={"ETag": etag})
         response.headers["ETag"] = etag
         response.headers["Cache-Control"] = "no-cache"

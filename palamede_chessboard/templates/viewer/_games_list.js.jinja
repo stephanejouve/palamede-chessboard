@@ -28,7 +28,9 @@ function gselDate(d) {
 
 function gselItem(g) {
   const status = g.result === '*' ? 'ply ' + g.ply + ', en cours' : g.result;
-  const exo = g.rated === false ? '<span class="gsel-badge">exercice</span>' : '';
+  // rated=false : exercise, import, or game without a Rated header —
+  // all of them outside the Elo, hence "non classée" (review Junior #52).
+  const exo = g.rated === false ? '<span class="gsel-badge">non classée</span>' : '';
   return '<button type="button" class="gsel-item' + (g.game_id === gameId() ? ' current' : '') +
     '" data-id="' + escapeHtml(g.game_id) + '">' +
     '<span class="gsel-id">' + escapeHtml(g.game_id) + '</span>' + exo +
@@ -36,25 +38,33 @@ function gselItem(g) {
     escapeHtml(gselDate(g.date)) + ' · ' + escapeHtml(status) + '</span></button>';
 }
 
-async function gselLoad(append) {
+function gselQuery(limit, offset) {
   const p = new URLSearchParams();
   const q = gameIdInput.value.trim();
   if (q && q !== gameId()) p.set('q', q);
   if (!gselExos.checked) p.set('exercises', 'false');
-  p.set('limit', String(GSEL_PAGE));
-  p.set('offset', String(append ? gselOffset : 0));
+  p.set('limit', String(limit));
+  p.set('offset', String(offset));
+  // 'no-cache', not 'no-store' : the browser revalidates with
+  // If-None-Match, so an unchanged listing costs a 304 (review Junior #52).
+  return fetch('/api/games?' + p.toString(), { cache: 'no-cache' });
+}
+
+function gselEmpty(msg) { return '<div class="gsel-empty">' + msg + '</div>'; }
+
+async function gselLoad(append) {
   try {
-    const r = await fetch('/api/games?' + p.toString(), { cache: 'no-store' });
+    const r = await gselQuery(GSEL_PAGE, append ? gselOffset : 0);
     if (!r.ok) return;
     const data = await r.json();
     if (!append) {
       gselOffset = 0;
       gselLive.innerHTML = (data.in_progress || []).map(gselItem).join('') ||
-        '<div class="gsel-empty">Aucune partie en cours.</div>';
+        gselEmpty('Aucune partie en cours.');
       gselDone.innerHTML = '';
     }
     gselDone.insertAdjacentHTML('beforeend', (data.completed || []).map(gselItem).join(''));
-    if (!gselDone.innerHTML) gselDone.innerHTML = '<div class="gsel-empty">Aucune partie terminée.</div>';
+    if (!gselDone.innerHTML) gselDone.innerHTML = gselEmpty('Aucune partie terminée.');
     gselOffset += (data.completed || []).length;
     gselMore.hidden = !data.has_more;
   } catch (_) { /* silent — the box still accepts a typed game_id */ }
@@ -71,8 +81,19 @@ function selectGame(id) {
   resetAndPoll();
 }
 
-// Called every 30 s by _live.js : only refreshes an open panel.
-function refreshGamesList() { if (gselOpen()) gselLoad(false); }
+// Called every 30 s by _live.js : only while the panel is open, and only
+// the "in progress" section (limit=0) — the finished games already
+// paged in by "Plus anciennes…" stay put (review Junior #52).
+async function refreshGamesList() {
+  if (!gselOpen()) return;
+  try {
+    const r = await gselQuery(0, 0);
+    if (!r.ok) return;
+    const data = await r.json();
+    gselLive.innerHTML = (data.in_progress || []).map(gselItem).join('') ||
+      gselEmpty('Aucune partie en cours.');
+  } catch (_) { /* silent */ }
+}
 
 gameIdInput.addEventListener('focus', () => { gameIdInput.select(); gselShow(true); gselLoad(false); });
 gameIdInput.addEventListener('input', () => {

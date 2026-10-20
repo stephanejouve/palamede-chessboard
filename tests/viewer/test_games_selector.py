@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from palamede_chessboard.chessboard_state import GameMetadata, GameState
-from palamede_chessboard.viewer.games_query import select_games
+from palamede_chessboard.viewer.games_query import etag_matches, select_games
 
 
 def _entry(game_id: str, result: str = "1-0", rated: bool = True, **kw: str) -> dict:
@@ -122,3 +122,31 @@ def test_etag_304_until_a_pgn_changes(client: TestClient, games_dir: Path) -> No
     after = client.get("/api/games", headers={"If-None-Match": etag})
     assert after.status_code == 200
     assert after.json()["in_progress"][0]["ply"] == 1
+
+
+# ---- ETag faible derrière un reverse proxy (revue Admin #52) ----------------
+
+
+@pytest.mark.parametrize(
+    ("header", "expected"),
+    [
+        ('"abc"', True),
+        ('W/"abc"', True),
+        ('"zzz", W/"abc"', True),
+        ("*", True),
+        ('"zzz"', False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_etag_matches(header: str | None, expected: bool) -> None:
+    assert etag_matches(header, '"abc"') is expected
+
+
+@pytest.mark.parametrize("path", ["/api/games", "/api/positions?game_id=live"])
+def test_weak_etag_from_proxy_still_gets_304(
+    client: TestClient, games_dir: Path, path: str
+) -> None:
+    _game(games_dir, "live")
+    etag = client.get(path).headers["ETag"]
+    assert client.get(path, headers={"If-None-Match": "W/" + etag}).status_code == 304
