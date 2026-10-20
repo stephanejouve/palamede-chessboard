@@ -46,6 +46,7 @@ from palamede_chessboard.chessboard_engine import (
     get_my_mistakes,
 )
 from palamede_chessboard.chessboard_state import (
+    ChessboardError,
     GameMetadata,
     GameState,
     TimeControl,
@@ -57,6 +58,11 @@ from palamede_chessboard.chessboard_state import (
 
 async def _handle_chess_create_game(arguments: dict, games_dir: Path) -> dict:
     _require_arbiter_or_daemon(arguments.get("arbiter"), games_dir)
+    # Issue #33 : strict boolean, so a malformed client (``"false"``,
+    # ``0``) can never create a rated game by accident.
+    rated = arguments.get("rated", True)
+    if not isinstance(rated, bool):
+        raise ChessboardError(f"rated must be a JSON boolean (true/false), got {rated!r}")
     tc_raw = arguments.get("time_control") or {}
     tc = TimeControl(
         format=tc_raw.get("format", "unrated"),
@@ -76,6 +82,7 @@ async def _handle_chess_create_game(arguments: dict, games_dir: Path) -> dict:
         annotator=arguments.get("annotator") or None,
         opening=arguments.get("opening") or None,
         eco=arguments.get("eco") or None,
+        rated=rated,
     )
     state = GameState.create(
         metadata,
