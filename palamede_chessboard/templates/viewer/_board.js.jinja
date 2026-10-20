@@ -1,0 +1,97 @@
+// Chessground : drag&drop board (lichess). ESM import from CDN — falls
+// back gracefully to the static SVG board (via /api/board.svg) if the
+// CDN is blocked (offline, adblocker, DSM proxy filtering) : window.__cgSetFen
+// stays undefined and draw() no-ops, but the moves list, clocks,
+// commentary and engine panel keep working.
+import { Chessground } from 'https://cdn.jsdelivr.net/npm/chessground@9.2.1/+esm';
+
+const boardEl = document.getElementById('board');
+const errorEl = document.getElementById('move-error');
+// Chessground removes children on init, so re-parent the error overlay.
+if (errorEl && errorEl.parentNode === boardEl) boardEl.removeChild(errorEl);
+boardEl.classList.add('cg-wrap');
+
+let cg = null;
+let cgFenSnapshot = null;  // FEN before the last user drop, for revert on 422.
+
+function showMoveError(msg) {
+  if (!errorEl) return;
+  errorEl.textContent = msg;
+  errorEl.classList.add('show');
+  setTimeout(() => errorEl.classList.remove('show'), 2500);
+}
+
+async function onUserDrop(from, to) {
+  const gid = document.getElementById('gameid').value.trim();
+  if (!gid) return;
+  // Promotion : chessground doesn't ship a dialog by default. We send
+  // the drop as UCI ; if it's a pawn reaching the last rank, we append
+  // 'q' server-side (implicit queen promotion, most common case).
+  let uci = from + to;
+  const piece = cg ? cg.state.pieces.get(to) : null;
+  const isPromoRank = (piece && piece.role === 'pawn' &&
+    (to.endsWith('8') || to.endsWith('1')));
+  if (isPromoRank) uci = uci + 'q';
+  try {
+    const r = await fetch('/api/games/' + encodeURIComponent(gid) + '/move', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ uci, by: 'viewer-drag-drop' }),
+    });
+    if (!r.ok) {
+      // Revert to pre-drop FEN. The server rejected — either illegal
+      // move (422) or game state changed under us (409).
+      if (cgFenSnapshot && cg) cg.set({ fen: cgFenSnapshot });
+      const body = await r.json().catch(() => ({}));
+      showMoveError(body.detail || ('HTTP ' + r.status));
+      return;
+    }
+    // Successful move — the SSE stream will push the fresh state, and
+    // pollPositions() will refresh the moves list. Don't manually
+    // update chessground here to avoid double-update flicker.
+  } catch (e) {
+    if (cgFenSnapshot && cg) cg.set({ fen: cgFenSnapshot });
+    showMoveError('Network error');
+  }
+}
+
+// Public setter used by the classical polling loop's draw() function.
+// ``turn`` may be null → viewOnly; otherwise 'white'|'black'.
+// ``interactive`` toggles drag&drop (true at live position, false in history).
+window.__cgSetFen = function(fen, turn, interactive) {
+  if (!cg) return;
+  if (!fen) {
+    cg.set({ fen: 'start', viewOnly: true, movable: { color: undefined, free: false } });
+    return;
+  }
+  cgFenSnapshot = fen;
+  cg.set({
+    fen,
+    turnColor: turn || undefined,
+    viewOnly: !interactive,
+    movable: {
+      free: true,  // server validates via POST /move ; client is permissive
+      color: interactive ? turn : undefined,
+      showDests: false,
+      events: { after: onUserDrop },
+    },
+  });
+};
+
+cg = Chessground(boardEl, {
+  fen: 'start',
+  orientation: 'white',
+  viewOnly: true,
+  animation: { enabled: true, duration: 200 },
+  movable: { free: true, color: undefined, events: { after: onUserDrop } },
+  draggable: { showGhost: true },
+});
+
+// Re-attach the error overlay after chessground has taken over the div.
+if (errorEl) boardEl.appendChild(errorEl);
+
+// Once chessground is ready, re-trigger the classical draw() so the
+// board catches up with any positions already polled by the sibling
+// script. ``window.draw`` is populated by the classical <script>
+// (top-level function declarations are globals in non-module scripts).
+if (typeof window.draw === 'function') window.draw();

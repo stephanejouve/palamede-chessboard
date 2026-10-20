@@ -1,0 +1,162 @@
+function updateUrl() {
+  const p = new URLSearchParams();
+  if (gameId()) p.set('game', gameId());
+  if (viewerRole() !== 'spectator') p.set('viewer', viewerRole());
+  history.replaceState(null, '', '?' + p.toString());
+}
+
+function resetAndPoll() {
+  POS = []; idx = 0; COMMENTS = []; CLOCK = null;
+  // chessground: reset to empty position if the ground is up.
+  if (window.__cgSetFen) window.__cgSetFen(null, null, false);
+  pollPositions(); pollClock(); pollEngine(); pollComments();
+  startEventStream();
+}
+
+async function pollPositions() {
+  if (!gameId()) return;
+  try {
+    const r = await fetch('/api/positions' + qs(), { cache: 'no-store' });
+    if (r.status === 404) { setOffline('Partie inconnue: ' + gameId()); return; }
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const wasAtEnd = (POS.length === 0) || (idx === POS.length - 1);
+    const oldLen = POS.length;
+    POS = data.positions;
+    lastResult = data.result || '*';
+    const h = data.headers || {};
+    document.getElementById('hdr-meta').innerHTML =
+      '<strong>' + (h.White || '?') + '</strong> vs <strong>' + (h.Black || '?') + '</strong>'
+      + (h.Result && h.Result !== '*' ? ' · <span style="color:var(--accent);font-weight:600;">' + h.Result + '</span>' : '')
+      + (h.ECO ? ' · ' + h.ECO : '')
+      + (h.Date ? ' · ' + h.Date : '');
+    document.title = (h.White || '?') + ' vs ' + (h.Black || '?');
+    if (wasAtEnd && !userPinned) idx = POS.length - 1;
+    if (POS.length !== oldLen) { draw(); list(); upd(); pollEngine(); }
+    setOnline();
+  } catch (e) {
+    setOffline(e.message);
+  }
+}
+
+async function pollClock() {
+  if (!gameId()) return;
+  try {
+    const r = await fetch('/api/clock' + qs('viewer=' + encodeURIComponent(viewerRole())), { cache: 'no-store' });
+    if (!r.ok) return;
+    const data = await r.json();
+    CLOCK = data.clock;
+    clockServerTs = (CLOCK && CLOCK.now_ts) ? CLOCK.now_ts : 0;
+    clockClientTs = Date.now() / 1000;
+    document.getElementById('clocks').style.display = CLOCK ? 'grid' : 'none';
+    renderClocks();
+  } catch(e) { /* silent */ }
+}
+
+function renderClocks() {
+  if (!CLOCK) return;
+  // Drift must be computed from the server-side ``last_move_ts``
+  // (the moment the active side started thinking) — NOT from the
+  // client fetch time. Pre-fix, ``clockClientTs`` was reset at each
+  // /api/clock poll, so the local extrapolation snapped back every
+  // 5s (Safari iPhone visible "4:49 → 4:53 loop").
+  const refTs = CLOCK.last_move_ts || clockClientTs;
+  const driftS = Math.max(0, (Date.now() / 1000) - refTs);
+  const active = CLOCK.active;
+  let ws = CLOCK.white_seconds;
+  let bs = CLOCK.black_seconds;
+  if (CLOCK.started && active === 'white') ws -= driftS;
+  else if (CLOCK.started && active === 'black') bs -= driftS;
+  const fmt = (s) => {
+    if (s <= 0) return '0:00.0';
+    if (s < 10) return s.toFixed(1).replace('.', 's.');
+    const m = Math.floor(s / 60); const r = Math.floor(s % 60);
+    return m + ':' + (r < 10 ? '0' + r : r);
+  };
+  document.getElementById('time-white').textContent = fmt(ws);
+  document.getElementById('time-black').textContent = fmt(bs);
+  setClass('clock-white', 'active', active === 'white' && CLOCK.started);
+  setClass('clock-black', 'active', active === 'black' && CLOCK.started);
+  setClass('clock-white', 'low', ws > 0 && ws < 30);
+  setClass('clock-black', 'low', bs > 0 && bs < 30);
+}
+
+function setClass(id, cls, on) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle(cls, !!on);
+}
+
+async function pollEngine() {
+  if (!gameId() || POS.length === 0) return;
+  const fen = POS[idx] && POS[idx].fen;
+  if (!fen) return;
+  const role = viewerRole();
+  const eng = document.getElementById('engine');
+  try {
+    const depthSel = document.getElementById('engineDepth');
+    const depth = depthSel ? parseInt(depthSel.value, 10) : 15;
+    const r = await fetch('/api/engine/live' + qs('viewer=' + encodeURIComponent(role) + '&fen=' + encodeURIComponent(fen) + '&depth=' + depth), { cache: 'no-store' });
+    if (r.status === 403) {
+      eng.innerHTML = '<h3>Analyse Stockfish</h3><div class="locked">🔒 Engine masqué aux joueurs pendant la partie (fair-play). Disponible post-partie ou en mode spectator/arbiter.</div>';
+      return;
+    }
+    if (r.status === 503) {
+      eng.innerHTML = '<h3>Analyse Stockfish</h3><div class="empty">Engine indisponible (binaire Stockfish manquant).</div>';
+      return;
+    }
+    if (!r.ok) {
+      // Transient server error (Stockfish subprocess timeout / contention).
+      // Keep the previous eval bar instead of wiping it — the next poll
+      // will refresh on success. Surface the error only on initial load
+      // (eng.innerHTML still has the boot placeholder ``—``) so the user
+      // gets a signal but mid-game flicker disappears.
+      console.warn('engine fetch HTTP ' + r.status + ' — keeping previous eval');
+      if (eng.querySelector('.eval-bar') === null) {
+        eng.innerHTML = '<h3>Analyse Stockfish</h3><div class="empty">Erreur HTTP ' + r.status + ' (retry au prochain tick)</div>';
+      }
+      return;
+    }
+    const data = await r.json();
+    renderEngine(data);
+  } catch (e) {
+    console.warn('engine fetch threw: ' + e.message + ' — keeping previous eval');
+    if (eng.querySelector('.eval-bar') === null) {
+      eng.innerHTML = '<h3>Analyse Stockfish</h3><div class="empty">Erreur: ' + escapeHtml(e.message) + '</div>';
+    }
+  }
+}
+
+function renderEngine(data) {
+  const eng = document.getElementById('engine');
+  const a = data.analysis || {};
+  const cp = a.score_cp;
+  const mate = a.mate;
+  const pv = (a.pv_san || []).slice(0, 6).join(' ');
+  const best = a.best_move_san || (a.pv_san && a.pv_san[0]) || '—';
+  const depth = a.depth || '?';
+  let displayEval;
+  if (mate !== null && mate !== undefined) displayEval = (mate > 0 ? '+' : '') + '#' + mate;
+  else if (cp !== null && cp !== undefined) displayEval = (cp >= 0 ? '+' : '') + (cp / 100).toFixed(2);
+  else displayEval = '—';
+  // Eval bar: clip to [-500, +500] cp range, 50% center = 0
+  let pct = 50;
+  if (mate !== null && mate !== undefined) pct = mate > 0 ? 99 : 1;
+  else if (cp !== null && cp !== undefined) pct = 50 + Math.max(-49, Math.min(49, cp / 10));
+  eng.innerHTML =
+    '<h3>Analyse Stockfish · depth ' + depth + (data.is_over ? ' · post-mortem' : ' · live') + '</h3>'
+    + '<div class="eval-bar"><div class="indicator" style="left:' + pct + '%"></div></div>'
+    + '<div class="eval-line"><span class="eval-cp">' + displayEval + '</span> · best : <span class="eval-best">' + escapeHtml(best) + '</span></div>'
+    + (pv ? '<div class="eval-pv">PV : ' + escapeHtml(pv) + '</div>' : '');
+}
+
+async function pollComments() {
+  if (!gameId()) return;
+  try {
+    const r = await fetch('/api/commentary' + qs(), { cache: 'no-store' });
+    if (!r.ok) return;
+    const data = await r.json();
+    COMMENTS = data.entries || [];
+    renderComments();
+  } catch(e) { /* silent */ }
+}
+

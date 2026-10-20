@@ -1,0 +1,42 @@
+// HTML5 <input list="…"> + <datalist> filtre STRICTEMENT sur le texte
+// tapé. Si l'URL a chargé un game_id (ex : ?game=junior-vs-leader-002),
+// l'input contient déjà cette valeur → la datalist ne montre QUE les
+// options matchant ce préfixe, i.e. la partie courante toute seule et
+// impossible de naviguer. Solution : au focus, on backup la valeur et
+// on vide l'input pour laisser voir toute la liste ; au blur, si rien
+// n'a été changé, on restaure. Un `change` (nouvelle sélection) écrase
+// le backup via son propre listener au-dessus.
+let _gameIdBackup = '';
+gameIdInput.addEventListener('focus', () => {
+  _gameIdBackup = gameIdInput.value;
+  gameIdInput.value = '';
+});
+gameIdInput.addEventListener('blur', () => {
+  if (!gameIdInput.value) gameIdInput.value = _gameIdBackup;
+});
+
+// Populate the ``game_id`` datalist from /api/games. Combobox lets the
+// user pick from live games OR type a fresh id (useful right after
+// ``chess_create_game``, before mtime propagates). Refreshed on load
+// and every 30s so new games / result flips (`*` → `1-0` etc.) show up
+// without needing a page reload.
+async function refreshGamesList() {
+  try {
+    const r = await fetch('/api/games', { cache: 'no-store' });
+    if (!r.ok) return;
+    const data = await r.json();
+    const dl = document.getElementById('games-list');
+    if (!dl) return;
+    const entries = [];
+    for (const g of (data.in_progress || [])) {
+      entries.push({ value: g.game_id, label: g.game_id + ' — ' + g.white + ' vs ' + g.black + ' (ply ' + g.ply + ', en cours)' });
+    }
+    for (const g of (data.completed || [])) {
+      entries.push({ value: g.game_id, label: g.game_id + ' — ' + g.white + ' vs ' + g.black + ' (' + g.result + ')' });
+    }
+    dl.innerHTML = entries.map(e =>
+      '<option value="' + escapeHtml(e.value) + '">' + escapeHtml(e.label) + '</option>'
+    ).join('');
+  } catch (_) { /* silent — combobox falls back to free-text */ }
+}
+

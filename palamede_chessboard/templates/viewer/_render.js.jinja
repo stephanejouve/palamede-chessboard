@@ -1,0 +1,174 @@
+function draw() {
+  if (!POS[idx] || !gameId()) return;
+  if (window.__cgSetFen) {
+    // At-current-ply chessground update: only enable drag&drop when
+    // viewing the latest position (idx === POS.length - 1). Historic
+    // positions stay view-only to avoid users accidentally trying to
+    // "correct" a past ply.
+    const atLive = (idx === POS.length - 1) && lastResult === '*';
+    // Turn to move is derived from the FEN active-color field.
+    const fen = POS[idx].fen;
+    const turn = fen.split(' ')[1] === 'w' ? 'white' : 'black';
+    window.__cgSetFen(fen, atLive ? turn : null, atLive);
+  }
+}
+
+// Side to move ('w' / 'b') and full-move number, read from a FEN.
+// The game may start from any position (``starting_fen``, #36) : Black
+// to move, or a move number other than 1. Never assume the standard
+// start (move 1, White) from the ply index.
+function fenTurn(fen) { return fen ? fen.split(' ')[1] : null; }
+function fenMoveNo(fen) { return (fen && parseInt(fen.split(' ')[5], 10)) || 1; }
+
+function list() {
+  const m = document.getElementById('moves');
+  m.innerHTML = '';
+  for (let k = 1; k < POS.length; k++) {
+    // "N." before a White move ; "N..." when the game opens with Black.
+    const no = fenMoveNo(POS[k-1].fen);
+    const label = POS[k].color === 'w' ? no + '.' : (k === 1 ? no + '...' : null);
+    if (label) {
+      const n = document.createElement('span');
+      n.className = 'num';
+      n.textContent = label;
+      m.appendChild(n);
+    }
+    const b = document.createElement('button');
+    b.className = 'mv' + (k === idx ? ' act' : '');
+    b.textContent = POS[k].san;
+    b.onclick = () => { idx = k; userPinned = (k !== POS.length-1); draw(); list(); upd(); pollEngine(); };
+    m.appendChild(b);
+  }
+  const act = m.querySelector('.mv.act');
+  if (act) act.scrollIntoView({block: 'nearest'});
+}
+
+function plyLabel(p) {
+  if (p <= 0 || !POS[p]) return '0';
+  // Move number of the position the move was played from, and its side.
+  return fenMoveNo(POS[p-1].fen) + (POS[p].color === 'w' ? '.w' : '.b');
+}
+
+function upd() {
+  // Display in chess.com-style "N.w" / "N.b" — N = full move number,
+  // .w / .b = side that just played to reach this position. After
+  // 7.Nc3 (ply 13) we want "7.w". After 7...Bxc3+ (ply 14) → "7.b".
+  document.getElementById('ct').textContent = plyLabel(idx) + ' / ' + plyLabel(POS.length - 1);
+  // Side to move straight from the FEN : right at ply 0 too, including
+  // a game that starts with Black to move.
+  const t = fenTurn(POS[idx] && POS[idx].fen);
+  const next = t === 'w' ? 'blancs' : (t === 'b' ? 'noirs' : '');
+  document.getElementById('trait').textContent = next ? 'Trait aux ' + next : '';
+  renderComments();
+  renderCaptures(POS[idx] && POS[idx].fen);
+}
+
+// Initial piece counts per side (standard chess start) — fallback only :
+// captures are counted against the game's own first position (POS[0]),
+// which differs from the standard start for a ``starting_fen`` game.
+const INITIAL_PIECES = { p: 8, n: 2, b: 2, r: 2, q: 1 };
+// Material values (king ignored — can't be captured)
+const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+// SVG-based rendering via /api/piece.svg?color=w|b&type=p|n|b|r|q.
+// Previously used Unicode glyphs — but ♙♘♗♖♕ (outlined white) render
+// noticeably smaller than ♟♞♝♜♛ (filled black) on system fonts, and
+// every workaround (CSS color trick, font-size compensation) was
+// fragile cross-browser (Safari iPhone notably broken). SVG gives
+// pixel-identical sizing + native white/black distinction. Responses
+// are cached forever ("immutable") server-side, so the 12 unique
+// URLs are fetched once and reused.
+function pieceImg(color, type) {
+  return '<img src="/api/piece.svg?color=' + color + '&type=' + type +
+    '" alt="' + color + type + '" />';
+}
+
+// Piece counts per FEN letter (kings ignored). FEN ranks are
+// space-delimited ; the placement field is the first token.
+function pieceCounts(fen) {
+  const counts = { P:0, N:0, B:0, R:0, Q:0, p:0, n:0, b:0, r:0, q:0 };
+  for (const ch of fen.split(' ')[0]) {
+    if (counts.hasOwnProperty(ch)) counts[ch]++;
+  }
+  return counts;
+}
+
+function renderCaptures(fen) {
+  const box = document.getElementById('captures');
+  if (!fen) {
+    box.innerHTML = '<h3>Matériel capturé</h3><div class="empty">—</div>';
+    return;
+  }
+  const counts = pieceCounts(fen);
+  const start = POS[0] && POS[0].fen ? pieceCounts(POS[0].fen) : null;
+  const initial = k => start ? start[k] : INITIAL_PIECES[k.toLowerCase()];
+  // Captured = initial - current. White's row shows black pieces taken
+  // by white (rendered as black-colored SVG); black's row shows white
+  // pieces taken by black (rendered as white-colored SVG). Native
+  // sizing — no Unicode-glyph mismatch.
+  const whiteCaptured = []; // black pieces taken → color="b" in SVG
+  const blackCaptured = []; // white pieces taken → color="w" in SVG
+  let whiteMaterial = 0, blackMaterial = 0;
+  for (const k of ['p','n','b','r','q']) {
+    const blackTaken = initial(k) - counts[k];
+    for (let i = 0; i < blackTaken; i++) whiteCaptured.push(pieceImg('b', k));
+    whiteMaterial += blackTaken * PIECE_VALUE[k];
+    const whiteTaken = initial(k.toUpperCase()) - counts[k.toUpperCase()];
+    for (let i = 0; i < whiteTaken; i++) blackCaptured.push(pieceImg('w', k));
+    blackMaterial += whiteTaken * PIECE_VALUE[k];
+  }
+  if (whiteCaptured.length === 0 && blackCaptured.length === 0) {
+    box.innerHTML = '<h3>Matériel capturé</h3><div class="empty">Position initiale — rien capturé.</div>';
+    return;
+  }
+  const balance = whiteMaterial - blackMaterial;
+  const balanceLabel = balance === 0 ? '0' : (balance > 0 ? '+' + balance : String(balance));
+  const balanceClass = balance === 0 ? 'even' : (balance > 0 ? 'plus' : 'minus');
+  const whitePieces = whiteCaptured.length ? whiteCaptured.join('') : '<span class="empty">—</span>';
+  const blackPieces = blackCaptured.length ? blackCaptured.join('') : '<span class="empty">—</span>';
+  box.innerHTML =
+    '<h3>Matériel capturé</h3>' +
+    '<div class="row"><span class="side">Blancs</span><span class="pieces">' + whitePieces +
+    '</span><span class="balance ' + balanceClass + '">' + balanceLabel + '</span></div>' +
+    '<div class="row"><span class="side">Noirs</span><span class="pieces">' + blackPieces +
+    '</span><span class="balance">&nbsp;</span></div>';
+}
+
+function renderComments() {
+  const box = document.getElementById('commentary');
+  const matches = COMMENTS.filter(e => e.ply === idx);
+  let html = '<h3>Commentaires — ply ' + idx + '</h3>';
+  if (matches.length === 0) {
+    html += '<div class="empty">Aucun commentaire pour ce coup.</div>';
+  } else {
+    matches.sort((a,b) => (a.ts || '').localeCompare(b.ts || ''));
+    for (const e of matches) {
+      let t = e.ts || '';
+      try { t = new Date(t).toLocaleTimeString(); } catch (_) {}
+      html += '<div class="entry"><span class="src">' + escapeHtml(e.source) + '</span><span class="ts">' + escapeHtml(t) + '</span><div class="txt">' + escapeHtml(e.text) + '</div></div>';
+    }
+  }
+  box.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function g(a) {
+  if (POS.length === 0) return;
+  if (a === 's') { idx = 0; userPinned = true; }
+  else if (a === 'p') { idx = Math.max(0, idx-1); userPinned = (idx !== POS.length-1); }
+  else if (a === 'n') { idx = Math.min(POS.length-1, idx+1); userPinned = (idx !== POS.length-1); }
+  else if (a === 'e') { idx = POS.length-1; userPinned = false; }
+  draw(); list(); upd(); pollEngine();
+}
+
+function setOnline() {
+  document.getElementById('pulse').classList.remove('off');
+  document.getElementById('liveStatus').textContent = 'En direct · ' + new Date().toLocaleTimeString();
+}
+function setOffline(msg) {
+  document.getElementById('pulse').classList.add('off');
+  document.getElementById('liveStatus').innerHTML = '<span class="err">Hors ligne · ' + escapeHtml(msg || '') + '</span>';
+}
+

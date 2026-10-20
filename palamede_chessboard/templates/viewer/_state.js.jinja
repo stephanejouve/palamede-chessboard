@@ -1,0 +1,22 @@
+const params = new URLSearchParams(location.search);
+const gameIdInput = document.getElementById('gameid');
+const roleSelect = document.getElementById('role');
+gameIdInput.value = params.get('game') || '';
+roleSelect.value = params.get('viewer') || 'spectator';
+
+let POS = [];
+let idx = 0;
+let lastResult = '*';
+let COMMENTS = [];
+let CLOCK = null;
+let clockServerTs = 0;
+let clockClientTs = 0;
+let userPinned = false;
+
+function gameId() { return gameIdInput.value.trim(); }
+function viewerRole() { return roleSelect.value; }
+function qs(extra) { return '?game_id=' + encodeURIComponent(gameId()) + (extra ? '&' + extra : ''); }
+
+gameIdInput.addEventListener('change', () => { updateUrl(); resetAndPoll(); });
+roleSelect.addEventListener('change', () => { updateUrl(); pollEngine(); });
+
