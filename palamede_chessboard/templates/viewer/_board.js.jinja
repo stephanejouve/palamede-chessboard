@@ -60,19 +60,21 @@ async function onUserDrop(from, to) {
 }
 
 // Public setter used by the classical polling loop's draw() function.
-// ``turn`` may be null → viewOnly; otherwise 'white'|'black'.
+// ``turn`` may be null; otherwise 'white'|'black'.
 // ``interactive`` toggles drag&drop (true at live position, false in history).
+// Drag&drop is gated by ``movable.color`` only, never by ``viewOnly`` :
+// chessground binds its mouse listeners once, at creation, and only when
+// ``viewOnly`` is false ; ``cg.set()`` cannot change ``viewOnly``.
 window.__cgSetFen = function(fen, turn, interactive) {
   if (!cg) return;
   if (!fen) {
-    cg.set({ fen: 'start', viewOnly: true, movable: { color: undefined, free: false } });
+    cg.set({ fen: 'start', movable: { color: undefined, free: false } });
     return;
   }
   cgFenSnapshot = fen;
   cg.set({
     fen,
     turnColor: turn || undefined,
-    viewOnly: !interactive,
     movable: {
       free: true,  // server validates via POST /move ; client is permissive
       color: interactive ? turn : undefined,
@@ -85,7 +87,7 @@ window.__cgSetFen = function(fen, turn, interactive) {
 cg = Chessground(boardEl, {
   fen: 'start',
   orientation: 'white',
-  viewOnly: true,
+  viewOnly: false,  // listeners are bound at creation only, see __cgSetFen
   animation: { enabled: true, duration: 200 },
   movable: { free: true, color: undefined, events: { after: onUserDrop } },
   draggable: { showGhost: true },
