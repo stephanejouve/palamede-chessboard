@@ -47,8 +47,13 @@ _PLAYER_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 _LABEL_MAX = 64
 
 
-class RegistryError(ValueError):
-    """Invalid request, or a registry file that cannot be trusted."""
+class RegistryError(Exception):
+    """Invalid request, or a registry file that cannot be trusted.
+
+    Deliberately **not** a ``ValueError`` (review Admin #54) : a broad
+    ``except ValueError`` around authentication code would otherwise
+    swallow an unreadable registry and fail open.
+    """
 
 
 def registry_path(games_dir: Path) -> Path:
@@ -94,20 +99,25 @@ def _save(games_dir: Path, raw: dict) -> None:
 
 @contextlib.contextmanager
 def _writing(games_dir: Path) -> Iterator[None]:
-    """Directory ready (``0700`` at most), lock held.
+    """Directory ready, lock held.
 
-    An existing directory loses its group / other bits but never gains
-    owner bits : a ``.players`` locked to ``0000`` stays locked and the
-    write fails, instead of being silently reopened. Any ``OSError`` —
-    directory not creatable, lock not openable, write failure — surfaces
-    as :class:`RegistryError`.
+    Permissions are tightened **only on the dedicated** ``.players``
+    directory : it loses its group / other bits but never gains owner
+    bits (a ``.players`` locked to ``0000`` stays locked). With the
+    ``PALAMEDE_PLAYERS`` override the parent is any directory — possibly
+    the games directory itself — and is left untouched (review Admin
+    #54 : the games directory was turned to ``drwx------``). Any
+    ``OSError`` surfaces as :class:`RegistryError`.
     """
     path = registry_path(games_dir)
     try:
-        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        mode = stat.S_IMODE(path.parent.stat().st_mode)
-        if mode & 0o077:
-            os.chmod(path.parent, mode & 0o700)
+        if os.environ.get(REGISTRY_ENV, "").strip():
+            path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            mode = stat.S_IMODE(path.parent.stat().st_mode)
+            if mode & 0o077:
+                os.chmod(path.parent, mode & 0o700)
         with _atomic.locked(path):
             yield
     except OSError as exc:

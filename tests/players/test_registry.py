@@ -170,6 +170,25 @@ def test_untraversable_dir_raises_registry_error(tmp_path: Path) -> None:
         folder.chmod(0o700)
 
 
+def test_override_never_touches_the_parent_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Revue Admin #54 : avec PALAMEDE_PLAYERS, le parent peut être le dossier
+    des parties lui-même ; il ne doit pas passer en 0700."""
+    games = tmp_path / "games"
+    games.mkdir()
+    games.chmod(0o755)
+    monkeypatch.setenv(registry.REGISTRY_ENV, str(games / "registre.json"))
+    add_player(games, "leader", kind="agent")
+    assert stat.S_IMODE(games.stat().st_mode) == 0o755
+    assert stat.S_IMODE((games / "registre.json").stat().st_mode) == 0o600
+
+
+def test_registry_error_is_not_a_value_error() -> None:
+    """Revue Admin #54 : un ``except ValueError`` ne doit pas l'avaler."""
+    assert not issubclass(RegistryError, ValueError)
+
+
 def test_existing_dir_is_brought_back_to_0700(tmp_path: Path) -> None:
     folder = registry_path(tmp_path).parent
     folder.mkdir(mode=0o755)
