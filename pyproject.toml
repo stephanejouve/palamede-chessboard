@@ -32,6 +32,7 @@ httpx = "^0.28.0"
 # modules outillages soient supprimés en Phase N).
 [tool.poetry.scripts]
 palamede-lessons = "palamede_chessboard.cli_lessons:main"
+palamede-players = "palamede_chessboard.cli_players:main"
 palamede-elo = "palamede_chessboard.cli_elo:main"
 palamede-matchmaking = "palamede_chessboard.cli_matchmaking:main"
 palamede-chessboard-viewer = "palamede_chessboard.viewer.app:main"
