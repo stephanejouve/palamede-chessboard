@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.2](https://github.com/stephanejouve/palamede-chessboard/compare/v0.6.1...v0.6.2) (2026-10-20)
+
+
+### Bug Fixes
+
+* **viewer:** Content-Security-Policy sur la page ([#63](https://github.com/stephanejouve/palamede-chessboard/issues/63)) ([4a0f893](https://github.com/stephanejouve/palamede-chessboard/commit/4a0f893e5f6597f4011eb17b72f242cb6083c788))
+* **viewer:** le drag&drop du plateau fonctionne enfin ([#64](https://github.com/stephanejouve/palamede-chessboard/issues/64)) ([e13ceb8](https://github.com/stephanejouve/palamede-chessboard/commit/e13ceb818eb0610204e6f2c68d1fcf4926b53225))
+
 ## [0.6.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.6.0...v0.6.1) (2026-10-20)
 
 
