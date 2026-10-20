@@ -118,3 +118,56 @@ def test_env_override_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     set_max_concurrent(tmp_path / "games", "junior", 2)
     assert custom.exists()
     assert max_concurrent_for(load_prefs(tmp_path / "games"), "junior") == 2
+
+
+def _write(tmp_path: Path, players: str) -> Path:
+    path = tmp_path / PREFS_FILENAME
+    path.write_text('{"players": ' + players + "}", encoding="utf-8")
+    return path
+
+
+@pytest.mark.parametrize("key", ["Leader", " LEADER ", "devleader"])
+def test_hand_edited_key_is_normalised(tmp_path: Path, key: str) -> None:
+    """Revue CD #40 : une clé saisie à la main n'est pas ignorée en silence."""
+    _write(tmp_path, json.dumps({key: {"max_concurrent": 3}}))
+    assert max_concurrent_for(load_prefs(tmp_path), "leader") == 3
+
+
+@pytest.mark.parametrize(
+    ("players", "expected"),
+    [
+        # la clé déjà canonique l'emporte, quel que soit l'ordre
+        ('{"Leader": {"max_concurrent": 2}, "leader": {"max_concurrent": 3}}', 3),
+        ('{"leader": {"max_concurrent": 3}, "devleader": {"max_concurrent": 2}}', 3),
+        # entre deux clés non canoniques : la première dans le fichier
+        ('{"Leader": {"max_concurrent": 2}, "LEADER": {"max_concurrent": 3}}', 2),
+        # une entrée dict l'emporte sur une entrée invalide, même canonique
+        ('{"leader": 5, "Leader": {"max_concurrent": 2}}', 2),
+    ],
+)
+def test_collision_is_deterministic_and_logged(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, players: str, expected: int
+) -> None:
+    _write(tmp_path, players)
+    with caplog.at_level("WARNING"):
+        prefs = load_prefs(tmp_path)
+    assert max_concurrent_for(prefs, "leader") == expected
+    assert "both map to 'leader'" in caplog.text
+
+
+def test_set_merges_duplicate_keys(tmp_path: Path) -> None:
+    path = _write(
+        tmp_path,
+        '{"Leader": {"max_concurrent": 2, "note": "x"}, "admin": {"max_concurrent": 4}}',
+    )
+    set_max_concurrent(tmp_path, "leader", 3)
+    on_disk = json.loads(path.read_text(encoding="utf-8"))
+    assert on_disk["players"] == {
+        "admin": {"max_concurrent": 4},
+        "leader": {"max_concurrent": 3, "note": "x"},
+    }
+
+
+def test_empty_key_is_ignored(tmp_path: Path) -> None:
+    _write(tmp_path, '{"  ": {"max_concurrent": 3}, "junior": {"max_concurrent": 2}}')
+    assert load_prefs(tmp_path) == {"junior": {"max_concurrent": 2}}

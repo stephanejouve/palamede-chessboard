@@ -14,6 +14,11 @@ Reading is fail-safe : a missing, unreadable or malformed file yields
 no preferences, i.e. the default ceiling of 1 for everyone — the most
 conservative pairing. Writing is atomic (tmp + replace) and validated.
 
+Player keys are normalised on read (``Leader`` / ``devleader`` →
+``leader``), the same way as the lookup, so a hand-edited key is not
+silently ignored. When two keys collapse to the same player, see
+:func:`_normalize_players` ; the next write keeps only the winner.
+
 Interim storage until the identity registry of #34 lands : the setter
 does not authenticate the caller yet (same trust level as the ``by``
 audit field of ``chess_play_move``).
@@ -50,6 +55,32 @@ def prefs_path(games_dir: Path) -> Path:
     return Path(override) if override else games_dir / PREFS_FILENAME
 
 
+def _normalize_players(players: dict, path: Path) -> dict[str, object]:
+    """Re-key ``players`` by :func:`normalize_identity`.
+
+    On a collision (``"Leader"`` and ``"leader"``), a dict entry beats a
+    non-dict one, then the key already in canonical form wins, then the
+    first one in file order. Each collision is logged.
+    """
+    out: dict[str, object] = {}
+    rank: dict[str, tuple[bool, bool]] = {}
+    for raw_key, value in players.items():
+        name = normalize_identity(str(raw_key))
+        if not name:
+            log.warning("player prefs at %s : empty player key %r ignored", path, raw_key)
+            continue
+        key_rank = (isinstance(value, dict), str(raw_key) == name)
+        if name in out:
+            log.warning(
+                "player prefs at %s : %r and another key both map to %r", path, raw_key, name
+            )
+            if key_rank <= rank[name]:
+                continue
+        out[name] = value
+        rank[name] = key_rank
+    return out
+
+
 def load_prefs(games_dir: Path) -> dict[str, dict]:
     """Return ``{player: {pref: value}}``, or ``{}`` if absent or invalid."""
     path = prefs_path(games_dir)
@@ -64,7 +95,7 @@ def load_prefs(games_dir: Path) -> dict[str, dict]:
     if not isinstance(players, dict):
         log.warning("player prefs at %s has no 'players' object : defaults apply", path)
         return {}
-    return {str(k): v for k, v in players.items() if isinstance(v, dict)}
+    return {k: v for k, v in _normalize_players(players, path).items() if isinstance(v, dict)}
 
 
 def _valid_ceiling(value: object) -> bool:
@@ -105,7 +136,8 @@ def _read_for_update(path: Path) -> dict:
     Unlike :func:`load_prefs`, an existing but unreadable or malformed
     file is an error : rewriting it from ``{}`` would silently drop the
     other players' preferences. A missing file starts empty. Unknown
-    keys are preserved as-is.
+    keys are preserved as-is ; player keys are normalised, which merges
+    duplicates of a same player.
     """
     if not path.exists():
         return {"players": {}}
@@ -115,6 +147,7 @@ def _read_for_update(path: Path) -> dict:
         raise PlayerPrefsError(f"{path} is unreadable ({exc}) : nothing written") from exc
     if not isinstance(raw, dict) or not isinstance(raw.get("players"), dict):
         raise PlayerPrefsError(f"{path} has no 'players' object : nothing written")
+    raw["players"] = _normalize_players(raw["players"], path)
     return raw
 
 
