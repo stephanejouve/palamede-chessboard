@@ -21,6 +21,11 @@ __all__ = [
 ]
 
 
+def __dir__() -> list[str]:
+    """Keep the lazy re-exports visible to ``dir()`` and completion."""
+    return sorted({*globals(), *__all__})
+
+
 def __getattr__(name: str) -> Any:
     """Lazy re-export of the lessons API (PEP 562)."""
     if name in __all__:

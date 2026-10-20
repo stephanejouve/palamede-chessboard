@@ -5,7 +5,7 @@ heavy lifting lives in three sibling modules split for the palamede
 module/function budget :
 
 - ``_mcp_shared`` : helpers, constants, board-facts primitives.
-- ``_mcp_tool_schemas`` : the 18 ``Tool()`` schema definitions.
+- ``_mcp_tool_schemas`` : the ``Tool()`` schema definitions, one module per tool family.
 - ``_mcp_tool_handlers`` : one ``_handle_*`` coroutine per tool.
 
 This module keeps only the ``Server`` instance, the two ``@server.*``
