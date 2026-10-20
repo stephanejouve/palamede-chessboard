@@ -149,3 +149,30 @@ def test_env_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(registry.REGISTRY_ENV, str(custom))
     add_player(tmp_path / "games", "leader", kind="agent")
     assert custom.exists()
+
+
+# ---- revue Junior #54 ----------------------------------------------------
+
+
+def test_untraversable_dir_raises_registry_error(tmp_path: Path) -> None:
+    """``.players`` en 0000 : RegistryError, jamais une PermissionError brute."""
+    add_player(tmp_path, "leader", kind="agent")
+    folder = registry_path(tmp_path).parent
+    folder.chmod(0o000)
+    try:
+        with pytest.raises(RegistryError):
+            verify_token(tmp_path, "plm_00000000_" + "a" * 43)
+        with pytest.raises(RegistryError):
+            list_players(tmp_path)
+        with pytest.raises(RegistryError):
+            add_player(tmp_path, "junior", kind="agent")
+    finally:
+        folder.chmod(0o700)
+
+
+def test_existing_dir_is_brought_back_to_0700(tmp_path: Path) -> None:
+    folder = registry_path(tmp_path).parent
+    folder.mkdir(mode=0o755)
+    folder.chmod(0o755)
+    add_player(tmp_path, "leader", kind="agent")
+    assert stat.S_IMODE(folder.stat().st_mode) == 0o700

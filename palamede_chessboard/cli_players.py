@@ -55,10 +55,20 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _write_token_file(path: Path, token: str) -> None:
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(token + "\n")
+def _issue_to_file(games_dir: Path, args: argparse.Namespace) -> None:
+    """Create ``--out`` first (``O_EXCL``, ``0600``), then issue the token.
+
+    Review Junior #54 : issuing first left an active token nobody held
+    when the file could not be created (missing directory, existing
+    file). If the issue itself fails, the empty file is removed.
+    """
+    fd = os.open(args.out, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(registry.issue_token(games_dir, args.player, label=args.label) + "\n")
+    except BaseException:
+        args.out.unlink(missing_ok=True)
+        raise
 
 
 def _run(args: argparse.Namespace, games_dir: Path) -> None:
@@ -81,13 +91,10 @@ def _run(args: argparse.Namespace, games_dir: Path) -> None:
             raise registry.RegistryError(f"unknown player {player_id!r}")
         print(json.dumps(players[player_id], indent=2, ensure_ascii=False))
     elif args.command == "token":
-        if args.out is not None and args.out.exists():
-            raise registry.RegistryError(f"{args.out} already exists : nothing issued")
-        token = registry.issue_token(games_dir, args.player, label=args.label)
         if args.stdout:
-            print(token)
+            print(registry.issue_token(games_dir, args.player, label=args.label))
         else:
-            _write_token_file(args.out, token)
+            _issue_to_file(games_dir, args)
             print(f"jeton écrit dans {args.out} (0600)", file=sys.stderr)
     elif args.command == "revoke":
         registry.revoke_token(games_dir, args.player, args.token_id)

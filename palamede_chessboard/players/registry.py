@@ -26,9 +26,12 @@ observation then strict mode come next, #34 §4).
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
+import stat
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -66,12 +69,17 @@ def player_id_of(raw: object) -> str:
 
 
 def load(games_dir: Path) -> dict:
-    """The registry as a dict ; ``{"version": 1, "players": {}}`` if absent."""
+    """The registry as a dict ; ``{"version": 1, "players": {}}`` if absent.
+
+    Every other failure — including a ``.players`` directory that cannot
+    be traversed — is a :class:`RegistryError` (review Junior #54 : no
+    raw ``PermissionError`` for the authentication middleware to miss).
+    """
     path = registry_path(games_dir)
-    if not path.exists():
-        return {"version": 1, "players": {}}
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {"version": 1, "players": {}}
     except (OSError, ValueError) as exc:
         raise RegistryError(f"{path} is unreadable ({exc})") from exc
     if not isinstance(raw, dict) or not isinstance(raw.get("players"), dict):
@@ -84,10 +92,26 @@ def _save(games_dir: Path, raw: dict) -> None:
     _atomic.write_json(path, raw, mode=0o600)
 
 
-def _prepare_dir(games_dir: Path) -> Path:
+@contextlib.contextmanager
+def _writing(games_dir: Path) -> Iterator[None]:
+    """Directory ready (``0700`` at most), lock held.
+
+    An existing directory loses its group / other bits but never gains
+    owner bits : a ``.players`` locked to ``0000`` stays locked and the
+    write fails, instead of being silently reopened. Any ``OSError`` —
+    directory not creatable, lock not openable, write failure — surfaces
+    as :class:`RegistryError`.
+    """
     path = registry_path(games_dir)
-    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    return path
+    try:
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        mode = stat.S_IMODE(path.parent.stat().st_mode)
+        if mode & 0o077:
+            os.chmod(path.parent, mode & 0o700)
+        with _atomic.locked(path):
+            yield
+    except OSError as exc:
+        raise RegistryError(f"{path} is not writable ({exc})") from exc
 
 
 def add_player(games_dir: Path, raw_id: object, *, kind: str, display_name: str = "") -> dict:
@@ -95,8 +119,7 @@ def add_player(games_dir: Path, raw_id: object, *, kind: str, display_name: str 
     player_id = player_id_of(raw_id)
     if kind not in KINDS:
         raise RegistryError(f"kind must be one of {KINDS}, got {kind!r}")
-    path = _prepare_dir(games_dir)
-    with _atomic.locked(path):
+    with _writing(games_dir):
         raw = load(games_dir)
         if player_id in raw["players"]:
             raise RegistryError(f"player {player_id!r} already exists")
@@ -117,8 +140,7 @@ def issue_token(games_dir: Path, raw_id: object, *, label: str) -> str:
     label = label.strip()
     if not label or len(label) > _LABEL_MAX:
         raise RegistryError(f"label must be 1..{_LABEL_MAX} characters")
-    path = _prepare_dir(games_dir)
-    with _atomic.locked(path):
+    with _writing(games_dir):
         raw = load(games_dir)
         player = raw["players"].get(player_id)
         if player is None:
@@ -141,8 +163,7 @@ def issue_token(games_dir: Path, raw_id: object, *, label: str) -> str:
 def revoke_token(games_dir: Path, raw_id: object, token_id: str) -> None:
     """Mark a token revoked (kept for the audit trail, never reusable)."""
     player_id = player_id_of(raw_id)
-    path = _prepare_dir(games_dir)
-    with _atomic.locked(path):
+    with _writing(games_dir):
         raw = load(games_dir)
         player = raw["players"].get(player_id)
         found = [t for t in (player or {}).get("tokens", []) if t.get("id") == token_id]

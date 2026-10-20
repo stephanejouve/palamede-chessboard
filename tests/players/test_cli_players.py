@@ -73,3 +73,19 @@ def test_revoke_and_errors(gdir: Path, capsys: pytest.CaptureFixture[str]) -> No
     assert registry.verify_token(gdir, token) is None
     assert cli_players.main(["show", "inconnu"]) == 1
     assert "unknown player" in capsys.readouterr().err
+
+
+# ---- revue Junior #54 : aucun jeton orphelin ------------------------------
+
+
+def test_out_in_missing_dir_issues_nothing(gdir: Path, tmp_path: Path) -> None:
+    cli_players.main(["add", "leader", "--kind", "agent"])
+    out = tmp_path / "absent" / "leader.jeton"
+    assert cli_players.main(["token", "leader", "--label", "x", "--out", str(out)]) == 1
+    assert registry.list_players(gdir)[0]["tokens"] == []
+
+
+def test_failed_issue_removes_the_empty_file(gdir: Path, tmp_path: Path) -> None:
+    out = tmp_path / "inconnu.jeton"
+    assert cli_players.main(["token", "inconnu", "--label", "x", "--out", str(out)]) == 1
+    assert not out.exists()
