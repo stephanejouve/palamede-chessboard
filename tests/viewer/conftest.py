@@ -58,3 +58,18 @@ def _create_game(
     state.metadata.result = result
     state.save()
     return state
+
+
+def _page_and_scripts(client: TestClient) -> str:
+    """The page followed by the scripts it loads from /assets/ (#59 CSP).
+
+    The JS no longer sits inline in the page : tests that look for code
+    markers search the page and its scripts together.
+    """
+    import re
+
+    html = client.get("/").text
+    scripts = [
+        client.get(src).text for src in re.findall(r'<script[^>]* src="(/assets/[^"]+)"', html)
+    ]
+    return "\n".join([html, *scripts])

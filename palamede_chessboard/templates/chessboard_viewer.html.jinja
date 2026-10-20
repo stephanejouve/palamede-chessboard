@@ -44,11 +44,11 @@
         <div class="clock" id="clock-black"><div class="label">Noirs</div><div class="time" id="time-black">—</div></div>
       </div>
       <div class="controls">
-        <button onclick="g('s')" title="Début (Home)">⏮</button>
-        <button onclick="g('p')" title="Précédent (←)">◀</button>
+        <button type="button" data-nav="s" title="Début (Home)">⏮</button>
+        <button type="button" data-nav="p" title="Précédent (←)">◀</button>
         <span class="ct" id="ct">0 / 0</span>
-        <button onclick="g('n')" title="Suivant (→)">▶</button>
-        <button onclick="g('e')" title="Fin (End)">⏭</button>
+        <button type="button" data-nav="n" title="Suivant (→)">▶</button>
+        <button type="button" data-nav="e" title="Fin (End)">⏭</button>
       </div>
       <div class="status">
         <span class="live"><span class="pulse" id="pulse"></span><span id="liveStatus">Connexion…</span></span>
@@ -77,14 +77,6 @@
     </div>
   </div>
 </div>
-<script>
-{% include "viewer/_state.js.jinja" %}
-{% include "viewer/_games_list.js.jinja" %}
-{% include "viewer/_poll.js.jinja" %}
-{% include "viewer/_render.js.jinja" %}
-{% include "viewer/_live.js.jinja" %}
-</script>
-<script type="module">
-{% include "viewer/_board.js.jinja" %}
-</script>
+<script src="{{ assets['viewer.js'] }}"></script>
+<script type="module" src="{{ assets['board.js'] }}"></script>
 </body></html>

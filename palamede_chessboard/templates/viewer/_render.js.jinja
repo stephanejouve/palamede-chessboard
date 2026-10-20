@@ -162,6 +162,8 @@ function g(a) {
   else if (a === 'e') { idx = POS.length-1; userPinned = false; }
   draw(); list(); upd(); pollEngine();
 }
+// Navigation buttons : listeners, not onclick="" (#59 CSP : no inline script).
+document.querySelectorAll('[data-nav]').forEach(b => b.addEventListener('click', () => g(b.dataset.nav)));
 
 function setOnline() {
   document.getElementById('pulse').classList.remove('off');
@@ -171,4 +173,3 @@ function setOffline(msg) {
   document.getElementById('pulse').classList.add('off');
   document.getElementById('liveStatus').innerHTML = '<span class="err">Hors ligne · ' + escapeHtml(msg || '') + '</span>';
 }
-
