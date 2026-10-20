@@ -134,13 +134,15 @@ def move_request_context(board: chess.Board, last_n: int = 6) -> MoveRequestCont
     LLM sanity checks (spot mid-play desyncs).
     """
     ply = board.ply()
-    if last_n <= 0 or ply == 0:
+    if last_n <= 0 or not board.move_stack:
         last_moves: list[str] = []
     else:
         history = list(board.move_stack)
         take = history[-last_n:]
-        skip = ply - len(take)
-        replay = chess.Board()
+        # Index in the move stack, not ``ply`` : ``board.ply()`` is
+        # absolute and does not start at 0 from a ``starting_fen``.
+        skip = len(history) - len(take)
+        replay = board.root()
         for m in history[:skip]:
             replay.push(m)
         last_moves = []

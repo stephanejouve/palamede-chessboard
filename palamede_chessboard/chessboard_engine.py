@@ -267,7 +267,7 @@ def analyze_game(
     path = engine_path or get_engine_path()
     limit = chess.engine.Limit(depth=depth, time=timeout)
     entries: list[GameWalkEntry] = []
-    board = chess.Board()
+    board = state.board.root()
     with chess.engine.SimpleEngine.popen_uci(path) as engine:
         for ply_index, san in enumerate(state.san_history):
             mover = "white" if board.turn == chess.WHITE else "black"

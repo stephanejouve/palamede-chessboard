@@ -508,14 +508,24 @@ function draw() {
   }
 }
 
+// Side to move ('w' / 'b') and full-move number, read from a FEN.
+// The game may start from any position (``starting_fen``, #36) : Black
+// to move, or a move number other than 1. Never assume the standard
+// start (move 1, White) from the ply index.
+function fenTurn(fen) { return fen ? fen.split(' ')[1] : null; }
+function fenMoveNo(fen) { return (fen && parseInt(fen.split(' ')[5], 10)) || 1; }
+
 function list() {
   const m = document.getElementById('moves');
   m.innerHTML = '';
   for (let k = 1; k < POS.length; k++) {
-    if (POS[k].color === 'w') {
+    // "N." before a White move ; "N..." when the game opens with Black.
+    const no = fenMoveNo(POS[k-1].fen);
+    const label = POS[k].color === 'w' ? no + '.' : (k === 1 ? no + '...' : null);
+    if (label) {
       const n = document.createElement('span');
       n.className = 'num';
-      n.textContent = Math.floor((k-1)/2)+1 + '.';
+      n.textContent = label;
       m.appendChild(n);
     }
     const b = document.createElement('button');
@@ -529,9 +539,9 @@ function list() {
 }
 
 function plyLabel(p) {
-  if (p <= 0) return '0';
-  const move = Math.ceil(p / 2);
-  return move + (p % 2 === 1 ? '.w' : '.b');
+  if (p <= 0 || !POS[p]) return '0';
+  // Move number of the position the move was played from, and its side.
+  return fenMoveNo(POS[p-1].fen) + (POS[p].color === 'w' ? '.w' : '.b');
 }
 
 function upd() {
@@ -539,14 +549,18 @@ function upd() {
   // .w / .b = side that just played to reach this position. After
   // 7.Nc3 (ply 13) we want "7.w". After 7...Bxc3+ (ply 14) → "7.b".
   document.getElementById('ct').textContent = plyLabel(idx) + ' / ' + plyLabel(POS.length - 1);
-  const c = POS[idx] && POS[idx].color;
-  const next = c === 'w' ? 'noirs' : (c === 'b' ? 'blancs' : (POS.length > 1 ? 'blancs' : ''));
+  // Side to move straight from the FEN : right at ply 0 too, including
+  // a game that starts with Black to move.
+  const t = fenTurn(POS[idx] && POS[idx].fen);
+  const next = t === 'w' ? 'blancs' : (t === 'b' ? 'noirs' : '');
   document.getElementById('trait').textContent = next ? 'Trait aux ' + next : '';
   renderComments();
   renderCaptures(POS[idx] && POS[idx].fen);
 }
 
-// Initial piece counts per side (standard chess start)
+// Initial piece counts per side (standard chess start) — fallback only :
+// captures are counted against the game's own first position (POS[0]),
+// which differs from the standard start for a ``starting_fen`` game.
 const INITIAL_PIECES = { p: 8, n: 2, b: 2, r: 2, q: 1 };
 // Material values (king ignored — can't be captured)
 const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9 };
@@ -563,18 +577,25 @@ function pieceImg(color, type) {
     '" alt="' + color + type + '" />';
 }
 
+// Piece counts per FEN letter (kings ignored). FEN ranks are
+// space-delimited ; the placement field is the first token.
+function pieceCounts(fen) {
+  const counts = { P:0, N:0, B:0, R:0, Q:0, p:0, n:0, b:0, r:0, q:0 };
+  for (const ch of fen.split(' ')[0]) {
+    if (counts.hasOwnProperty(ch)) counts[ch]++;
+  }
+  return counts;
+}
+
 function renderCaptures(fen) {
   const box = document.getElementById('captures');
   if (!fen) {
     box.innerHTML = '<h3>Matériel capturé</h3><div class="empty">—</div>';
     return;
   }
-  // FEN ranks are space-delimited; the position field is the first token.
-  const placement = fen.split(' ')[0];
-  const counts = { P:0, N:0, B:0, R:0, Q:0, p:0, n:0, b:0, r:0, q:0 };
-  for (const ch of placement) {
-    if (counts.hasOwnProperty(ch)) counts[ch]++;
-  }
+  const counts = pieceCounts(fen);
+  const start = POS[0] && POS[0].fen ? pieceCounts(POS[0].fen) : null;
+  const initial = k => start ? start[k] : INITIAL_PIECES[k.toLowerCase()];
   // Captured = initial - current. White's row shows black pieces taken
   // by white (rendered as black-colored SVG); black's row shows white
   // pieces taken by black (rendered as white-colored SVG). Native
@@ -583,10 +604,10 @@ function renderCaptures(fen) {
   const blackCaptured = []; // white pieces taken → color="w" in SVG
   let whiteMaterial = 0, blackMaterial = 0;
   for (const k of ['p','n','b','r','q']) {
-    const blackTaken = INITIAL_PIECES[k] - counts[k];
+    const blackTaken = initial(k) - counts[k];
     for (let i = 0; i < blackTaken; i++) whiteCaptured.push(pieceImg('b', k));
     whiteMaterial += blackTaken * PIECE_VALUE[k];
-    const whiteTaken = INITIAL_PIECES[k] - counts[k.toUpperCase()];
+    const whiteTaken = initial(k.toUpperCase()) - counts[k.toUpperCase()];
     for (let i = 0; i < whiteTaken; i++) blackCaptured.push(pieceImg('w', k));
     blackMaterial += whiteTaken * PIECE_VALUE[k];
   }
