@@ -326,7 +326,7 @@ def _resolve_analyze_fen(
     state = GameState.load(game_id, games_dir=games_dir)
     if ply_arg is None:
         return state.board.fen()
-    replay = chess.Board()
+    replay = state.board.root()
     for san in state.san_history[: int(ply_arg)]:
         replay.push(replay.parse_san(san))
     return replay.fen()

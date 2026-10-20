@@ -157,7 +157,7 @@ def _game_position_fingerprints(state: GameState) -> set[str]:
     bails out silently and leaves whatever was already collected intact.
     """
     fingerprints: set[str] = set()
-    board = chess.Board()
+    board = state.board.root()
     for san in state.san_history:
         try:
             move = board.parse_san(san)
@@ -211,7 +211,7 @@ def _position_fen_at_ply(state: GameState, ply: int) -> str | None:
     """
     if ply < 0 or ply > len(state.san_history):
         return None
-    board = chess.Board()
+    board = state.board.root()
     for san in state.san_history[:ply]:
         try:
             board.push_san(san)

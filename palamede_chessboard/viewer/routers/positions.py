@@ -66,7 +66,9 @@ def build_positions_router() -> APIRouter:
             state = GameState.load(game_id, games_dir=_games_dir())
         except GameNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
-        board = chess.Board()
+        # Root position, not chess.Board() : a game created from
+        # ``starting_fen`` (#36) starts elsewhere.
+        board = state.board.root()
         last_move = None
         for i, san in enumerate(state.san_history):
             if i == ply:
@@ -131,9 +133,10 @@ def _walk_positions(state: GameState) -> list[dict[str, Any]]:
     Factored out of ``positions`` so the handler stays well under the
     80-line budget. Each entry carries ``fen``, played ``san`` (or
     ``None`` for the initial position), ``from``/``to`` square names,
-    and the color that moved.
+    and the color that moved. Ply 0 is the game's root position, which
+    is not the standard start for a game created from ``starting_fen``.
     """
-    board = chess.Board()
+    board = state.board.root()
     out: list[dict[str, Any]] = [
         {"fen": board.fen(), "san": None, "from": None, "to": None, "color": None}
     ]
