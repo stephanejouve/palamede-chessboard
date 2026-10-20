@@ -43,8 +43,9 @@ def build_app() -> FastAPI:
     The function stays an assembler : it only wires the per-domain
     ``APIRouter`` factories under the FastAPI root (so the URL
     contract from the pre-split monolith is preserved byte-for-byte)
-    and registers the two root routes (``/`` index + ``/api/health``)
-    that depend on the ``Jinja2Templates`` instance owned here.
+    and registers the root routes (``/`` index + ``/api/health``) that
+    depend on the ``Jinja2Templates`` instance owned here, plus the
+    favicon (a knight on a two-tone square, ``templates/viewer/favicon.svg``).
     """
     app = FastAPI(title="Chess ChessBoard Viewer", version="2.0-phase-c")
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
@@ -64,6 +65,19 @@ def build_app() -> FastAPI:
     @app.get("/api/health")
     def health() -> dict:
         return {"status": "ok"}
+
+    favicon = (TEMPLATES_DIR / "viewer" / "favicon.svg").read_bytes()
+
+    # /favicon.ico : browsers ask for it without reading the page ; SVG
+    # is served there too, every current browser accepts it.
+    @app.get("/favicon.svg", include_in_schema=False)
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon_svg() -> Response:
+        return Response(
+            favicon,
+            media_type="image/svg+xml",
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
 
     app.include_router(build_games_router())
     app.include_router(build_positions_router())
