@@ -13,18 +13,37 @@ if (errorEl && errorEl.parentNode === boardEl) boardEl.removeChild(errorEl);
 boardEl.classList.add('cg-wrap');
 
 let cg = null;
-let cgFenSnapshot = null;  // FEN before the last user drop, for revert on 422.
+let cgLast = null;  // last [fen, turn, interactive] applied from the server state
 
+// The error stays visible until the next move attempt (#67 : a 401 banner
+// that vanished after 2.5 s could not be read).
 function showMoveError(msg) {
   if (!errorEl) return;
   errorEl.textContent = msg;
   errorEl.classList.add('show');
-  setTimeout(() => errorEl.classList.remove('show'), 2500);
+}
+
+function hideMoveError() {
+  if (errorEl) errorEl.classList.remove('show');
+}
+
+// Undo a drop the server refused. chessground already applied it locally :
+// it moved the piece, set lastMove and flipped turnColor (board.ts,
+// baseUserMove). Restoring the FEN alone left turnColor on the other side,
+// so every later move of the player's pieces was refused client-side and no
+// POST went out (#67). Re-apply the full last server state instead.
+function restoreBoard() {
+  if (!cg) return;
+  cg.cancelMove();
+  cg.cancelPremove();
+  if (cgLast) window.__cgSetFen(...cgLast);
+  cg.set({ lastMove: undefined });
 }
 
 async function onUserDrop(from, to) {
   const gid = window.gameId();  // the displayed game, not the search box (#46)
   if (!gid) return;
+  hideMoveError();
   // Promotion : chessground doesn't ship a dialog by default. We send
   // the drop as UCI ; if it's a pawn reaching the last rank, we append
   // 'q' server-side (implicit queen promotion, most common case).
@@ -43,9 +62,9 @@ async function onUserDrop(from, to) {
       body: JSON.stringify({ uci }),
     });
     if (!r.ok) {
-      // Revert to pre-drop FEN. The server rejected : illegal move (422),
-      // missing / invalid token (401), not this player's turn or game (403).
-      if (cgFenSnapshot && cg) cg.set({ fen: cgFenSnapshot });
+      // The server rejected : illegal move (422), missing / invalid token
+      // (401), not this player's turn or game (403).
+      restoreBoard();
       const body = await r.json().catch(() => ({}));
       showMoveError(body.detail || ('HTTP ' + r.status));
       return;
@@ -54,7 +73,7 @@ async function onUserDrop(from, to) {
     // pollPositions() will refresh the moves list. Don't manually
     // update chessground here to avoid double-update flicker.
   } catch (e) {
-    if (cgFenSnapshot && cg) cg.set({ fen: cgFenSnapshot });
+    restoreBoard();
     showMoveError('Network error');
   }
 }
@@ -68,10 +87,11 @@ async function onUserDrop(from, to) {
 window.__cgSetFen = function(fen, turn, interactive) {
   if (!cg) return;
   if (!fen) {
+    cgLast = null;
     cg.set({ fen: 'start', movable: { color: undefined, free: false } });
     return;
   }
-  cgFenSnapshot = fen;
+  cgLast = [fen, turn, interactive];
   cg.set({
     fen,
     turnColor: turn || undefined,
@@ -90,6 +110,9 @@ cg = Chessground(boardEl, {
   viewOnly: false,  // listeners are bound at creation only, see __cgSetFen
   animation: { enabled: true, duration: 200 },
   movable: { free: true, color: undefined, events: { after: onUserDrop } },
+  // No premoves : the viewer never plays them (no playPremove), so a premove
+  // was only a ghost move that silently did nothing (#67).
+  premovable: { enabled: false },
   draggable: { showGhost: true },
 });
 

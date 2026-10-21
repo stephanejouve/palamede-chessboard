@@ -47,3 +47,45 @@ def test_bounds_are_cleared_at_each_gesture() -> None:
         "touchstart",
     }
     assert "capture: true" in loop.group(2)
+
+
+def _function_body(js: str, name: str) -> str:
+    body = re.search(rf"function {name}\([^)]*\) \{{(.*?)\n\}}", js, re.S)
+    assert body is not None, name
+    return body.group(1)
+
+
+def test_refused_move_restores_the_full_server_state() -> None:
+    """#67 : un coup refusé laissait ``turnColor`` au camp adverse.
+
+    chessground bascule ``turnColor`` dès le lâcher (``baseUserMove``) ;
+    remettre la seule FEN rendait les pièces du joueur inertes, et aucun
+    coup suivant ne partait. Le retour arrière réapplique l'état serveur
+    complet (FEN, trait, couleur jouable), annule geste et pré-coup, et
+    efface la surbrillance du coup refusé.
+    """
+    js = _board_js()
+    restore = _function_body(js, "restoreBoard")
+    assert "window.__cgSetFen(...cgLast)" in restore
+    assert "cg.cancelMove()" in restore
+    assert "cg.cancelPremove()" in restore
+    assert "lastMove: undefined" in restore
+    assert "cgLast = [fen, turn, interactive];" in js
+    drop = _function_body(js, "onUserDrop")
+    # Les deux chemins d'échec (réponse refusée, erreur réseau) passent par là.
+    assert drop.count("restoreBoard();") == 2
+    assert "cg.set({ fen:" not in drop
+
+
+def test_premoves_are_disabled() -> None:
+    """Le viewer ne joue jamais de pré-coup : il n'en propose donc pas (#67)."""
+    init = re.search(r"cg = Chessground\(boardEl, \{(.*?)\n\}\);", _board_js(), re.S)
+    assert init is not None
+    assert "premovable: { enabled: false }" in init.group(1)
+
+
+def test_move_error_stays_until_the_next_attempt() -> None:
+    """Le bandeau d'erreur reste lisible jusqu'au coup suivant (#67)."""
+    js = _board_js()
+    assert "setTimeout" not in _function_body(js, "showMoveError")
+    assert "hideMoveError();" in _function_body(js, "onUserDrop")
