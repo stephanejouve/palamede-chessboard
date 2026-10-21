@@ -31,3 +31,19 @@ def test_set_never_toggles_view_only() -> None:
 
 def test_moves_are_gated_by_movable_color() -> None:
     assert "color: interactive ? turn : undefined" in _board_js()
+
+
+def test_bounds_are_cleared_at_each_gesture() -> None:
+    """#67 : bornes vidées en capture au début de chaque geste, toutes sources."""
+    js = _board_js()
+    assert "cg.state.dom.bounds.clear()" in js
+    loop = re.search(
+        r"for \(const type of \[(.*?)\]\) \{\s*boardEl\.addEventListener\(type, (.*?)\);", js, re.S
+    )
+    assert loop is not None
+    assert {t.strip(" '") for t in loop.group(1).split(",")} == {
+        "pointerdown",
+        "mousedown",
+        "touchstart",
+    }
+    assert "capture: true" in loop.group(2)
