@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.3](https://github.com/stephanejouve/palamede-chessboard/compare/v0.6.2...v0.6.3) (2026-10-21)
+
+
+### Bug Fixes
+
+* **viewer:** un coup refusé ne bloque plus les coups suivants ([#70](https://github.com/stephanejouve/palamede-chessboard/issues/70)) ([0bad5fc](https://github.com/stephanejouve/palamede-chessboard/commit/0bad5fcfe1f5fc59988ff489ebcb03f1c5cb3b85))
+* **viewer:** vider les bornes du plateau au début de chaque geste ([#68](https://github.com/stephanejouve/palamede-chessboard/issues/68)) ([a617156](https://github.com/stephanejouve/palamede-chessboard/commit/a617156409ce913701444cbc6e5ed903b23322b8))
+
 ## [0.6.2](https://github.com/stephanejouve/palamede-chessboard/compare/v0.6.1...v0.6.2) (2026-10-20)
 
 
