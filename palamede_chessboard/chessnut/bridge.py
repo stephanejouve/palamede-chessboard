@@ -33,7 +33,7 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import chess
 
@@ -114,7 +114,10 @@ class Bridge:
         self.settled_since = 0.0
         self.pending: chess.Move | None = None
         self.refused: chess.Move | None = None
+        self.retry_at = 0.0
         self.leds: frozenset[chess.Square] | None = None
+        #: Set when the game cannot be followed any more (deleted, unknown id).
+        self.stopped = threading.Event()
 
     # ---- viewer side ------------------------------------------------------
 
@@ -132,9 +135,9 @@ class Bridge:
         self.pending = None
 
     def _follow_stream(self, loop: asyncio.AbstractEventLoop) -> None:
-        """Blocking SSE reader (own thread), reconnecting forever."""
+        """Blocking SSE reader (own thread), reconnecting until :attr:`stopped`."""
         url = f"{self.viewer}/api/games/{quote(self.game_id)}/stream"
-        while True:
+        while not self.stopped.is_set():
             try:
                 with urllib.request.urlopen(url, timeout=SSE_READ_TIMEOUT) as response:
                     for raw in response:
@@ -144,14 +147,19 @@ class Bridge:
                         payload = json.loads(line[len("data:") :])
                         if "error" in payload:
                             log.error("stream of %s : %s", self.game_id, payload["error"])
-                            break
+                            self.stopped.set()
+                            return
                         loop.call_soon_threadsafe(self.apply_stream, payload)
             except (OSError, ValueError) as exc:
                 log.warning("stream of %s lost (%s), reconnecting", self.game_id, exc)
             time.sleep(RETRY_SECONDS)
 
-    def _post_move(self, uci: str) -> str | None:
-        """Play ``uci`` through the viewer ; the refusal message, or ``None``."""
+    def _post_move(self, uci: str) -> tuple[str | None, bool]:
+        """Play ``uci`` through the viewer : ``(None, False)``, or ``(message, refused)``.
+
+        ``refused`` only for a 4xx, when the viewer judged the move. A network
+        error or a 5xx says nothing about the move, which is tried again.
+        """
         request = urllib.request.Request(
             f"{self.viewer}/api/games/{quote(self.game_id)}/move",
             data=json.dumps({"uci": uci}).encode("utf-8"),
@@ -160,11 +168,12 @@ class Bridge:
         )
         try:
             with urllib.request.urlopen(request, timeout=10):
-                return None
+                return None, False
         except urllib.error.HTTPError as exc:
-            return f"HTTP {exc.code} {exc.read().decode('utf-8', 'replace')[:200]}"
+            message = f"HTTP {exc.code} {exc.read().decode('utf-8', 'replace')[:200]}"
+            return message, 400 <= exc.code < 500
         except OSError as exc:
-            return str(exc)
+            return str(exc), False
 
     # ---- board side -------------------------------------------------------
 
@@ -203,31 +212,36 @@ class Bridge:
         if decision.leds != self.leds:
             await write(led_frame(decision.leds))
             self.leds = decision.leds
-        if decision.move is not None:
+        if decision.move is not None and time.monotonic() >= self.retry_at:
             await self._play(decision.move)
 
     async def _play(self, move: chess.Move) -> None:
         self.pending = move
         log.info("move read on the board : %s", move.uci())
-        error = await asyncio.to_thread(self._post_move, move.uci())
-        if error is not None:
+        error, refused = await asyncio.to_thread(self._post_move, move.uci())
+        if error is None:
+            return
+        self.pending = None
+        if refused:
             log.warning("move %s refused : %s", move.uci(), error)
-            self.pending = None
             self.refused = move
+        else:
+            log.warning("move %s not delivered (%s), trying again", move.uci(), error)
+            self.retry_at = time.monotonic() + RETRY_SECONDS
 
     async def run_board(self) -> None:
         """Connect, stream, reconnect : the board may sleep or lose the link."""
         from bleak import BleakClient, BleakScanner
         from bleak.exc import BleakError
 
-        while True:
-            device = await BleakScanner.find_device_by_filter(
-                lambda d, _ad: (d.name or "").startswith(DEVICE_PREFIX), timeout=20
-            )
-            if device is None:
-                log.info("no %s board in range, still looking", DEVICE_PREFIX)
-                continue
+        while not self.stopped.is_set():
             try:
+                device = await BleakScanner.find_device_by_filter(
+                    lambda d, _ad: (d.name or "").startswith(DEVICE_PREFIX), timeout=20
+                )
+                if device is None:
+                    log.info("no %s board in range, still looking", DEVICE_PREFIX)
+                    continue
                 async with BleakClient(device, timeout=20) as client:
                     await client.start_notify(BOARD_UUID, self.on_frame)
                     await client.write_gatt_char(COMMAND_UUID, ENABLE_REPORTING)
@@ -237,7 +251,7 @@ class Bridge:
                     async def write(command: bytes) -> None:
                         await client.write_gatt_char(COMMAND_UUID, command)
 
-                    while client.is_connected:
+                    while client.is_connected and not self.stopped.is_set():
                         await self.tick(write)
                         await asyncio.sleep(TICK_SECONDS)
             except (BleakError, TimeoutError, OSError) as exc:
@@ -248,6 +262,16 @@ class Bridge:
         loop = asyncio.get_running_loop()
         threading.Thread(target=self._follow_stream, args=(loop,), daemon=True).start()
         await self.run_board()
+
+
+def check_viewer_url(url: str) -> None:
+    """Refuse a URL that would send the player token in clear over the network."""
+    parts = urlsplit(url)
+    if parts.scheme == "https" or (
+        parts.scheme == "http" and parts.hostname in ("localhost", "127.0.0.1", "::1")
+    ):
+        return
+    raise SystemExit(f"{url} : https required (http only on loopback), the player token is sent")
 
 
 def _read_token(token_file: Path | None) -> str:
@@ -266,10 +290,13 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--color", required=True, choices=["white", "black"])
     parser.add_argument("--token-file", type=Path, help="file holding the player token")
     args = parser.parse_args(argv)
+    check_viewer_url(args.viewer)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     player = chess.WHITE if args.color == "white" else chess.BLACK
     bridge = Bridge(args.viewer, args.game, player, _read_token(args.token_file))
     try:
         asyncio.run(bridge.run())
     except KeyboardInterrupt:
-        pass
+        return
+    if bridge.stopped.is_set():
+        raise SystemExit(f"game {args.game} cannot be followed, see the log above")

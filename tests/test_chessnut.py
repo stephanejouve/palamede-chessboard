@@ -6,12 +6,15 @@ only on the board, then 1.d4 played and taken back).
 
 from __future__ import annotations
 
+import io
 import time
+import urllib.error
 
 import chess
 import pytest
 
-from palamede_chessboard.chessnut.bridge import GUIDE_SECONDS, Bridge, decide
+from palamede_chessboard.chessnut import bridge as bridge_module
+from palamede_chessboard.chessnut.bridge import GUIDE_SECONDS, Bridge, check_viewer_url, decide
 from palamede_chessboard.chessnut.moves import differing_squares, find_move
 from palamede_chessboard.chessnut.protocol import (
     PIECE_CODES,
@@ -171,7 +174,12 @@ def snapshot(board: chess.Board, *, over: bool = False) -> dict:
 async def test_tick_posts_the_move_and_lights_the_reply() -> None:
     bridge = Bridge("http://viewer.test", "g1", chess.WHITE, token="t")
     posted: list[str] = []
-    bridge._post_move = lambda uci: posted.append(uci)  # type: ignore[method-assign]
+
+    def accept(uci: str) -> tuple[None, bool]:
+        posted.append(uci)
+        return None, False
+
+    bridge._post_move = accept  # type: ignore[method-assign]
     written: list[bytes] = []
 
     async def write(command: bytes) -> None:
@@ -193,9 +201,9 @@ async def test_refused_move_is_not_posted_twice() -> None:
     bridge = Bridge("http://viewer.test", "g1", chess.WHITE, token="t")
     posted: list[str] = []
 
-    def refuse(uci: str) -> str:
+    def refuse(uci: str) -> tuple[str, bool]:
         posted.append(uci)
-        return "HTTP 403 NOT_YOUR_TURN"
+        return "HTTP 403 NOT_YOUR_TURN", True
 
     bridge._post_move = refuse  # type: ignore[method-assign]
 
@@ -225,3 +233,77 @@ def test_reconnection_snapshot_keeps_the_pending_move() -> None:
     assert bridge.pending is not None
     bridge.apply_stream(snapshot(after("e4")))
     assert bridge.pending is None
+
+
+async def test_undelivered_move_is_retried_not_refused() -> None:
+    """Review #71 : a network error says nothing about the move."""
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, token="t")
+    posted: list[str] = []
+
+    def unreachable(uci: str) -> tuple[str, bool]:
+        posted.append(uci)
+        return "[Errno 65] No route to host", False
+
+    bridge._post_move = unreachable  # type: ignore[method-assign]
+    written: list[bytes] = []
+
+    async def write(command: bytes) -> None:
+        written.append(command)
+
+    bridge.apply_stream(snapshot(chess.Board()))
+    bridge.on_frame(None, bytearray(frame(placement(after("e4")))))
+    bridge.settled_since = time.monotonic() - 1.0
+    await bridge.tick(write)
+    await bridge.tick(write)
+    assert posted == ["e2e4"]
+    assert bridge.refused is None
+    assert written == [led_frame([])]
+    bridge.retry_at = 0.0
+    await bridge.tick(write)
+    assert posted == ["e2e4", "e2e4"]
+
+
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (urllib.error.HTTPError("u", 422, "Unprocessable", {}, io.BytesIO(b"illegal")), True),
+        (urllib.error.HTTPError("u", 403, "Forbidden", {}, io.BytesIO(b"NOT_YOUR_TURN")), True),
+        (urllib.error.HTTPError("u", 503, "Unavailable", {}, io.BytesIO(b"")), False),
+        (urllib.error.URLError("unreachable"), False),
+        (TimeoutError("timed out"), False),
+    ],
+)
+def test_only_a_4xx_is_a_refusal(monkeypatch, error: Exception, expected: bool) -> None:
+    def fail(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(bridge_module.urllib.request, "urlopen", fail)
+    message, refused = Bridge("https://viewer.test", "g1", chess.WHITE, "t")._post_move("e2e4")
+    assert message and refused is expected
+
+
+def test_stream_error_stops_the_bridge(monkeypatch) -> None:
+    class Response:
+        def __enter__(self):
+            return iter([b'data: {"error": "GAME_NOT_FOUND", "game_id": "g1"}\n'])
+
+        def __exit__(self, *_exc):
+            return False
+
+    monkeypatch.setattr(bridge_module.urllib.request, "urlopen", lambda *_a, **_k: Response())
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "t")
+    bridge._follow_stream(loop=None)  # type: ignore[arg-type]
+    assert bridge.stopped.is_set()
+
+
+@pytest.mark.parametrize(
+    "url", ["https://chess.example", "http://localhost:8765", "http://127.0.0.1:8765"]
+)
+def test_viewer_url_accepted(url: str) -> None:
+    check_viewer_url(url)
+
+
+@pytest.mark.parametrize("url", ["http://192.168.1.10:8765", "http://chess.example", "ftp://x"])
+def test_viewer_url_that_would_leak_the_token_is_refused(url: str) -> None:
+    with pytest.raises(SystemExit, match="https required"):
+        check_viewer_url(url)
