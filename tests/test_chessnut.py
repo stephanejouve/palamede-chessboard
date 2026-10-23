@@ -251,6 +251,7 @@ async def test_undelivered_move_is_retried_not_refused() -> None:
         return "[Errno 65] No route to host", False
 
     bridge._post_move = unreachable  # type: ignore[method-assign]
+    bridge._server_fen = lambda: chess.STARTING_FEN  # type: ignore[method-assign]
     written: list[bytes] = []
 
     async def write(command: bytes) -> None:
@@ -323,3 +324,46 @@ def test_token_file_must_be_private(tmp_path) -> None:
         _read_token(token_file)
     token_file.chmod(0o600)
     assert _read_token(token_file) == "secret"
+
+
+async def _retry_after_network_error(server_fen: str | None) -> tuple[Bridge, list[str]]:
+    """1.e4 on the board, first POST lost, then the retry with ``server_fen`` read back."""
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, token="t")
+    posted: list[str] = []
+
+    def lost(uci: str) -> tuple[str, bool]:
+        posted.append(uci)
+        return "timed out", False
+
+    bridge._post_move = lost  # type: ignore[method-assign]
+    bridge._server_fen = lambda: server_fen  # type: ignore[method-assign]
+
+    async def write(command: bytes) -> None:
+        pass
+
+    bridge.apply_stream(snapshot(chess.Board()))
+    bridge.on_frame(None, bytearray(frame(placement(after("e4")))))
+    bridge.settled_since = time.monotonic() - 1.0
+    await bridge.tick(write)
+    bridge.retry_at = 0.0
+    await bridge.tick(write)
+    return bridge, posted
+
+
+async def test_move_that_reached_the_viewer_is_not_posted_twice() -> None:
+    """Review Admin #71 : the lost POST had landed, the retry must not refuse it."""
+    bridge, posted = await _retry_after_network_error(after("e4").fen())
+    assert posted == ["e2e4"]
+    assert bridge.game.fen() == after("e4").fen()
+    assert bridge.refused is None
+
+
+async def test_move_that_did_not_reach_the_viewer_is_posted_again() -> None:
+    _bridge, posted = await _retry_after_network_error(chess.Board().fen())
+    assert posted == ["e2e4", "e2e4"]
+
+
+async def test_retry_waits_while_the_viewer_cannot_be_read() -> None:
+    bridge, posted = await _retry_after_network_error(None)
+    assert posted == ["e2e4"]
+    assert bridge.retry_at > time.monotonic()

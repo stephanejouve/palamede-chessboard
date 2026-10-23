@@ -115,6 +115,8 @@ class Bridge:
         self.pending: chess.Move | None = None
         self.refused: chess.Move | None = None
         self.retry_at = 0.0
+        #: Posted move whose outcome is unknown (network error, 5xx).
+        self.undelivered: chess.Move | None = None
         self.leds: frozenset[chess.Square] | None = None
         #: Set when the game cannot be followed any more (deleted, unknown id).
         self.stopped = threading.Event()
@@ -133,6 +135,7 @@ class Bridge:
         self.game = game
         self.synced = False
         self.pending = None
+        self.undelivered = None
 
     def _follow_stream(self, loop: asyncio.AbstractEventLoop) -> None:
         """Blocking SSE reader (own thread), reconnecting until :attr:`stopped`."""
@@ -175,6 +178,16 @@ class Bridge:
         except OSError as exc:
             return str(exc), False
 
+    def _server_fen(self) -> str | None:
+        """Current position according to the viewer, ``None`` if it cannot be read."""
+        url = f"{self.viewer}/api/positions?game_id={quote(self.game_id)}"
+        try:
+            with urllib.request.urlopen(url, timeout=10) as response:
+                return str(json.load(response)["positions"][-1]["fen"])
+        except (OSError, ValueError, KeyError, IndexError) as exc:
+            log.warning("position of %s unreadable (%s)", self.game_id, exc)
+            return None
+
     # ---- board side -------------------------------------------------------
 
     def on_frame(self, _sender: Any, data: bytearray) -> None:
@@ -216,9 +229,12 @@ class Bridge:
             await self._play(decision.move)
 
     async def _play(self, move: chess.Move) -> None:
+        if move == self.undelivered and await self._already_played():
+            return
         self.pending = move
         log.info("move read on the board : %s", move.uci())
         error, refused = await asyncio.to_thread(self._post_move, move.uci())
+        self.undelivered = None
         if error is None:
             return
         self.pending = None
@@ -227,7 +243,25 @@ class Bridge:
             self.refused = move
         else:
             log.warning("move %s not delivered (%s), trying again", move.uci(), error)
+            self.undelivered = move
             self.retry_at = time.monotonic() + RETRY_SECONDS
+
+    async def _already_played(self) -> bool:
+        """Before posting a move again : did the first, unanswered POST land ?
+
+        A move that reached the viewer must not be posted twice (the second
+        POST would come back as a refusal). The viewer's position decides ;
+        if it cannot be read, the retry waits.
+        """
+        fen = await asyncio.to_thread(self._server_fen)
+        if fen is None:
+            self.retry_at = time.monotonic() + RETRY_SECONDS
+            return True
+        if self.game is not None and fen != self.game.fen():
+            log.info("move %s had reached the viewer", self.undelivered)
+            self.apply_stream({"fen": fen, "ply": "?", "turn": "?", "is_game_over": not self.live})
+            return True
+        return False
 
     async def run_board(self) -> None:
         """Connect, stream, reconnect : the board may sleep or lose the link."""
