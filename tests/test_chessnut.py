@@ -14,7 +14,13 @@ import chess
 import pytest
 
 from palamede_chessboard.chessnut import bridge as bridge_module
-from palamede_chessboard.chessnut.bridge import GUIDE_SECONDS, Bridge, check_viewer_url, decide
+from palamede_chessboard.chessnut.bridge import (
+    GUIDE_SECONDS,
+    Bridge,
+    _read_token,
+    check_viewer_url,
+    decide,
+)
 from palamede_chessboard.chessnut.moves import differing_squares, find_move
 from palamede_chessboard.chessnut.protocol import (
     PIECE_CODES,
@@ -307,3 +313,13 @@ def test_viewer_url_accepted(url: str) -> None:
 def test_viewer_url_that_would_leak_the_token_is_refused(url: str) -> None:
     with pytest.raises(SystemExit, match="https required"):
         check_viewer_url(url)
+
+
+def test_token_file_must_be_private(tmp_path) -> None:
+    token_file = tmp_path / "token"
+    token_file.write_text("secret\n", encoding="utf-8")
+    token_file.chmod(0o644)
+    with pytest.raises(SystemExit, match="chmod 600"):
+        _read_token(token_file)
+    token_file.chmod(0o600)
+    assert _read_token(token_file) == "secret"

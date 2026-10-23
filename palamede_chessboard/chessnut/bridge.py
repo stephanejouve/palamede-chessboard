@@ -276,6 +276,8 @@ def check_viewer_url(url: str) -> None:
 
 def _read_token(token_file: Path | None) -> str:
     if token_file is not None:
+        if token_file.stat().st_mode & 0o077:
+            raise SystemExit(f"{token_file} : readable by other accounts, chmod 600 it first")
         return token_file.read_text(encoding="utf-8").strip()
     token = os.environ.get("PALAMEDE_PLAYER_TOKEN", "").strip()
     if not token:
