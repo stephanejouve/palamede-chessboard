@@ -156,18 +156,22 @@ def _identify(token: str | None, games_dir: Path) -> tuple[str | None, str]:
     return (who, "ok") if who else (None, "invalid")
 
 
-def authorize_move(headers: Any, state: Any, games_dir: Path) -> tuple[str | None, str | None]:
-    """``(player_id, refusal_code)`` for a move on the loaded ``state``.
+def authorize_move(
+    headers: Any, state: Any, games_dir: Path, tool: str = "chess_play_move"
+) -> tuple[str | None, str | None]:
+    """``(player_id, refusal_code)`` for a viewer action on the loaded ``state``.
 
-    Strict check used by the viewer's move endpoint (#34) : the token's
-    player must be the one to move. ``refusal_code`` is ``None`` when the
-    move may be played, else one of ``UNAUTHENTICATED``,
-    ``REGISTRY_UNREADABLE``, ``NOT_YOUR_TURN``, ``NOT_A_PLAYER``.
+    Strict check used by the viewer's endpoints, under the rule of the MCP
+    ``tool`` they mirror : ``chess_play_move`` (#34, the token's player must
+    be the one to move) or ``chess_resign`` (either player of the game).
+    ``refusal_code`` is ``None`` when the action may proceed, else one of
+    ``UNAUTHENTICATED``, ``REGISTRY_UNREADABLE``, ``NOT_YOUR_TURN``,
+    ``NOT_A_PLAYER``.
     """
     who, auth = _identify(bearer_token(headers), games_dir)
     if auth == "registry_error":
         return None, "REGISTRY_UNREADABLE"
-    return who, evaluate("chess_play_move", {}, who, roles_of(state))
+    return who, evaluate(tool, {}, who, roles_of(state))
 
 
 def observe(
