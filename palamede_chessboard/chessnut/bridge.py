@@ -166,9 +166,12 @@ class Bridge:
         request = urllib.request.Request(
             f"{self.viewer}/api/games/{quote(self.game_id)}/move",
             data=json.dumps({"uci": uci}).encode("utf-8"),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self._token}"},
+            headers={"Content-Type": "application/json"},
             method="POST",
         )
+        # Not copied onto a redirect (review Admin #71) : check_viewer_url
+        # only vouches for the first URL, a 302 may point anywhere.
+        request.add_unredirected_header("Authorization", f"Bearer {self._token}")
         try:
             with urllib.request.urlopen(request, timeout=10):
                 return None, False

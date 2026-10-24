@@ -8,7 +8,9 @@ six black piece types.
 
 from __future__ import annotations
 
+import http.server
 import io
+import threading
 import time
 import urllib.error
 
@@ -278,6 +280,44 @@ async def test_undelivered_move_is_retried_not_refused() -> None:
     bridge.retry_at = 0.0
     await bridge.tick(write)
     assert posted == ["e2e4", "e2e4"]
+
+
+def test_token_is_not_forwarded_on_a_redirect() -> None:
+    """A 302 from the viewer must not carry the player token elsewhere (review Admin #71)."""
+    seen: dict[str, str | None] = {}
+
+    class Target(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 (http.server API)
+            seen["authorization"] = self.headers.get("Authorization")
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *_args: object) -> None:
+            pass
+
+    target = http.server.HTTPServer(("127.0.0.1", 0), Target)
+
+    class Viewer(http.server.BaseHTTPRequestHandler):
+        def do_POST(self) -> None:  # noqa: N802 (http.server API)
+            seen["first"] = self.headers.get("Authorization")
+            self.send_response(302)
+            self.send_header("Location", f"http://127.0.0.1:{target.server_port}/elsewhere")
+            self.end_headers()
+
+        def log_message(self, *_args: object) -> None:
+            pass
+
+    viewer = http.server.HTTPServer(("127.0.0.1", 0), Viewer)
+    for server in (target, viewer):
+        threading.Thread(target=server.handle_request, daemon=True).start()
+    try:
+        bridge = Bridge(f"http://127.0.0.1:{viewer.server_port}", "g1", chess.WHITE, "secret")
+        bridge._post_move("e2e4")
+    finally:
+        target.server_close()
+        viewer.server_close()
+    assert seen["first"] == "Bearer secret"
+    assert "authorization" in seen and seen["authorization"] is None
 
 
 @pytest.mark.parametrize(
