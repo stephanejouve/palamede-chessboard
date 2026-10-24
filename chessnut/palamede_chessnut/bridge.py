@@ -148,12 +148,23 @@ class Bridge:
         self.pending = None
         self.undelivered = None
 
+    def stream_opened(self) -> None:
+        """The stream is (re)connected : a viewer that refused resignation may have been redeployed.
+
+        Seen on the board (chessnut-abandon-001) : a 404 from the old viewer
+        kept the gesture off after the upgrade, until the bridge was restarted.
+        """
+        if self.resign_state == "unavailable":
+            log.info("stream connected : resignation will be tried again")
+            self.resign_state = None
+
     def _follow_stream(self, loop: asyncio.AbstractEventLoop) -> None:
         """Blocking SSE reader (own thread), reconnecting until :attr:`stopped`."""
         url = f"{self.viewer}/api/games/{quote(self.game_id)}/stream"
         while not self.stopped.is_set():
             try:
                 with urllib.request.urlopen(url, timeout=SSE_READ_TIMEOUT) as response:
+                    loop.call_soon_threadsafe(self.stream_opened)
                     for raw in response:
                         line = raw.decode("utf-8").strip()
                         if not line.startswith("data:"):

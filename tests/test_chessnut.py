@@ -359,9 +359,19 @@ def test_stream_error_stops_the_bridge(monkeypatch) -> None:
             return False
 
     monkeypatch.setattr(bridge_module.urllib.request, "urlopen", lambda *_a, **_k: Response())
+
+    class Loop:
+        def __init__(self) -> None:
+            self.calls: list = []
+
+        def call_soon_threadsafe(self, callback, *args) -> None:
+            self.calls.append(callback)
+
     bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "t")
-    bridge._follow_stream(loop=None)  # type: ignore[arg-type]
+    loop = Loop()
+    bridge._follow_stream(loop=loop)  # type: ignore[arg-type]
     assert bridge.stopped.is_set()
+    assert loop.calls == [bridge.stream_opened]
 
 
 @pytest.mark.parametrize(
@@ -539,6 +549,16 @@ async def test_old_viewer_without_resignation_falls_back_to_guidance() -> None:
     bridge.settled_since = time.monotonic() - 5.0
     await bridge.tick(board.write)
     assert board.frames[-1] == {chess.E8}
+
+
+async def test_reconnected_stream_tries_resignation_again() -> None:
+    """chessnut-abandon-001 : after the viewer upgrade, the gesture works without a restart."""
+    bridge, calls, _board = await _lift_king((404, "Not Found"))
+    assert bridge.resign_state == "unavailable"
+    bridge.stream_opened()
+    assert bridge.resign_state is None
+    bridge.stream_opened()
+    assert bridge.resign_state is None
 
 
 async def test_resignation_not_delivered_is_tried_again() -> None:
