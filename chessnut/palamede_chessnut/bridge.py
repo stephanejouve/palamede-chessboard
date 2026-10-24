@@ -51,7 +51,8 @@ log = logging.getLogger(__name__)
 DEVICE_PREFIX = "Chessnut"
 SETTLE_SECONDS = 0.6
 GUIDE_SECONDS = 2.0
-RESIGN_SECONDS = 3.0
+#: Long enough for a king held in hand while thinking (arbitration of Stéphane, #75).
+RESIGN_SECONDS = 5.0
 TICK_SECONDS = 0.1
 #: Above the viewer's 15 s SSE keepalive : a silent stream is a dead one.
 SSE_READ_TIMEOUT = 45.0

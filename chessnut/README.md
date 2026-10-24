@@ -18,5 +18,5 @@ On the board :
   the LEDs says the board matches the game, from then on your moves count ;
 - play your move : it is sent once the pieces stay still ;
 - the opponent's move lights up its squares : play it for them ;
-- to resign, lift your king off the board for 3 seconds (the LEDs blink
+- to resign, lift your king off the board for 5 seconds (the LEDs blink
   meanwhile ; put it back to cancel).
