@@ -22,9 +22,10 @@ from palamede_chessboard.chessboard_state import (
     GameNotFoundError,
     GameState,
     IllegalMoveError,
+    InvalidGameStateError,
     list_games,
 )
-from palamede_chessboard.players.observe import authorize_move
+from palamede_chessboard.players.observe import authorize_move, roles_of
 from palamede_chessboard.viewer.games_query import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
@@ -88,7 +89,39 @@ def build_games_router() -> APIRouter:
         """Drag&drop move from the viewer UI ; see :func:`play_from_viewer`."""
         return play_from_viewer(game_id, payload, request)
 
+    @router.post("/api/games/{game_id}/resign")
+    def game_resign(game_id: str, request: Request) -> dict:
+        """Resignation of the token's player ; see :func:`resign_from_viewer`."""
+        return resign_from_viewer(game_id, request)
+
     return router
+
+
+def resign_from_viewer(game_id: str, request: Request) -> dict:
+    """Resign the side of the token's player through ``GameState.resign()``.
+
+    Same rule as the MCP tool ``chess_resign`` : either player may resign,
+    whoever is to move. Used by the Chessnut bridge when the player lifts
+    their king off the board. 409 when the game is already over.
+    """
+    gdir = _games_dir()
+    try:
+        state = GameState.load(game_id, games_dir=gdir)
+    except GameNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+    who = _authorized_mover(request, state, gdir, tool="chess_resign")
+    roles = roles_of(state)
+    if roles["white"] == roles["black"]:
+        side = "white" if state.board.turn else "black"
+    else:
+        side = "white" if who == roles["white"] else "black"
+
+    try:
+        result = state.resign(by=side)
+    except InvalidGameStateError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"status": "ok", "resign": result, "state": state.to_state_dict()}
 
 
 def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> dict:
@@ -136,13 +169,15 @@ _MOVE_REFUSALS = {
 }
 
 
-def _authorized_mover(request: Request, state: GameState, gdir) -> str:
-    """Player allowed to move on ``state`` ; :class:`HTTPException` otherwise."""
-    who, code = authorize_move(request.headers, state, gdir)
+def _authorized_mover(
+    request: Request, state: GameState, gdir, tool: str = "chess_play_move"
+) -> str:
+    """Player allowed to act on ``state`` under ``tool``'s rule ; :class:`HTTPException` otherwise."""
+    who, code = authorize_move(request.headers, state, gdir, tool)
     if code is None and who is not None:
         return who
     status, message = _MOVE_REFUSALS.get(code or "", (403, "Coup refusé"))
-    log.warning("viewer move refused on %s : %s (caller %s)", state.metadata.game_id, code, who)
+    log.warning("viewer %s refused on %s : %s (caller %s)", tool, state.metadata.game_id, code, who)
     headers = {"WWW-Authenticate": "Bearer"} if status == 401 else None
     raise HTTPException(status, f"{message} ({code})", headers=headers)
 
