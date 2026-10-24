@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.6.3...v0.7.0) (2026-10-24)
+
+
+### Features
+
+* **chessnut:** Bluetooth LE bridge between a Chessnut Air+ and a viewer game ([#71](https://github.com/stephanejouve/palamede-chessboard/issues/71)) ([643890c](https://github.com/stephanejouve/palamede-chessboard/commit/643890c15f97706da4b189d79e70292fb7ecc510))
+* **viewer:** resignation with the player's token, POST /api/games/&lt;id&gt;/resign ([#73](https://github.com/stephanejouve/palamede-chessboard/issues/73)) ([60f6960](https://github.com/stephanejouve/palamede-chessboard/commit/60f69602850eb02b640aa6246342f73e3fa61855))
+
 ## [0.6.3](https://github.com/stephanejouve/palamede-chessboard/compare/v0.6.2...v0.6.3) (2026-10-21)
 
 
