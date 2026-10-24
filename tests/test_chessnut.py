@@ -541,6 +541,21 @@ async def test_king_put_back_in_time_does_not_resign() -> None:
     assert calls == []
 
 
+async def test_king_missing_during_the_setup_is_not_a_resignation() -> None:
+    """Review Junior #75 : before the board ever matched, no resignation."""
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, token="t")
+    bridge._post_resign = lambda: pytest.fail("not a resignation")  # type: ignore[method-assign]
+    board = Board()
+    bridge.apply_stream(snapshot(chess.Board()))
+    bridge.on_frame(None, bytearray(frame(_without_king(chess.Board(), chess.WHITE))))
+    await bridge.tick(board.write)
+    bridge.king_gone_since = time.monotonic() - 10.0
+    bridge.settled_since = time.monotonic() - 5.0
+    await bridge.tick(board.write)
+    assert not bridge.ready and bridge.resign_state is None
+    assert board.frames[-1] == {chess.E1}
+
+
 async def test_opponent_king_off_the_board_is_not_a_resignation() -> None:
     bridge = ready_bridge(after("e4"), chess.BLACK)
     bridge._post_resign = lambda: pytest.fail("not a resignation")  # type: ignore[method-assign]

@@ -275,7 +275,8 @@ class Bridge:
         """The player's king off the board : countdown, then resignation. ``True`` while it runs."""
         assert self.game is not None and self.observed is not None
         if (
-            self.pending is not None
+            not self.ready  # a king not yet set up is not a resignation (review Junior #75)
+            or self.pending is not None
             or self.resign_state == "unavailable"
             or self.observed.pieces(chess.KING, self.player)
         ):
