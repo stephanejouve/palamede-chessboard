@@ -122,6 +122,8 @@ class Bridge:
         self.pending: chess.Move | None = None
         self.refused: chess.Move | None = None
         self.retry_at = 0.0
+        #: Move received from the viewer (``g8f6 (Nf6)``), still to be played on the board.
+        self.to_relay: str | None = None
         #: Posted move whose outcome is unknown (network error, 5xx).
         self.undelivered: chess.Move | None = None
         self.king_gone_since: float | None = None
@@ -143,6 +145,13 @@ class Bridge:
             # position actually changes, or it would be posted twice.
             return
         log.info("game %s : ply %s, %s to move", self.game_id, payload["ply"], payload["turn"])
+        history = payload.get("san_history") or []
+        # A move the board does not show yet : the opponent's, or one played in
+        # the viewer (mixed game). Not before the setup, which relays nothing.
+        behind = self.observed is None or self.observed.board_fen() != game.board_fen()
+        self.to_relay = (
+            _relayed(self.game, history[-1], game) if self.ready and history and behind else None
+        )
         self.game = game
         self.synced = False
         self.pending = None
@@ -246,6 +255,9 @@ class Bridge:
         if in_sync:
             self.synced = True
             self.refused = None
+            if self.to_relay is not None:
+                log.info("move %s played on the board", self.to_relay)
+                self.to_relay = None
         if not self.live:
             await self._end(write, in_sync)
             return
@@ -342,7 +354,8 @@ class Bridge:
         if move == self.undelivered and await self._already_played():
             return
         self.pending = move
-        log.info("move read on the board : %s", move.uci())
+        assert self.game is not None
+        log.info("move read on the board : %s (%s)", move.uci(), self.game.san(move))
         error, refused = await asyncio.to_thread(self._post_move, move.uci())
         self.undelivered = None
         if error is None:
@@ -416,6 +429,20 @@ class Bridge:
             loop.add_signal_handler(signal.SIGTERM, task.cancel)
         threading.Thread(target=self._follow_stream, args=(loop,), daemon=True).start()
         await self.run_board()
+
+
+def _relayed(before: chess.Board | None, san: str, after: chess.Board) -> str:
+    """``g8f6 (Nf6)`` ; the SAN alone when ``before`` is not the position it was played from."""
+    if before is not None:
+        try:
+            move = before.parse_san(san)
+        except ValueError:
+            return san
+        board = before.copy(stack=False)
+        board.push(move)
+        if board.board_fen() == after.board_fen():
+            return f"{move.uci()} ({san})"
+    return san
 
 
 async def _switch_off(write: Any) -> None:

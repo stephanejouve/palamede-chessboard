@@ -186,7 +186,15 @@ def test_no_move_is_posted_once_the_game_is_over() -> None:
 
 def snapshot(board: chess.Board, *, over: bool = False) -> dict:
     turn = "white" if board.turn == chess.WHITE else "black"
-    return {"fen": board.fen(), "ply": board.ply(), "turn": turn, "is_game_over": over}
+    replay = board.root()
+    history = [replay.san_and_push(move) for move in board.move_stack]
+    return {
+        "fen": board.fen(),
+        "ply": board.ply(),
+        "turn": turn,
+        "san_history": history,
+        "is_game_over": over,
+    }
 
 
 def ready_bridge(game: chess.Board | None = None, player: chess.Color = chess.WHITE) -> Bridge:
@@ -485,6 +493,87 @@ async def test_first_match_logs_the_fen(caplog: pytest.LogCaptureFixture) -> Non
     with caplog.at_level("INFO", logger=bridge_module.log.name):
         await bridge.tick(Board().write)
     assert f"FEN {game.fen()}" in caplog.messages
+
+
+async def test_relayed_move_is_logged_once_played(caplog: pytest.LogCaptureFixture) -> None:
+    """The opponent's move shows in the log when it stands on the board, not before (game 006)."""
+    bridge = ready_bridge(after("e4"))
+    bridge.on_frame(None, bytearray(frame(placement(after("e4")))))
+    board = Board()
+    with caplog.at_level("INFO", logger=bridge_module.log.name):
+        bridge.apply_stream(snapshot(after("e4", "e5")))
+        await bridge.tick(board.write)
+        assert "move e7e5 (e5) played on the board" not in caplog.messages
+        bridge.on_frame(None, bytearray(frame(placement(after("e4", "e5")))))
+        await bridge.tick(board.write)
+        await bridge.tick(board.write)
+    assert caplog.messages.count("move e7e5 (e5) played on the board") == 1
+
+
+async def test_own_posted_move_is_not_relayed(caplog: pytest.LogCaptureFixture) -> None:
+    """The player's move read on the board comes back from the viewer : nothing to relay."""
+    bridge = ready_bridge()
+    bridge.on_frame(None, bytearray(frame(placement(after("e4")))))
+    with caplog.at_level("INFO", logger=bridge_module.log.name):
+        bridge.apply_stream(snapshot(after("e4")))
+        await bridge.tick(Board().write)
+    assert not [m for m in caplog.messages if m.endswith("played on the board")]
+
+
+async def test_move_played_in_the_viewer_is_relayed(caplog: pytest.LogCaptureFixture) -> None:
+    """Mixed game : the player's own move entered in the viewer is relayed too (chessnut-abandon-001)."""
+    bridge = ready_bridge()
+    bridge.on_frame(None, bytearray(frame(chess.BaseBoard())))
+    with caplog.at_level("INFO", logger=bridge_module.log.name):
+        bridge.apply_stream(snapshot(after("Nc3")))
+        bridge.on_frame(None, bytearray(frame(placement(after("Nc3")))))
+        await bridge.tick(Board().write)
+    assert "move b1c3 (Nc3) played on the board" in caplog.messages
+
+
+async def test_setup_relays_nothing(caplog: pytest.LogCaptureFixture) -> None:
+    """A game joined in progress : setting it up is not a relay, only the FEN is logged."""
+    game = after("e4", "e5")
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, token="t")
+    bridge.apply_stream(snapshot(game))
+    bridge.on_frame(None, bytearray(frame(placement(game))))
+    with caplog.at_level("INFO", logger=bridge_module.log.name):
+        await bridge.tick(Board().write)
+    assert f"FEN {game.fen()}" in caplog.messages
+    assert not [m for m in caplog.messages if m.endswith("played on the board")]
+
+
+async def test_mating_move_is_relayed_before_the_end(caplog: pytest.LogCaptureFixture) -> None:
+    """The opponent mates : its move is logged, then the game is over."""
+    before = after("f3", "e5", "g4")
+    mate = after("f3", "e5", "g4", "Qh4#")
+    bridge = ready_bridge(before)
+    bridge.on_frame(None, bytearray(frame(placement(before))))
+    with caplog.at_level("INFO", logger=bridge_module.log.name):
+        bridge.apply_stream(snapshot(mate, over=True))
+        bridge.on_frame(None, bytearray(frame(placement(mate))))
+        await bridge.tick(Board().write)
+    played = caplog.messages.index("move d8h4 (Qh4#) played on the board")
+    assert played < caplog.messages.index("game g1 over")
+
+
+async def test_move_read_is_logged_with_its_san(caplog: pytest.LogCaptureFixture) -> None:
+    bridge = ready_bridge()
+    bridge._post_move = lambda uci: (None, False)  # type: ignore[method-assign]
+    bridge.on_frame(None, bytearray(frame(placement(after("Nf3")))))
+    bridge.settled_since = time.monotonic() - 1.0
+    with caplog.at_level("INFO", logger=bridge_module.log.name):
+        await bridge.tick(Board().write)
+    assert "move read on the board : g1f3 (Nf3)" in caplog.messages
+
+
+def test_relayed_move_without_its_position_keeps_the_san() -> None:
+    """Several moves missed (stream back after a long loss) : no UCI to rebuild, the SAN stays."""
+    assert bridge_module._relayed(chess.Board(), "Nf6", after("e4", "e5", "Nf3", "Nf6")) == "Nf6"
+    assert bridge_module._relayed(None, "Nf6", after("Nf3", "Nf6")) == "Nf6"
+    # Legal from the old position, but not the move that led to the new one (review Junior #79).
+    assert bridge_module._relayed(after("e4"), "Nf6", after("e4", "e5", "Nf3", "Nf6")) == "Nf6"
+    assert bridge_module._relayed(after("Nf3"), "Nf6", after("Nf3", "Nf6")) == "g8f6 (Nf6)"
 
 
 async def test_guidance_cuts_the_ready_sweep() -> None:
