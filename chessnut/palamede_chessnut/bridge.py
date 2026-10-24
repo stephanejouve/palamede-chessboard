@@ -1,44 +1,43 @@
 """Bridge between a Chessnut Air+ and a game served by the viewer.
 
-    palamede-chessnut --viewer <viewer URL> --game <game_id> --color white
-
-The player token (the one behind the viewer's 🔑 button) is read from
-``PALAMEDE_PLAYER_TOKEN`` or from ``--token-file`` ; it is never logged.
-
 The SSE stream of the game keeps the expected position. Each time the
 placement on the board has been still for :data:`SETTLE_SECONDS`,
 :func:`decide` compares it with that position :
 
 * same placement → LEDs off ;
-* the player is to move and a legal move leads to the placement → the
-  move is posted, as the viewer's drag&drop would ;
+* the player is to move, the board had caught up with the game, and a
+  legal move leads to the placement → the move is posted, as the
+  viewer's drag&drop would ;
 * otherwise → the squares that differ light up : the opponent's move to
   replicate, a piece to put back, the setup to finish before the start.
   Once the board has caught up with the game (``synced``), this guidance
   waits :data:`GUIDE_SECONDS` on the player's own turn, so that holding a
   piece while thinking does not light its square.
+
+Around that loop : a sweep of the LEDs when the board first matches the
+game (from then on moves count), resignation by lifting one's own king
+off the board for :data:`RESIGN_SECONDS`, and LEDs off once the game is
+over and its final position stands on the board.
 """
 
 from __future__ import annotations
 
-import argparse
 import asyncio
 import json
 import logging
-import os
+import signal
 import threading
 import time
-import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 
 import chess
 
-from palamede_chessboard.chessnut.moves import differing_squares, find_move
-from palamede_chessboard.chessnut.protocol import (
+from palamede_chessnut import leds, viewer
+from palamede_chessnut.moves import differing_squares, find_move
+from palamede_chessnut.protocol import (
     BOARD_UUID,
     COMMAND_UUID,
     ENABLE_REPORTING,
@@ -52,6 +51,8 @@ log = logging.getLogger(__name__)
 DEVICE_PREFIX = "Chessnut"
 SETTLE_SECONDS = 0.6
 GUIDE_SECONDS = 2.0
+#: Long enough for a king held in hand while thinking (arbitration of Stéphane, #75).
+RESIGN_SECONDS = 5.0
 TICK_SECONDS = 0.1
 #: Above the viewer's 15 s SSE keepalive : a silent stream is a dead one.
 SSE_READ_TIMEOUT = 45.0
@@ -80,7 +81,9 @@ def decide(
     """What to do with a placement still for ``settled_for`` seconds (``None`` : wait).
 
     ``synced`` : the board has matched the game since its last change ;
-    until then the squares to fix light up without delay.
+    until then the squares to fix light up without delay, and no move is
+    read : a placement that happens to equal « position + one legal move »
+    while the pieces are being set up is not a move.
     ``pending`` : a move was posted and the stream has not confirmed it yet.
     ``refused`` : the viewer rejected that move from this position ; it is
     not posted again, its squares light up so that it can be taken back.
@@ -90,11 +93,11 @@ def decide(
     expected = chess.BaseBoard(game.board_fen())
     if observed.board_fen() == expected.board_fen() or pending:
         return Decision(frozenset())
-    if live and game.turn == player:
+    if live and synced and game.turn == player:
         move = find_move(game, observed)
         if move is not None and move != refused:
             return Decision(frozenset(), move)
-        if move is None and synced and settled_for < GUIDE_SECONDS:
+        if move is None and settled_for < GUIDE_SECONDS:
             return Decision(frozenset())
     return Decision(frozenset(differing_squares(expected, observed)))
 
@@ -102,14 +105,18 @@ def decide(
 class Bridge:
     """One physical board bound to one game of the viewer."""
 
-    def __init__(self, viewer: str, game_id: str, player: chess.Color, token: str) -> None:
-        self.viewer = viewer.rstrip("/")
+    def __init__(self, viewer_url: str, game_id: str, player: chess.Color, token: str) -> None:
+        self.viewer = viewer_url.rstrip("/")
         self.game_id = game_id
         self.player = player
         self._token = token
         self.game: chess.Board | None = None
         self.live = False
         self.synced = False
+        #: The board has matched the game once : the ready sweep was played.
+        self.ready = False
+        #: The game is over and its final position stood on the board.
+        self.finished = False
         self.observed: chess.BaseBoard | None = None
         self.settled_since = 0.0
         self.pending: chess.Move | None = None
@@ -117,8 +124,12 @@ class Bridge:
         self.retry_at = 0.0
         #: Posted move whose outcome is unknown (network error, 5xx).
         self.undelivered: chess.Move | None = None
+        self.king_gone_since: float | None = None
+        #: ``None``, ``"sent"`` or ``"unavailable"`` (refused, or old viewer).
+        self.resign_state: str | None = None
         self.leds: frozenset[chess.Square] | None = None
-        #: Set when the game cannot be followed any more (deleted, unknown id).
+        self.animation: list[leds.Frame] = []
+        #: Set when the bridge stops : game over, or game impossible to follow.
         self.stopped = threading.Event()
 
     # ---- viewer side ------------------------------------------------------
@@ -161,32 +172,28 @@ class Bridge:
         """Play ``uci`` through the viewer : ``(None, False)``, or ``(message, refused)``.
 
         ``refused`` only for a 4xx, when the viewer judged the move. A network
-        error or a 5xx says nothing about the move, which is tried again.
+        error or a 5xx says nothing about the move, which is tried again. A
+        3xx means a wrong ``--viewer`` : the bridge stops (review Admin #71).
         """
-        request = urllib.request.Request(
-            f"{self.viewer}/api/games/{quote(self.game_id)}/move",
-            data=json.dumps({"uci": uci}).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        # Not copied onto a redirect (review Admin #71) : check_viewer_url
-        # only vouches for the first URL, a 302 may point anywhere.
-        request.add_unredirected_header("Authorization", f"Bearer {self._token}")
-        try:
-            with urllib.request.urlopen(request, timeout=10):
-                return None, False
-        except urllib.error.HTTPError as exc:
-            message = f"HTTP {exc.code} {exc.read().decode('utf-8', 'replace')[:200]}"
-            return message, 400 <= exc.code < 500
-        except OSError as exc:
-            return str(exc), False
+        url = f"{self.viewer}/api/games/{quote(self.game_id)}/move"
+        status, text = viewer.post(url, self._token, {"uci": uci})
+        if status is not None and 200 <= status < 300:
+            return None, False
+        if status is not None and 300 <= status < 400:
+            log.error("the viewer redirects %s (HTTP %s) : check --viewer", url, status)
+            self.stopped.set()
+        message = f"HTTP {status} {text}" if status is not None else text
+        return message, status is not None and 400 <= status < 500
 
-    def _server_fen(self) -> str | None:
-        """Current position according to the viewer, ``None`` if it cannot be read."""
-        url = f"{self.viewer}/api/positions?game_id={quote(self.game_id)}"
+    def _post_resign(self) -> tuple[int | None, str]:
+        return viewer.post(f"{self.viewer}/api/games/{quote(self.game_id)}/resign", self._token)
+
+    def _server_position(self) -> tuple[str, bool] | None:
+        """``(fen, game over)`` according to the viewer, ``None`` if it cannot be read."""
         try:
-            with urllib.request.urlopen(url, timeout=10) as response:
-                return str(json.load(response)["positions"][-1]["fen"])
+            data = viewer.get_json(f"{self.viewer}/api/positions?game_id={quote(self.game_id)}")
+            fen = str(data["positions"][-1]["fen"])
+            return fen, data.get("result", "*") != "*" or chess.Board(fen).is_game_over()
         except (OSError, ValueError, KeyError, IndexError) as exc:
             log.warning("position of %s unreadable (%s)", self.game_id, exc)
             return None
@@ -206,30 +213,105 @@ class Bridge:
             self.observed = placement
             self.settled_since = time.monotonic()
 
+    async def _show(self, write: Any, squares: leds.Frame) -> None:
+        if squares != self.leds:
+            await write(led_frame(squares))
+            self.leds = squares
+
     async def tick(self, write: Any) -> None:
         """One comparison step ; ``write`` sends a command to the board."""
         if self.game is None or self.observed is None:
             return
-        if self.observed.board_fen() == self.game.board_fen():
+        in_sync = self.observed.board_fen() == self.game.board_fen()
+        if in_sync:
             self.synced = True
             self.refused = None
+        if not self.live:
+            await self._end(write, in_sync)
+            return
+        if in_sync and not self.ready:
+            self.ready = True
+            self.animation = leds.ready_sweep()
+            log.info("the board matches the game : moves count from now on")
+        if await self._resign_gesture(write):
+            return
         decision = decide(
             self.game,
             self.player,
             self.observed,
             time.monotonic() - self.settled_since,
-            live=self.live,
             synced=self.synced,
             pending=self.pending is not None,
             refused=self.refused,
         )
-        if decision is None:
-            return
-        if decision.leds != self.leds:
-            await write(led_frame(decision.leds))
-            self.leds = decision.leds
-        if decision.move is not None and time.monotonic() >= self.retry_at:
+        if decision is not None and (decision.leds or decision.move):
+            self.animation = []
+        if self.animation:
+            await self._show(write, self.animation.pop(0))
+        elif decision is not None:
+            await self._show(write, decision.leds)
+        if decision is not None and decision.move is not None and time.monotonic() >= self.retry_at:
             await self._play(decision.move)
+
+    async def _end(self, write: Any, in_sync: bool) -> None:
+        """Game over : guide to the final position, then a blink, LEDs off, stop."""
+        assert self.game is not None and self.observed is not None
+        if not self.finished:
+            if not (in_sync or self.resign_state == "sent"):
+                settled_for = time.monotonic() - self.settled_since
+                decision = decide(self.game, self.player, self.observed, settled_for, live=False)
+                if decision is not None:
+                    await self._show(write, decision.leds)
+                return
+            self.finished = True
+            self.animation = leds.finished_blink()
+            log.info("game %s over", self.game_id)
+        if self.animation:
+            await self._show(write, self.animation.pop(0))
+            return
+        await self._show(write, frozenset())
+        self.stopped.set()
+
+    async def _resign_gesture(self, write: Any) -> bool:
+        """The player's king off the board : countdown, then resignation. ``True`` while it runs."""
+        assert self.game is not None and self.observed is not None
+        if (
+            not self.ready  # a king not yet set up is not a resignation (review Junior #75)
+            or self.pending is not None
+            or self.resign_state == "unavailable"
+            or self.observed.pieces(chess.KING, self.player)
+        ):
+            self.king_gone_since = None
+            return False
+        now = time.monotonic()
+        if self.king_gone_since is None:
+            self.king_gone_since = now
+            log.info(
+                "king off the board : resigning in %.0f s unless it comes back", RESIGN_SECONDS
+            )
+        elapsed = now - self.king_gone_since
+        if self.resign_state is None and elapsed >= RESIGN_SECONDS and now >= self.retry_at:
+            await self._resign()
+        self.animation = []
+        await self._show(write, leds.countdown(self.game.king(self.player), elapsed))
+        return True
+
+    async def _resign(self) -> None:
+        status, text = await asyncio.to_thread(self._post_resign)
+        if status is not None and (200 <= status < 300 or status == 409):
+            # 409 : already over, possibly through an earlier try whose answer
+            # was lost (review Admin #73) ; the stream tells the outcome.
+            self.resign_state = "sent"
+            log.info("resignation sent")
+        elif status in (404, 405):
+            log.error("this viewer cannot take a resignation yet (HTTP %s)", status)
+            self.resign_state = "unavailable"
+        elif status is not None and 300 <= status < 500:
+            log.error("resignation refused : HTTP %s %s", status, text)
+            self.resign_state = "unavailable"
+        else:
+            log.warning("resignation not delivered (%s), trying again", text or status)
+            self.retry_at = time.monotonic() + RETRY_SECONDS
 
     async def _play(self, move: chess.Move) -> None:
         if move == self.undelivered and await self._already_played():
@@ -253,16 +335,18 @@ class Bridge:
         """Before posting a move again : did the first, unanswered POST land ?
 
         A move that reached the viewer must not be posted twice (the second
-        POST would come back as a refusal). The viewer's position decides ;
-        if it cannot be read, the retry waits.
+        POST would come back as a refusal). The viewer's position decides,
+        compared as positions rather than FEN strings ; if it cannot be read,
+        the retry waits.
         """
-        fen = await asyncio.to_thread(self._server_fen)
-        if fen is None:
+        server = await asyncio.to_thread(self._server_position)
+        if server is None:
             self.retry_at = time.monotonic() + RETRY_SECONDS
             return True
-        if self.game is not None and fen != self.game.fen():
+        fen, over = server
+        if self.game is not None and chess.Board(fen).epd() != self.game.epd():
             log.info("move %s had reached the viewer", self.undelivered)
-            self.apply_stream({"fen": fen, "ply": "?", "turn": "?", "is_game_over": not self.live})
+            self.apply_stream({"fen": fen, "ply": "?", "turn": "?", "is_game_over": over})
             return True
         return False
 
@@ -288,54 +372,30 @@ class Bridge:
                     async def write(command: bytes) -> None:
                         await client.write_gatt_char(COMMAND_UUID, command)
 
-                    while client.is_connected and not self.stopped.is_set():
-                        await self.tick(write)
-                        await asyncio.sleep(TICK_SECONDS)
+                    try:
+                        while client.is_connected and not self.stopped.is_set():
+                            await self.tick(write)
+                            await asyncio.sleep(TICK_SECONDS)
+                    finally:
+                        await _switch_off(write)
             except (BleakError, TimeoutError, OSError) as exc:
                 log.warning("board link lost (%s)", exc)
-            await asyncio.sleep(RETRY_SECONDS)
+            if not self.stopped.is_set():
+                await asyncio.sleep(RETRY_SECONDS)
 
     async def run(self) -> None:
         loop = asyncio.get_running_loop()
+        task = asyncio.current_task()
+        if task is not None:
+            # The launcher stops the bridge with SIGTERM : leave the LEDs off.
+            loop.add_signal_handler(signal.SIGTERM, task.cancel)
         threading.Thread(target=self._follow_stream, args=(loop,), daemon=True).start()
         await self.run_board()
 
 
-def check_viewer_url(url: str) -> None:
-    """Refuse a URL that would send the player token in clear over the network."""
-    parts = urlsplit(url)
-    if parts.scheme == "https" or (
-        parts.scheme == "http" and parts.hostname in ("localhost", "127.0.0.1", "::1")
-    ):
-        return
-    raise SystemExit(f"{url} : https required (http only on loopback), the player token is sent")
-
-
-def _read_token(token_file: Path | None) -> str:
-    if token_file is not None:
-        if token_file.stat().st_mode & 0o077:
-            raise SystemExit(f"{token_file} : readable by other accounts, chmod 600 it first")
-        return token_file.read_text(encoding="utf-8").strip()
-    token = os.environ.get("PALAMEDE_PLAYER_TOKEN", "").strip()
-    if not token:
-        raise SystemExit("player token missing : PALAMEDE_PLAYER_TOKEN or --token-file")
-    return token
-
-
-def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Play a viewer game on a Chessnut Air+ board.")
-    parser.add_argument("--viewer", required=True, help="viewer base URL")
-    parser.add_argument("--game", required=True, help="game_id")
-    parser.add_argument("--color", required=True, choices=["white", "black"])
-    parser.add_argument("--token-file", type=Path, help="file holding the player token")
-    args = parser.parse_args(argv)
-    check_viewer_url(args.viewer)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    player = chess.WHITE if args.color == "white" else chess.BLACK
-    bridge = Bridge(args.viewer, args.game, player, _read_token(args.token_file))
+async def _switch_off(write: Any) -> None:
+    """Best effort on the way out (Ctrl-C, SIGTERM, end of game, lost link)."""
     try:
-        asyncio.run(bridge.run())
-    except KeyboardInterrupt:
-        return
-    if bridge.stopped.is_set():
-        raise SystemExit(f"game {args.game} cannot be followed, see the log above")
+        await asyncio.wait_for(write(led_frame(())), timeout=2)
+    except Exception as exc:  # noqa: BLE001 (the link may already be gone)
+        log.debug("LEDs not switched off (%s)", exc)
