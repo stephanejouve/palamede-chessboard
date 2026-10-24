@@ -305,7 +305,11 @@ class Bridge:
             self.resign_state = "sent"
             log.info("resignation sent")
         elif status in (404, 405):
-            log.error("this viewer cannot take a resignation yet (HTTP %s)", status)
+            # Expected with a viewer older than #73 : the game simply goes on
+            # (CD, smoke of chessnut-abandon-001).
+            log.warning(
+                "this viewer cannot take a resignation yet (HTTP %s) : the game goes on", status
+            )
             self.resign_state = "unavailable"
         elif status is not None and 300 <= status < 500:
             log.error("resignation refused : HTTP %s %s", status, text)
