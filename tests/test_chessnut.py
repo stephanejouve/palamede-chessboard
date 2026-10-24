@@ -359,9 +359,19 @@ def test_stream_error_stops_the_bridge(monkeypatch) -> None:
             return False
 
     monkeypatch.setattr(bridge_module.urllib.request, "urlopen", lambda *_a, **_k: Response())
+
+    class Loop:
+        def __init__(self) -> None:
+            self.calls: list = []
+
+        def call_soon_threadsafe(self, callback, *args) -> None:
+            self.calls.append((callback, *args))
+
     bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "t")
-    bridge._follow_stream(loop=None)  # type: ignore[arg-type]
+    loop = Loop()
+    bridge._follow_stream(loop=loop)  # type: ignore[arg-type]
     assert bridge.stopped.is_set()
+    assert loop.calls == [(bridge.stream_opened, False)]
 
 
 @pytest.mark.parametrize(
@@ -466,6 +476,17 @@ async def test_first_match_plays_the_ready_sweep_then_goes_dark() -> None:
     assert board.frames[-1] == set()
 
 
+async def test_first_match_logs_the_fen(caplog: pytest.LogCaptureFixture) -> None:
+    """Once the board matches, the FEN is in the log : a position set from a problem can be checked."""
+    game = chess.Board("4r2k/pp4pp/2n4N/q7/2Q5/8/PPP2PPP/3R2K1 w - - 0 1")
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, token="t")
+    bridge.apply_stream(snapshot(game))
+    bridge.on_frame(None, bytearray(frame(placement(game))))
+    with caplog.at_level("INFO", logger=bridge_module.log.name):
+        await bridge.tick(Board().write)
+    assert f"FEN {game.fen()}" in caplog.messages
+
+
 async def test_guidance_cuts_the_ready_sweep() -> None:
     """The opponent moves while the sweep runs : its squares light up at once."""
     bridge = Bridge("https://viewer.test", "g1", chess.BLACK, token="t")
@@ -528,6 +549,59 @@ async def test_old_viewer_without_resignation_falls_back_to_guidance() -> None:
     bridge.settled_since = time.monotonic() - 5.0
     await bridge.tick(board.write)
     assert board.frames[-1] == {chess.E8}
+
+
+async def test_reconnected_stream_tries_resignation_again() -> None:
+    """chessnut-abandon-001 : after the viewer upgrade, the gesture works without a restart."""
+    bridge, calls, _board = await _lift_king((404, "Not Found"))
+    assert bridge.resign_state == "unavailable"
+    bridge.stream_opened()
+    assert bridge.resign_state is None
+    bridge.stream_opened()
+    assert bridge.resign_state is None
+
+
+def test_lost_stream_reopens_as_back(monkeypatch) -> None:
+    """Review Junior #77 : the loop itself passes ``back=True`` after a loss."""
+
+    class Response:
+        def __enter__(self):
+            return iter([b'data: {"error": "GAME_NOT_FOUND", "game_id": "g1"}\n'])
+
+        def __exit__(self, *_exc):
+            return False
+
+    answers: list = [OSError("502 Bad Gateway"), Response()]
+
+    def urlopen(*_a, **_k):
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    class Loop:
+        def __init__(self) -> None:
+            self.calls: list = []
+
+        def call_soon_threadsafe(self, callback, *args) -> None:
+            self.calls.append((callback, *args))
+
+    monkeypatch.setattr(bridge_module.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(bridge_module.time, "sleep", lambda _s: None)
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "t")
+    loop = Loop()
+    bridge._follow_stream(loop=loop)  # type: ignore[arg-type]
+    assert loop.calls == [(bridge.stream_opened, True)]
+
+
+def test_stream_back_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """Review Admin #75 : a reconnection on an unchanged position is said."""
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, token="t")
+    with caplog.at_level("INFO", logger=bridge_module.log.name):
+        bridge.stream_opened()
+        assert caplog.messages == []
+        bridge.stream_opened(back=True)
+    assert caplog.messages == ["stream of g1 back"]
 
 
 async def test_resignation_not_delivered_is_tried_again() -> None:

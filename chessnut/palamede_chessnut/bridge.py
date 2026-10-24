@@ -148,12 +148,31 @@ class Bridge:
         self.pending = None
         self.undelivered = None
 
+    def stream_opened(self, back: bool = False) -> None:
+        """The stream is (re)connected : a viewer that refused resignation may have been redeployed.
+
+        Seen on the board (chessnut-abandon-001) : a 404 from the old viewer
+        kept the gesture off after the upgrade, until the bridge was restarted.
+        Any refusal (404/405, but also 401/403 : a token fixed meanwhile)
+        gets one new try per gesture once the stream is back.
+        ``back`` : it had been lost ; said in the log, since a reconnection on
+        an unchanged position is otherwise silent (review Admin #75).
+        """
+        if back:
+            log.info("stream of %s back", self.game_id)
+        if self.resign_state == "unavailable":
+            log.info("stream connected : resignation will be tried again")
+            self.resign_state = None
+
     def _follow_stream(self, loop: asyncio.AbstractEventLoop) -> None:
         """Blocking SSE reader (own thread), reconnecting until :attr:`stopped`."""
         url = f"{self.viewer}/api/games/{quote(self.game_id)}/stream"
+        lost = False
         while not self.stopped.is_set():
             try:
                 with urllib.request.urlopen(url, timeout=SSE_READ_TIMEOUT) as response:
+                    loop.call_soon_threadsafe(self.stream_opened, lost)
+                    lost = False
                     for raw in response:
                         line = raw.decode("utf-8").strip()
                         if not line.startswith("data:"):
@@ -166,6 +185,7 @@ class Bridge:
                         loop.call_soon_threadsafe(self.apply_stream, payload)
             except (OSError, ValueError) as exc:
                 log.warning("stream of %s lost (%s), reconnecting", self.game_id, exc)
+                lost = True
             time.sleep(RETRY_SECONDS)
 
     def _post_move(self, uci: str) -> tuple[str | None, bool]:
@@ -233,6 +253,7 @@ class Bridge:
             self.ready = True
             self.animation = leds.ready_sweep()
             log.info("the board matches the game : moves count from now on")
+            log.info("FEN %s", self.game.fen())
         if await self._resign_gesture(write):
             return
         decision = decide(
@@ -304,7 +325,11 @@ class Bridge:
             self.resign_state = "sent"
             log.info("resignation sent")
         elif status in (404, 405):
-            log.error("this viewer cannot take a resignation yet (HTTP %s)", status)
+            # Expected with a viewer older than #73 : the game simply goes on
+            # (CD, smoke of chessnut-abandon-001).
+            log.warning(
+                "this viewer cannot take a resignation yet (HTTP %s) : the game goes on", status
+            )
             self.resign_state = "unavailable"
         elif status is not None and 300 <= status < 500:
             log.error("resignation refused : HTTP %s %s", status, text)
