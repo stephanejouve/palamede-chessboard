@@ -561,6 +561,39 @@ async def test_reconnected_stream_tries_resignation_again() -> None:
     assert bridge.resign_state is None
 
 
+def test_lost_stream_reopens_as_back(monkeypatch) -> None:
+    """Review Junior #77 : the loop itself passes ``back=True`` after a loss."""
+
+    class Response:
+        def __enter__(self):
+            return iter([b'data: {"error": "GAME_NOT_FOUND", "game_id": "g1"}\n'])
+
+        def __exit__(self, *_exc):
+            return False
+
+    answers: list = [OSError("502 Bad Gateway"), Response()]
+
+    def urlopen(*_a, **_k):
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    class Loop:
+        def __init__(self) -> None:
+            self.calls: list = []
+
+        def call_soon_threadsafe(self, callback, *args) -> None:
+            self.calls.append((callback, *args))
+
+    monkeypatch.setattr(bridge_module.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(bridge_module.time, "sleep", lambda _s: None)
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "t")
+    loop = Loop()
+    bridge._follow_stream(loop=loop)  # type: ignore[arg-type]
+    assert loop.calls == [(bridge.stream_opened, True)]
+
+
 def test_stream_back_is_logged(caplog: pytest.LogCaptureFixture) -> None:
     """Review Admin #75 : a reconnection on an unchanged position is said."""
     bridge = Bridge("https://viewer.test", "g1", chess.WHITE, token="t")

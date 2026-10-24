@@ -153,6 +153,8 @@ class Bridge:
 
         Seen on the board (chessnut-abandon-001) : a 404 from the old viewer
         kept the gesture off after the upgrade, until the bridge was restarted.
+        Any refusal (404/405, but also 401/403 : a token fixed meanwhile)
+        gets one new try per gesture once the stream is back.
         ``back`` : it had been lost ; said in the log, since a reconnection on
         an unchanged position is otherwise silent (review Admin #75).
         """
