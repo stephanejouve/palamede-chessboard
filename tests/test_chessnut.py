@@ -571,6 +571,8 @@ def test_relayed_move_without_its_position_keeps_the_san() -> None:
     """Several moves missed (stream back after a long loss) : no UCI to rebuild, the SAN stays."""
     assert bridge_module._relayed(chess.Board(), "Nf6", after("e4", "e5", "Nf3", "Nf6")) == "Nf6"
     assert bridge_module._relayed(None, "Nf6", after("Nf3", "Nf6")) == "Nf6"
+    # Legal from the old position, but not the move that led to the new one (review Junior #79).
+    assert bridge_module._relayed(after("e4"), "Nf6", after("e4", "e5", "Nf3", "Nf6")) == "Nf6"
     assert bridge_module._relayed(after("Nf3"), "Nf6", after("Nf3", "Nf6")) == "g8f6 (Nf6)"
 
 
