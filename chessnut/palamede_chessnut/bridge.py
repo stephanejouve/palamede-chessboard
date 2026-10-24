@@ -233,6 +233,7 @@ class Bridge:
             self.ready = True
             self.animation = leds.ready_sweep()
             log.info("the board matches the game : moves count from now on")
+            log.info("FEN %s", self.game.fen())
         if await self._resign_gesture(write):
             return
         decision = decide(

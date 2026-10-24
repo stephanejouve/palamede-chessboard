@@ -466,6 +466,17 @@ async def test_first_match_plays_the_ready_sweep_then_goes_dark() -> None:
     assert board.frames[-1] == set()
 
 
+async def test_first_match_logs_the_fen(caplog: pytest.LogCaptureFixture) -> None:
+    """Once the board matches, the FEN is in the log : a position set from a problem can be checked."""
+    game = chess.Board("4r2k/pp4pp/2n4N/q7/2Q5/8/PPP2PPP/3R2K1 w - - 0 1")
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, token="t")
+    bridge.apply_stream(snapshot(game))
+    bridge.on_frame(None, bytearray(frame(placement(game))))
+    with caplog.at_level("INFO", logger=bridge_module.log.name):
+        await bridge.tick(Board().write)
+    assert f"FEN {game.fen()}" in caplog.messages
+
+
 async def test_guidance_cuts_the_ready_sweep() -> None:
     """The opponent moves while the sweep runs : its squares light up at once."""
     bridge = Bridge("https://viewer.test", "g1", chess.BLACK, token="t")
