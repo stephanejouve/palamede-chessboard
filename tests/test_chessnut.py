@@ -365,13 +365,13 @@ def test_stream_error_stops_the_bridge(monkeypatch) -> None:
             self.calls: list = []
 
         def call_soon_threadsafe(self, callback, *args) -> None:
-            self.calls.append(callback)
+            self.calls.append((callback, *args))
 
     bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "t")
     loop = Loop()
     bridge._follow_stream(loop=loop)  # type: ignore[arg-type]
     assert bridge.stopped.is_set()
-    assert loop.calls == [bridge.stream_opened]
+    assert loop.calls == [(bridge.stream_opened, False)]
 
 
 @pytest.mark.parametrize(
@@ -559,6 +559,16 @@ async def test_reconnected_stream_tries_resignation_again() -> None:
     assert bridge.resign_state is None
     bridge.stream_opened()
     assert bridge.resign_state is None
+
+
+def test_stream_back_is_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """Review Admin #75 : a reconnection on an unchanged position is said."""
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, token="t")
+    with caplog.at_level("INFO", logger=bridge_module.log.name):
+        bridge.stream_opened()
+        assert caplog.messages == []
+        bridge.stream_opened(back=True)
+    assert caplog.messages == ["stream of g1 back"]
 
 
 async def test_resignation_not_delivered_is_tried_again() -> None:

@@ -148,12 +148,16 @@ class Bridge:
         self.pending = None
         self.undelivered = None
 
-    def stream_opened(self) -> None:
+    def stream_opened(self, back: bool = False) -> None:
         """The stream is (re)connected : a viewer that refused resignation may have been redeployed.
 
         Seen on the board (chessnut-abandon-001) : a 404 from the old viewer
         kept the gesture off after the upgrade, until the bridge was restarted.
+        ``back`` : it had been lost ; said in the log, since a reconnection on
+        an unchanged position is otherwise silent (review Admin #75).
         """
+        if back:
+            log.info("stream of %s back", self.game_id)
         if self.resign_state == "unavailable":
             log.info("stream connected : resignation will be tried again")
             self.resign_state = None
@@ -161,10 +165,12 @@ class Bridge:
     def _follow_stream(self, loop: asyncio.AbstractEventLoop) -> None:
         """Blocking SSE reader (own thread), reconnecting until :attr:`stopped`."""
         url = f"{self.viewer}/api/games/{quote(self.game_id)}/stream"
+        lost = False
         while not self.stopped.is_set():
             try:
                 with urllib.request.urlopen(url, timeout=SSE_READ_TIMEOUT) as response:
-                    loop.call_soon_threadsafe(self.stream_opened)
+                    loop.call_soon_threadsafe(self.stream_opened, lost)
+                    lost = False
                     for raw in response:
                         line = raw.decode("utf-8").strip()
                         if not line.startswith("data:"):
@@ -177,6 +183,7 @@ class Bridge:
                         loop.call_soon_threadsafe(self.apply_stream, payload)
             except (OSError, ValueError) as exc:
                 log.warning("stream of %s lost (%s), reconnecting", self.game_id, exc)
+                lost = True
             time.sleep(RETRY_SECONDS)
 
     def _post_move(self, uci: str) -> tuple[str | None, bool]:
