@@ -1,7 +1,9 @@
 """Chessnut Air+ bridge : wire format, move reading, bridge decisions.
 
-The ``REAL_*`` frames were captured on an Air+ on 2026-10-23 (white pieces
-only on the board, then 1.d4 played and taken back).
+The ``REAL_*`` frames were captured on an Air+ : on 2026-10-23 white pieces
+only on the board, then 1.d4 played and taken back ; on 2026-10-24 the final
+position of the first real game (``chessnut-stephane-001``), which holds all
+six black piece types.
 """
 
 from __future__ import annotations
@@ -31,6 +33,9 @@ from palamede_chessboard.chessnut.protocol import (
 
 REAL_WHITE_ONLY = bytes.fromhex("0124a6b99c6a77777777" + "00" * 24 + "15000000")
 REAL_D4 = bytes.fromhex("0124a6b99c6a77077777" + "0000000000700000" + "00" * 16 + "19000000")
+REAL_MATE = bytes.fromhex(
+    "0124a609000677b000c0007770100000500400030400000500004404400408008002c5050000"
+)
 CODES = {symbol: code for code, symbol in PIECE_CODES.items()}
 
 
@@ -61,6 +66,11 @@ def placement(board: chess.Board) -> chess.BaseBoard:
 def test_real_frames_decode() -> None:
     assert decode_board(REAL_WHITE_ONLY).board_fen() == "8/8/8/8/8/8/PPPPPPPP/RNBQKBNR"
     assert decode_board(REAL_D4).board_fen() == "8/8/8/8/3P4/8/PPP1PPPP/RNBQKBNR"
+    mate = after(
+        *"e4 e5 d3 Nc6 Nf3 Nf6 Be2 Bc5 O-O O-O h3 d5 exd5 Nxd5 Qd2 Nf4 Bd1 Qd6"
+        " c3 Bxh3 Ng5 Qg6 gxh3 Qxg5+ Bg4 h5 Kh2 hxg4 Rg1 Qh4 f3 Qxh3#".split()
+    )
+    assert decode_board(REAL_MATE).board_fen() == mate.board_fen()
 
 
 def test_start_position_round_trips() -> None:
