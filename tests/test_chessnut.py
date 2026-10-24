@@ -16,17 +16,17 @@ import urllib.error
 
 import chess
 import pytest
-
-from palamede_chessboard.chessnut import bridge as bridge_module
-from palamede_chessboard.chessnut.bridge import (
+from palamede_chessnut import bridge as bridge_module
+from palamede_chessnut import viewer as viewer_module
+from palamede_chessnut.bridge import (
     GUIDE_SECONDS,
+    RESIGN_SECONDS,
     Bridge,
-    _read_token,
-    check_viewer_url,
     decide,
 )
-from palamede_chessboard.chessnut.moves import differing_squares, find_move
-from palamede_chessboard.chessnut.protocol import (
+from palamede_chessnut.cli import check_viewer_url, read_token
+from palamede_chessnut.moves import differing_squares, find_move
+from palamede_chessnut.protocol import (
     PIECE_CODES,
     UnknownPieceCode,
     decode_board,
@@ -189,8 +189,16 @@ def snapshot(board: chess.Board, *, over: bool = False) -> dict:
     return {"fen": board.fen(), "ply": board.ply(), "turn": turn, "is_game_over": over}
 
 
+def ready_bridge(game: chess.Board | None = None, player: chess.Color = chess.WHITE) -> Bridge:
+    """A bridge whose board has already matched ``game`` (the ready sweep is behind it)."""
+    bridge = Bridge("https://viewer.test", "g1", player, token="t")
+    bridge.apply_stream(snapshot(game or chess.Board()))
+    bridge.synced = bridge.ready = True
+    return bridge
+
+
 async def test_tick_posts_the_move_and_lights_the_reply() -> None:
-    bridge = Bridge("http://viewer.test", "g1", chess.WHITE, token="t")
+    bridge = ready_bridge()
     posted: list[str] = []
 
     def accept(uci: str) -> tuple[None, bool]:
@@ -203,7 +211,6 @@ async def test_tick_posts_the_move_and_lights_the_reply() -> None:
     async def write(command: bytes) -> None:
         written.append(command)
 
-    bridge.apply_stream(snapshot(chess.Board()))
     bridge.on_frame(None, bytearray(frame(placement(after("e4")))))
     bridge.settled_since = time.monotonic() - 1.0
     await bridge.tick(write)
@@ -216,7 +223,7 @@ async def test_tick_posts_the_move_and_lights_the_reply() -> None:
 
 
 async def test_refused_move_is_not_posted_twice() -> None:
-    bridge = Bridge("http://viewer.test", "g1", chess.WHITE, token="t")
+    bridge = ready_bridge()
     posted: list[str] = []
 
     def refuse(uci: str) -> tuple[str, bool]:
@@ -228,7 +235,6 @@ async def test_refused_move_is_not_posted_twice() -> None:
     async def write(command: bytes) -> None:
         pass
 
-    bridge.apply_stream(snapshot(chess.Board()))
     bridge.on_frame(None, bytearray(frame(placement(after("e4")))))
     bridge.settled_since = time.monotonic() - 1.0
     await bridge.tick(write)
@@ -255,7 +261,7 @@ def test_reconnection_snapshot_keeps_the_pending_move() -> None:
 
 async def test_undelivered_move_is_retried_not_refused() -> None:
     """Review #71 : a network error says nothing about the move."""
-    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, token="t")
+    bridge = ready_bridge()
     posted: list[str] = []
 
     def unreachable(uci: str) -> tuple[str, bool]:
@@ -263,13 +269,12 @@ async def test_undelivered_move_is_retried_not_refused() -> None:
         return "[Errno 65] No route to host", False
 
     bridge._post_move = unreachable  # type: ignore[method-assign]
-    bridge._server_fen = lambda: chess.STARTING_FEN  # type: ignore[method-assign]
+    bridge._server_position = lambda: (chess.STARTING_FEN, False)  # type: ignore[method-assign]
     written: list[bytes] = []
 
     async def write(command: bytes) -> None:
         written.append(command)
 
-    bridge.apply_stream(snapshot(chess.Board()))
     bridge.on_frame(None, bytearray(frame(placement(after("e4")))))
     bridge.settled_since = time.monotonic() - 1.0
     await bridge.tick(write)
@@ -300,6 +305,8 @@ def test_token_is_not_forwarded_on_a_redirect() -> None:
     class Viewer(http.server.BaseHTTPRequestHandler):
         def do_POST(self) -> None:  # noqa: N802 (http.server API)
             seen["first"] = self.headers.get("Authorization")
+            # Read the body : closing on unread data resets the connection.
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
             self.send_response(302)
             self.send_header("Location", f"http://127.0.0.1:{target.server_port}/elsewhere")
             self.end_headers()
@@ -312,12 +319,15 @@ def test_token_is_not_forwarded_on_a_redirect() -> None:
         threading.Thread(target=server.handle_request, daemon=True).start()
     try:
         bridge = Bridge(f"http://127.0.0.1:{viewer.server_port}", "g1", chess.WHITE, "secret")
-        bridge._post_move("e2e4")
+        message, refused = bridge._post_move("e2e4")
     finally:
         target.server_close()
         viewer.server_close()
     assert seen["first"] == "Bearer secret"
-    assert "authorization" in seen and seen["authorization"] is None
+    assert seen.get("authorization") is None
+    # The redirect is not followed : a wrong --viewer stops the bridge.
+    assert message and not refused
+    assert bridge.stopped.is_set()
 
 
 @pytest.mark.parametrize(
@@ -331,10 +341,11 @@ def test_token_is_not_forwarded_on_a_redirect() -> None:
     ],
 )
 def test_only_a_4xx_is_a_refusal(monkeypatch, error: Exception, expected: bool) -> None:
-    def fail(*_args, **_kwargs):
-        raise error
+    class Opener:
+        def open(self, *_args, **_kwargs):
+            raise error
 
-    monkeypatch.setattr(bridge_module.urllib.request, "urlopen", fail)
+    monkeypatch.setattr(viewer_module, "_OPENER", Opener())
     message, refused = Bridge("https://viewer.test", "g1", chess.WHITE, "t")._post_move("e2e4")
     assert message and refused is expected
 
@@ -371,14 +382,14 @@ def test_token_file_must_be_private(tmp_path) -> None:
     token_file.write_text("secret\n", encoding="utf-8")
     token_file.chmod(0o644)
     with pytest.raises(SystemExit, match="chmod 600"):
-        _read_token(token_file)
+        read_token(token_file)
     token_file.chmod(0o600)
-    assert _read_token(token_file) == "secret"
+    assert read_token(token_file) == "secret"
 
 
 async def _retry_after_network_error(server_fen: str | None) -> tuple[Bridge, list[str]]:
     """1.e4 on the board, first POST lost, then the retry with ``server_fen`` read back."""
-    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, token="t")
+    bridge = ready_bridge()
     posted: list[str] = []
 
     def lost(uci: str) -> tuple[str, bool]:
@@ -386,12 +397,13 @@ async def _retry_after_network_error(server_fen: str | None) -> tuple[Bridge, li
         return "timed out", False
 
     bridge._post_move = lost  # type: ignore[method-assign]
-    bridge._server_fen = lambda: server_fen  # type: ignore[method-assign]
+    bridge._server_position = lambda: (  # type: ignore[method-assign]
+        None if server_fen is None else (server_fen, False)
+    )
 
     async def write(command: bytes) -> None:
         pass
 
-    bridge.apply_stream(snapshot(chess.Board()))
     bridge.on_frame(None, bytearray(frame(placement(after("e4")))))
     bridge.settled_since = time.monotonic() - 1.0
     await bridge.tick(write)
@@ -417,3 +429,164 @@ async def test_retry_waits_while_the_viewer_cannot_be_read() -> None:
     bridge, posted = await _retry_after_network_error(None)
     assert posted == ["e2e4"]
     assert bridge.retry_at > time.monotonic()
+
+
+# ---- ready, resignation, end of game ------------------------------------------
+
+
+def test_setup_placement_is_not_read_as_a_move_before_the_board_matched() -> None:
+    """A pawn put on e4 instead of e2 while setting up is not 1.e4."""
+    decision = decide(chess.Board(), chess.WHITE, placement(after("e4")), 5.0, synced=False)
+    assert decision.move is None
+    assert decision.leds == {chess.E2, chess.E4}
+
+
+class Board:
+    """Writes captured as LED square sets."""
+
+    def __init__(self) -> None:
+        self.frames: list[set[chess.Square]] = []
+
+    async def write(self, command: bytes) -> None:
+        ranks = command[2:]
+        self.frames.append(
+            {chess.square(f, r) for r in range(8) for f in range(8) if ranks[r] >> f & 1}
+        )
+
+
+async def test_first_match_plays_the_ready_sweep_then_goes_dark() -> None:
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, token="t")
+    board = Board()
+    bridge.apply_stream(snapshot(chess.Board()))
+    bridge.on_frame(None, bytearray(frame(chess.BaseBoard())))
+    for _ in range(12):
+        await bridge.tick(board.write)
+    assert bridge.ready
+    assert board.frames[:8] == [{chess.square(f, r) for f in range(8)} for r in range(8)]
+    assert board.frames[-1] == set()
+
+
+async def test_guidance_cuts_the_ready_sweep() -> None:
+    """The opponent moves while the sweep runs : its squares light up at once."""
+    bridge = Bridge("https://viewer.test", "g1", chess.BLACK, token="t")
+    board = Board()
+    bridge.apply_stream(snapshot(chess.Board()))
+    bridge.on_frame(None, bytearray(frame(chess.BaseBoard())))
+    await bridge.tick(board.write)
+    assert bridge.animation
+    bridge.apply_stream(snapshot(after("e4")))
+    bridge.settled_since = time.monotonic() - 1.0
+    await bridge.tick(board.write)
+    assert bridge.animation == []
+    assert board.frames[-1] == {chess.E2, chess.E4}
+
+
+def _without_king(board: chess.Board, color: chess.Color) -> chess.BaseBoard:
+    lifted = placement(board)
+    king = lifted.king(color)
+    assert king is not None
+    lifted.remove_piece_at(king)
+    return lifted
+
+
+async def _lift_king(
+    answer: tuple[int | None, str], *, held_for: float = RESIGN_SECONDS
+) -> tuple[Bridge, list[int], Board]:
+    bridge = ready_bridge(after("e4"), chess.BLACK)
+    calls: list[int] = []
+
+    def resign() -> tuple[int | None, str]:
+        calls.append(1)
+        return answer
+
+    bridge._post_resign = resign  # type: ignore[method-assign]
+    board = Board()
+    bridge.on_frame(None, bytearray(frame(_without_king(after("e4"), chess.BLACK))))
+    await bridge.tick(board.write)
+    bridge.king_gone_since = time.monotonic() - held_for
+    await bridge.tick(board.write)
+    await bridge.tick(board.write)
+    return bridge, calls, board
+
+
+async def test_king_off_the_board_resigns_once() -> None:
+    bridge, calls, board = await _lift_king((200, ""))
+    assert calls == [1]
+    assert bridge.resign_state == "sent"
+    assert all(squares <= {chess.E8} for squares in board.frames)
+
+
+async def test_resignation_answered_409_counts_as_arrived() -> None:
+    """Review Admin #73 : an earlier, unanswered try may have landed."""
+    bridge, calls, _board = await _lift_king((409, "already ended"))
+    assert calls == [1] and bridge.resign_state == "sent"
+
+
+async def test_old_viewer_without_resignation_falls_back_to_guidance() -> None:
+    bridge, calls, board = await _lift_king((404, "Not Found"))
+    assert calls == [1] and bridge.resign_state == "unavailable"
+    bridge.settled_since = time.monotonic() - 5.0
+    await bridge.tick(board.write)
+    assert board.frames[-1] == {chess.E8}
+
+
+async def test_resignation_not_delivered_is_tried_again() -> None:
+    bridge, calls, _board = await _lift_king((None, "timed out"))
+    assert calls == [1] and bridge.resign_state is None
+    assert bridge.retry_at > time.monotonic()
+
+
+async def test_king_put_back_in_time_does_not_resign() -> None:
+    _bridge, calls, _board = await _lift_king((200, ""), held_for=1.0)
+    assert calls == []
+
+
+async def test_opponent_king_off_the_board_is_not_a_resignation() -> None:
+    bridge = ready_bridge(after("e4"), chess.BLACK)
+    bridge._post_resign = lambda: pytest.fail("not a resignation")  # type: ignore[method-assign]
+    bridge.on_frame(None, bytearray(frame(_without_king(after("e4"), chess.WHITE))))
+    bridge.king_gone_since = time.monotonic() - 10.0
+    await bridge.tick(Board().write)
+    assert bridge.king_gone_since is None
+
+
+async def test_game_over_guides_to_the_final_position_then_blinks_and_stops() -> None:
+    mate = after("f3", "e5", "g4", "Qh4#")
+    bridge = ready_bridge(after("f3", "e5", "g4"))
+    board = Board()
+    bridge.apply_stream(snapshot(mate, over=True))
+    bridge.on_frame(None, bytearray(frame(placement(after("f3", "e5", "g4")))))
+    bridge.settled_since = time.monotonic() - 1.0
+    await bridge.tick(board.write)
+    assert board.frames[-1] == {chess.D8, chess.H4}
+    assert not bridge.finished
+    bridge.on_frame(None, bytearray(frame(placement(mate))))
+    for _ in range(15):
+        await bridge.tick(board.write)
+    assert bridge.finished and bridge.stopped.is_set()
+    assert set(chess.SQUARES) in board.frames
+    assert board.frames[-1] == set()
+
+
+async def test_after_resigning_the_board_goes_dark_without_the_king() -> None:
+    bridge, _calls, board = await _lift_king((200, ""))
+    bridge.apply_stream(snapshot(after("e4"), over=True))
+    for _ in range(15):
+        await bridge.tick(board.write)
+    assert bridge.finished and board.frames[-1] == set()
+
+
+async def test_same_position_with_other_counters_is_not_a_new_one() -> None:
+    """Review Junior/Admin #71 : positions are compared, not FEN strings."""
+    bridge, posted = await _retry_after_network_error(chess.Board().fen().replace(" 0 1", " 3 7"))
+    assert posted == ["e2e4", "e2e4"]
+
+
+async def test_switch_off_survives_a_dead_link() -> None:
+    async def dead(_command: bytes) -> None:
+        raise OSError("link lost")
+
+    await bridge_module._switch_off(dead)
+    board = Board()
+    await bridge_module._switch_off(board.write)
+    assert board.frames == [set()]
