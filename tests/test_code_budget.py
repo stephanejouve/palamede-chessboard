@@ -11,21 +11,29 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import palamede_chessnut
+
 import palamede_chessboard
 from palamede_chessboard._mcp_tool_schemas import TOOL_SCHEMAS
 
 PACKAGE = Path(palamede_chessboard.__file__).parent
+#: The Chessnut bridge lives in its own package (``chessnut/``), same rules.
+PACKAGES = (PACKAGE, Path(palamede_chessnut.__file__).parent)
 MODULE_MAX_LINES = 500
 FUNCTION_MAX_LINES = 80
 
 
 def _modules() -> list[Path]:
-    return sorted(PACKAGE.rglob("*.py"))
+    return sorted(p for package in PACKAGES for p in package.rglob("*.py"))
+
+
+def _name(path: Path) -> str:
+    return str(path.relative_to(PACKAGE.parent))
 
 
 def test_modules_stay_under_budget() -> None:
     over = {
-        str(p.relative_to(PACKAGE)): n
+        _name(p): n
         for p in _modules()
         if (n := len(p.read_text(encoding="utf-8").splitlines())) > MODULE_MAX_LINES
     }
@@ -50,7 +58,7 @@ def test_functions_stay_under_budget() -> None:
                 start = min([node.lineno, *(d.lineno for d in node.decorator_list)])
                 length = (node.end_lineno or node.lineno) - start + 1
                 if length > FUNCTION_MAX_LINES:
-                    over.append(f"{path.relative_to(PACKAGE)}:{node.name} ({length})")
+                    over.append(f"{_name(path)}:{node.name} ({length})")
     assert over == []
 
 

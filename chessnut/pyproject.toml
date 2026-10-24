@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "palamede-chessnut"
+version = "0.1.0"
+description = "Play palamède games on a Chessnut Air+ electronic board, over Bluetooth LE"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Stéphane Jouve" }]
+requires-python = ">=3.11"
+# Board side only : no server stack (mcp, fastapi…), the viewer is reached
+# over HTTPS with the standard library.
+dependencies = ["chess>=1.10", "bleak>=1.0"]
+
+[project.scripts]
+palamede-chessnut = "palamede_chessnut.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["palamede_chessnut"]
