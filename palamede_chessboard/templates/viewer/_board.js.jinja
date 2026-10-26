@@ -104,9 +104,15 @@ window.__cgSetFen = function(fen, turn, interactive) {
   });
 };
 
+// Called by the classic script (role change, flip button). chessground's
+// set() toggles the orientation and redraws when it differs (src/api.ts).
+window.__cgSetOrientation = function(color) {
+  if (cg) cg.set({ orientation: color });
+};
+
 cg = Chessground(boardEl, {
   fen: 'start',
-  orientation: 'white',
+  orientation: typeof window.boardOrientation === 'function' ? window.boardOrientation() : 'white',
   viewOnly: false,  // listeners are bound at creation only, see __cgSetFen
   animation: { enabled: true, duration: 200 },
   movable: { free: true, color: undefined, events: { after: onUserDrop } },

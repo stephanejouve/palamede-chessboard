@@ -2,6 +2,7 @@ function updateUrl() {
   const p = new URLSearchParams();
   if (gameId()) p.set('game', gameId());
   if (viewerRole() !== 'spectator') p.set('viewer', viewerRole());
+  if (ORIENT) p.set('orient', ORIENT);
   history.replaceState(null, '', '?' + p.toString());
 }
 
