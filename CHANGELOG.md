@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.7.0...v0.8.0) (2026-10-26)
+
+
+### Features
+
+* **chessnut:** FEN at the ready sweep, resignation retried once the stream is back ([#77](https://github.com/stephanejouve/palamede-chessboard/issues/77)) ([ed3ef27](https://github.com/stephanejouve/palamede-chessboard/commit/ed3ef273f7d702756697550782eb38d134e38002))
+* **chessnut:** log the move relayed on the board, SAN next to UCI ([#79](https://github.com/stephanejouve/palamede-chessboard/issues/79)) ([0831b99](https://github.com/stephanejouve/palamede-chessboard/commit/0831b99d633490f07fe838aeb812f5ec4b28bf02))
+* **chessnut:** own package, ready sweep, resignation by lifting the king, dark board at the end ([#75](https://github.com/stephanejouve/palamede-chessboard/issues/75)) ([dee705a](https://github.com/stephanejouve/palamede-chessboard/commit/dee705a3d7e30eb58f1b085b04f2adbfb28a55f6))
+* **viewer:** flip the board, Black at the bottom for the black player ([#86](https://github.com/stephanejouve/palamede-chessboard/issues/86)) ([230defe](https://github.com/stephanejouve/palamede-chessboard/commit/230defe152122c76abc9277d0c703b2396c20c79))
+
 ## [0.7.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.6.3...v0.7.0) (2026-10-24)
 
 
