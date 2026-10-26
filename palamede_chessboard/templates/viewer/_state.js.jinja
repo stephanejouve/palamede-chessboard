@@ -20,7 +20,28 @@ function gameId() { return CURRENT_GAME; }
 function viewerRole() { return roleSelect.value; }
 function qs(extra) { return '?game_id=' + encodeURIComponent(gameId()) + (extra ? '&' + extra : ''); }
 
-roleSelect.addEventListener('change', () => { updateUrl(); pollEngine(); });
+// Board orientation : Black at the bottom for the black player. It follows
+// the role (player_black → black) unless flipped by hand ; a manual flip is
+// kept in the URL (``orient``) so that a shared link keeps it.
+let ORIENT = ['white', 'black'].includes(params.get('orient')) ? params.get('orient') : '';
+function boardOrientation() {
+  if (ORIENT) return ORIENT;
+  return viewerRole() === 'player_black' ? 'black' : 'white';
+}
+// No-op until the chessground module is up ; it reads boardOrientation()
+// at creation, whichever script runs first.
+function applyOrientation() {
+  if (window.__cgSetOrientation) window.__cgSetOrientation(boardOrientation());
+}
+
+roleSelect.addEventListener('change', () => {
+  ORIENT = '';  // a new role resets the orientation to its own side
+  updateUrl(); applyOrientation(); pollEngine();
+});
+document.getElementById('flip-btn').addEventListener('click', () => {
+  ORIENT = boardOrientation() === 'white' ? 'black' : 'white';
+  updateUrl(); applyOrientation();
+});
 
 // Player token (#34) : pasted once, kept in sessionStorage — forgotten
 // when the tab closes, never in localStorage nor in the URL. Sent as
