@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import http.server
 import io
+import sys
 import threading
 import time
 import urllib.error
+from pathlib import Path
 
 import chess
 import pytest
@@ -395,7 +397,8 @@ def test_viewer_url_that_would_leak_the_token_is_refused(url: str) -> None:
         check_viewer_url(url)
 
 
-def test_token_file_must_be_private(tmp_path) -> None:
+def test_token_file_must_be_private(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(sys, "platform", "linux")
     token_file = tmp_path / "token"
     token_file.write_text("secret\n", encoding="utf-8")
     token_file.chmod(0o644)
@@ -403,6 +406,52 @@ def test_token_file_must_be_private(tmp_path) -> None:
         read_token(token_file)
     token_file.chmod(0o600)
     assert read_token(token_file) == "secret"
+
+
+def _windows_home(tmp_path, monkeypatch) -> Path:
+    # tmp_path may sit behind a link (/var -> /private/var on macOS) : resolved,
+    # a refusal can only come from the check under test.
+    home = tmp_path.resolve() / "home"
+    home.mkdir()
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(Path, "home", lambda: home)
+    return home
+
+
+def test_windows_token_file_in_the_profile_is_read(tmp_path, monkeypatch) -> None:
+    """Windows reports 0o666 whatever the ACL : the mode bits must not refuse it."""
+    token_file = _windows_home(tmp_path, monkeypatch) / "token"
+    token_file.write_text("secret\n", encoding="utf-8")
+    token_file.chmod(0o666)
+    assert read_token(token_file) == "secret"
+
+
+def test_windows_token_file_outside_the_profile_is_refused(tmp_path, monkeypatch) -> None:
+    """Outside the profile, the default ACL lets every user read it (review Admin)."""
+    home = _windows_home(tmp_path, monkeypatch)
+    token_file = home.parent / "token"
+    token_file.write_text("secret\n", encoding="utf-8")
+    token_file.chmod(0o600)
+    with pytest.raises(SystemExit, match="outside your user profile"):
+        read_token(token_file)
+
+
+def test_windows_profile_behind_a_link_is_still_the_profile(tmp_path, monkeypatch) -> None:
+    real_home = _windows_home(tmp_path, monkeypatch)
+    linked_home = real_home.parent / "linked-home"
+    linked_home.symlink_to(real_home)
+    monkeypatch.setattr(Path, "home", lambda: linked_home)
+    (real_home / "token").write_text("secret\n", encoding="utf-8")
+    assert read_token(linked_home / "token") == "secret"
+
+
+def test_windows_link_in_the_profile_to_outside_is_refused(tmp_path, monkeypatch) -> None:
+    home = _windows_home(tmp_path, monkeypatch)
+    target = home.parent / "token"
+    target.write_text("secret\n", encoding="utf-8")
+    (home / "token").symlink_to(target)
+    with pytest.raises(SystemExit, match="outside your user profile"):
+        read_token(home / "token")
 
 
 async def _retry_after_network_error(server_fen: str | None) -> tuple[Bridge, list[str]]:
