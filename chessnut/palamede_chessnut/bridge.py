@@ -133,6 +133,12 @@ class Bridge:
         self.animation: list[leds.Frame] = []
         #: Set when the bridge stops : game over, or game impossible to follow.
         self.stopped = threading.Event()
+        #: Moves of the game so far (SAN), as the stream gives them.
+        self.history: list[str] = []
+        #: ``"searching"`` or ``"connected"`` : the Bluetooth link with the board.
+        self.board_link = "searching"
+        #: ``"connecting"``, ``"connected"`` or ``"reconnecting"`` : the viewer's stream.
+        self.stream_link = "connecting"
 
     # ---- viewer side ------------------------------------------------------
 
@@ -146,6 +152,7 @@ class Bridge:
             return
         log.info("game %s : ply %s, %s to move", self.game_id, payload["ply"], payload["turn"])
         history = payload.get("san_history") or []
+        self.history = list(history)
         # A move the board does not show yet : the opponent's, or one played in
         # the viewer (mixed game). Not before the setup, which relays nothing.
         behind = self.observed is None or self.observed.board_fen() != game.board_fen()
@@ -167,6 +174,7 @@ class Bridge:
         ``back`` : it had been lost ; said in the log, since a reconnection on
         an unchanged position is otherwise silent (review Admin #75).
         """
+        self.stream_link = "connected"
         if back:
             log.info("stream of %s back", self.game_id)
         if self.resign_state == "unavailable":
@@ -195,6 +203,7 @@ class Bridge:
             except (OSError, ValueError) as exc:
                 log.warning("stream of %s lost (%s), reconnecting", self.game_id, exc)
                 lost = True
+                self.stream_link = "reconnecting"
             time.sleep(RETRY_SECONDS)
 
     def _post_move(self, uci: str) -> tuple[str | None, bool]:
@@ -406,6 +415,7 @@ class Bridge:
                     await client.write_gatt_char(COMMAND_UUID, ENABLE_REPORTING)
                     log.info("connected to %s", device.name)
                     self.leds = None
+                    self.board_link = "connected"
 
                     async def write(command: bytes) -> None:
                         await client.write_gatt_char(COMMAND_UUID, command)
@@ -415,6 +425,7 @@ class Bridge:
                             await self.tick(write)
                             await asyncio.sleep(TICK_SECONDS)
                     finally:
+                        self.board_link = "searching"
                         await _switch_off(write)
             except (BleakError, TimeoutError, OSError) as exc:
                 log.warning("board link lost (%s)", exc)
@@ -425,10 +436,22 @@ class Bridge:
         loop = asyncio.get_running_loop()
         task = asyncio.current_task()
         if task is not None:
-            # The launcher stops the bridge with SIGTERM : leave the LEDs off.
-            loop.add_signal_handler(signal.SIGTERM, task.cancel)
+            cancel_on_sigterm(loop, task)
         threading.Thread(target=self._follow_stream, args=(loop,), daemon=True).start()
         await self.run_board()
+
+
+def cancel_on_sigterm(loop: asyncio.AbstractEventLoop, task: asyncio.Task[Any]) -> None:
+    """The launcher stops the bridge with SIGTERM : leave the LEDs off.
+
+    Not available on Windows' event loop (``NotImplementedError``), nor
+    outside the main thread, where the app runs the bridge beside its
+    window (#78) ; there, Ctrl-C or closing the window stops it.
+    """
+    try:
+        loop.add_signal_handler(signal.SIGTERM, task.cancel)
+    except (NotImplementedError, RuntimeError, ValueError) as exc:
+        log.debug("no SIGTERM handler here (%s)", type(exc).__name__)
 
 
 def _relayed(before: chess.Board | None, san: str, after: chess.Board) -> str:

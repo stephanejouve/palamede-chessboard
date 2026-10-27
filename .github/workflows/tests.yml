@@ -117,4 +117,4 @@ jobs:
         run: poetry install --no-interaction
 
       - name: pytest (bridge)
-        run: poetry run pytest -q -rs tests/test_chessnut.py
+        run: poetry run pytest -q -rs tests/test_chessnut.py tests/test_chessnut_app.py

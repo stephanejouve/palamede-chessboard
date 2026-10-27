@@ -7,15 +7,24 @@ name = "palamede-chessnut"
 version = "0.1.0"
 description = "Play palamède games on a Chessnut Air+ electronic board, over Bluetooth LE"
 readme = "README.md"
-license = "MIT"
+license = "MIT AND GPL-3.0-or-later"
 authors = [{ name = "Stéphane Jouve" }]
 requires-python = ">=3.11"
 # Board side only : no server stack (mcp, fastapi…), the viewer is reached
 # over HTTPS with the standard library.
 dependencies = ["chess>=1.10", "bleak>=1.0"]
 
+[project.optional-dependencies]
+# The « Échiquier » window (#78) : WebKit on macOS, Edge WebView2 on
+# Windows, Qt on Linux (installed by pip, no GTK bindings of the system).
+app = [
+    "pywebview>=5; sys_platform != 'linux'",
+    "pywebview[qt]>=5; sys_platform == 'linux'",
+]
+
 [project.scripts]
 palamede-chessnut = "palamede_chessnut.cli:main"
+palamede-chessnut-app = "palamede_chessnut.app:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["palamede_chessnut"]
