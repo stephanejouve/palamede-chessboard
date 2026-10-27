@@ -15,6 +15,9 @@ keep the file :
 - macOS, Linux : anywhere, once `chmod 600` ; any other mode is refused ;
 - Windows : under your user profile (`%USERPROFILE%`), whose default access
   rights keep it to you ; a file elsewhere, even through a link, is refused.
+  Prefer `%APPDATA%\palamede` to Documents or the Desktop, often synced by
+  OneDrive. Rights changed by hand on the file, or a hard link to it, are not
+  detected.
 
 On the board :
 

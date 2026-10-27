@@ -10,10 +10,14 @@ from __future__ import annotations
 
 import http.server
 import io
+import os
+import shutil
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
+from collections.abc import Iterator
 from pathlib import Path
 
 import chess
@@ -397,6 +401,7 @@ def test_viewer_url_that_would_leak_the_token_is_refused(url: str) -> None:
         check_viewer_url(url)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="chmod can't make a file private on Windows")
 def test_token_file_must_be_private(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(sys, "platform", "linux")
     token_file = tmp_path / "token"
@@ -452,6 +457,50 @@ def test_windows_link_in_the_profile_to_outside_is_refused(tmp_path, monkeypatch
     (home / "token").symlink_to(target)
     with pytest.raises(SystemExit, match="outside your user profile"):
         read_token(home / "token")
+
+
+# Native Windows (CI job « windows ») : nothing simulated, the real profile.
+native_windows = pytest.mark.skipif(sys.platform != "win32", reason="native Windows only")
+
+
+@pytest.fixture
+def in_real_profile() -> Iterator[Path]:
+    directory = Path(tempfile.mkdtemp(prefix="palamede-test-", dir=Path.home()))
+    yield directory
+    shutil.rmtree(directory)
+
+
+@native_windows
+def test_native_windows_mode_bits_say_nothing(in_real_profile) -> None:
+    """The premise of the fix : even after chmod 600, Windows reports group and other bits."""
+    token_file = in_real_profile / "token"
+    token_file.write_text("secret\n", encoding="utf-8")
+    token_file.chmod(0o600)
+    assert token_file.stat().st_mode & 0o077
+
+
+@native_windows
+def test_native_windows_token_in_the_profile_is_read(in_real_profile) -> None:
+    token_file = in_real_profile / "token"
+    token_file.write_text("secret\n", encoding="utf-8")
+    assert read_token(token_file) == "secret"
+
+
+@native_windows
+def test_native_windows_token_outside_the_profile_is_refused() -> None:
+    """``RUNNER_TEMP`` (``D:\\a\\_temp`` on GitHub) lies outside the runner's profile."""
+    runner_temp = os.environ.get("RUNNER_TEMP")
+    if not runner_temp:
+        pytest.skip("RUNNER_TEMP : GitHub runner only")
+    outside = Path(tempfile.mkdtemp(prefix="palamede-test-", dir=runner_temp))
+    try:
+        assert not outside.resolve().is_relative_to(Path.home().resolve())
+        token_file = outside / "token"
+        token_file.write_text("secret\n", encoding="utf-8")
+        with pytest.raises(SystemExit, match="outside your user profile"):
+            read_token(token_file)
+    finally:
+        shutil.rmtree(outside)
 
 
 async def _retry_after_network_error(server_fen: str | None) -> tuple[Bridge, list[str]]:
