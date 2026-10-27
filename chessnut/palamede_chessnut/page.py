@@ -20,7 +20,8 @@ if TYPE_CHECKING:
     from palamede_chessnut.bridge import Bridge
 
 HERE = Path(__file__).parent
-#: chessground, copied from the viewer's vendor directory (same version, MIT).
+#: chessground 9.2.1, GPL-3.0-or-later : an identical copy of the viewer's vendor
+#: directory, with its licence, provenance and TypeScript source (``src/``).
 CHESSGROUND = HERE / "vendor" / "chessground"
 PAGE = HERE / "web"
 TYPES = {".html": "text/html", ".js": "text/javascript", ".css": "text/css"}

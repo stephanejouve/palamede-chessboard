@@ -169,19 +169,22 @@ def test_page_serves_nothing_else(page, path: str) -> None:
 
 
 def test_chessground_copy_matches_the_viewer() -> None:
-    """The bridge ships its own copy : it must not drift from the viewer's."""
-    names = sorted(p.name for p in CHESSGROUND.iterdir())
-    assert names == sorted(
-        [
-            "LICENSE",
-            "chessground.base.css",
-            "chessground.brown.css",
-            "chessground.cburnett.css",
-            "chessground.min.js",
-        ]
-    )
-    for name in names:
-        assert (CHESSGROUND / name).read_bytes() == (VIEWER_VENDOR / name).read_bytes(), name
+    """The bridge ships its own copy (GPL-3.0 : licence, provenance, ``src/`` included).
+
+    It must not drift from the viewer's, file for file (review Admin #87).
+    """
+
+    def tree(root: Path) -> dict[str, bytes]:
+        return {
+            str(p.relative_to(root)): p.read_bytes()
+            for p in sorted(root.rglob("*"))
+            if p.is_file() and "__pycache__" not in p.parts
+        }
+
+    copy, viewer = tree(CHESSGROUND), tree(VIEWER_VENDOR)
+    assert {"LICENSE", "README.md", "package.json", "chessground.min.js"} <= set(copy)
+    assert any(name.startswith("src") for name in copy)
+    assert copy == viewer
 
 
 # ---- running beside a window ----------------------------------------------

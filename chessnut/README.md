@@ -45,6 +45,10 @@ in the bridge and never reaches the page. Closing the window stops the
 bridge, LEDs off. The window only shows the game : moves are still played
 on the board.
 
+The page embeds chessground 9.2.1 (lichess), under GPL-3.0-or-later : its
+licence, provenance and TypeScript source ship with it, in
+`palamede_chessnut/vendor/chessground/`. The rest of the bridge is MIT.
+
 On macOS, the first launch asks to allow Bluetooth for the terminal (or the
 app) that starts the bridge : without it, the Bluetooth light stays orange.
 The window needs a graphical session ; when it cannot open, the bridge
