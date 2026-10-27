@@ -96,3 +96,25 @@ jobs:
           name: coverage-xml
           path: coverage.xml
           retention-days: 7
+
+  # --- Job windows : the bridge's code that depends on the OS, run natively
+  # (no simulated sys.platform) : token file check (#88), app (#78).
+  # A list of files, not the whole suite : the server side is Linux only.
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: pytest (bridge)
+        run: poetry run pytest -q -rs tests/test_chessnut.py

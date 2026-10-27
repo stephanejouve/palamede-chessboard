@@ -3,7 +3,8 @@
     palamede-chessnut --viewer <viewer URL> --game <game_id> --color white
 
 The player token (the one behind the viewer's 🔑 button) is read from
-``--token-file`` (readable by its owner only) or ``PALAMEDE_PLAYER_TOKEN`` ;
+``--token-file`` (readable by its owner only, under the user profile on
+Windows) or ``PALAMEDE_PLAYER_TOKEN`` ;
 it is never logged. The bridge exits by itself once the game is over and
 its final position stands on the board, LEDs off.
 """
@@ -14,6 +15,7 @@ import argparse
 import asyncio
 import logging
 import os
+import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -34,7 +36,15 @@ def check_viewer_url(url: str) -> None:
 
 def read_token(token_file: Path | None) -> str:
     if token_file is not None:
-        if token_file.stat().st_mode & 0o077:
+        if sys.platform == "win32":
+            # Windows reports 0o666 whatever the NTFS ACL says. Only the user
+            # profile's default ACL keeps a file to its owner (review Admin) ;
+            # resolve() follows links, so one can't point outside of it.
+            if not token_file.resolve().is_relative_to(Path.home().resolve()):
+                raise SystemExit(
+                    f"{token_file} : outside your user profile, keep the token under {Path.home()}"
+                )
+        elif token_file.stat().st_mode & 0o077:
             raise SystemExit(f"{token_file} : readable by other accounts, chmod 600 it first")
         return token_file.read_text(encoding="utf-8").strip()
     token = os.environ.get("PALAMEDE_PLAYER_TOKEN", "").strip()

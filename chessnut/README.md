@@ -9,8 +9,15 @@ uv run --with 'palamede-chessnut @ git+https://github.com/stephanejouve/palamede
 ```
 
 The player token (the one behind the viewer's 🔑 button) is read from a
-file readable by its owner only (`chmod 600`), or from
-`PALAMEDE_PLAYER_TOKEN`.
+file readable by its owner only, or from `PALAMEDE_PLAYER_TOKEN`. Where to
+keep the file :
+
+- macOS, Linux : anywhere, once `chmod 600` ; any other mode is refused ;
+- Windows : under your user profile (`%USERPROFILE%`), whose default access
+  rights keep it to you ; a file elsewhere, even through a link, is refused.
+  Prefer `%APPDATA%\palamede` to Documents or the Desktop, often synced by
+  OneDrive. Rights changed by hand on the file, or a hard link to it, are not
+  detected.
 
 On the board :
 
