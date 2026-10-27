@@ -27,3 +27,20 @@ On the board :
 - the opponent's move lights up its squares : play it for them ;
 - to resign, lift your king off the board for 5 seconds (the LEDs blink
   meanwhile ; put it back to cancel).
+
+## The « Échiquier » window (#78)
+
+The same bridge, with a window that shows the game, the moves, three
+lights (Bluetooth, server, synchronisation) and the squares still to fix :
+
+```
+uv run --with 'palamede-chessnut[app] @ git+https://github.com/stephanejouve/palamede-chessboard#subdirectory=chessnut' \
+  palamede-chessnut-app --viewer https://<viewer> --game <game_id> --color white --token-file <file>
+```
+
+Same options as `palamede-chessnut`. The `app` extra brings pywebview :
+WebKit on macOS, Edge WebView2 on Windows, Qt on Linux. The window reads
+a page served by the bridge on `127.0.0.1` only ; the player token stays
+in the bridge and never reaches the page. Closing the window stops the
+bridge, LEDs off. The window only shows the game : moves are still played
+on the board.

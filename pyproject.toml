@@ -64,8 +64,8 @@ warn_unused_ignores = true
 warn_redundant_casts = true
 
 [[tool.mypy.overrides]]
-# Optional extra « chessnut » : absent from the default install.
-module = ["bleak", "bleak.*"]
+# Optional extras of the bridge (bleak, pywebview) : absent from the default install.
+module = ["bleak", "bleak.*", "webview", "webview.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

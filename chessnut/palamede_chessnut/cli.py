@@ -53,20 +53,25 @@ def read_token(token_file: Path | None) -> str:
     return token
 
 
-def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(description="Play a viewer game on a Chessnut Air+ board.")
+def bridge_from_args(argv: list[str] | None, description: str) -> Bridge:
+    """Parse the command line shared by the CLI and the app (#78), and build the bridge."""
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--viewer", required=True, help="viewer base URL")
     parser.add_argument("--game", required=True, help="game_id")
     parser.add_argument("--color", required=True, choices=["white", "black"])
     parser.add_argument("--token-file", type=Path, help="file holding the player token")
     args = parser.parse_args(argv)
     check_viewer_url(args.viewer)
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     player = chess.WHITE if args.color == "white" else chess.BLACK
-    bridge = Bridge(args.viewer, args.game, player, read_token(args.token_file))
+    return Bridge(args.viewer, args.game, player, read_token(args.token_file))
+
+
+def main(argv: list[str] | None = None) -> None:
+    bridge = bridge_from_args(argv, "Play a viewer game on a Chessnut Air+ board.")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
         asyncio.run(bridge.run())
     except (KeyboardInterrupt, asyncio.CancelledError):
         return
     if not bridge.finished:
-        raise SystemExit(f"game {args.game} cannot be followed, see the log above")
+        raise SystemExit(f"game {bridge.game_id} cannot be followed, see the log above")

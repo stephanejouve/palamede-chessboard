@@ -14,8 +14,17 @@ requires-python = ">=3.11"
 # over HTTPS with the standard library.
 dependencies = ["chess>=1.10", "bleak>=1.0"]
 
+[project.optional-dependencies]
+# The « Échiquier » window (#78) : WebKit on macOS, Edge WebView2 on
+# Windows, Qt on Linux (installed by pip, no GTK bindings of the system).
+app = [
+    "pywebview>=5; sys_platform != 'linux'",
+    "pywebview[qt]>=5; sys_platform == 'linux'",
+]
+
 [project.scripts]
 palamede-chessnut = "palamede_chessnut.cli:main"
+palamede-chessnut-app = "palamede_chessnut.app:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["palamede_chessnut"]
