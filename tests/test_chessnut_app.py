@@ -7,6 +7,7 @@ import json
 import logging
 import sys
 import threading
+import types
 from pathlib import Path
 
 import chess
@@ -142,6 +143,7 @@ def test_page_serves_the_state(page) -> None:
     assert response.status == 200
     assert response.getheader("Content-Security-Policy") == CONTENT_SECURITY_POLICY
     assert response.getheader("Cache-Control") == "no-store"
+    assert response.getheader("X-Content-Type-Options") == "nosniff"
     assert json.loads(response.read())["history"] == ["e4"]
 
 
@@ -264,3 +266,121 @@ def test_cli_and_app_share_their_options(monkeypatch) -> None:
         bridge_from_args(
             ["--viewer", "http://viewer.test", "--game", "g1", "--color", "white"], "t"
         )
+
+
+# ---- link lights on a dead link (review Junior #87) ------------------------
+
+
+def test_server_light_goes_orange_when_the_stream_drops(monkeypatch) -> None:
+    def unreachable(*_args, **_kwargs):
+        raise OSError("connection refused")
+
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
+    bridge.stream_link = "connected"
+    monkeypatch.setattr(bridge_module.urllib.request, "urlopen", unreachable)
+    monkeypatch.setattr(bridge_module.time, "sleep", lambda _s: bridge.stopped.set())
+    bridge._follow_stream(loop=None)  # type: ignore[arg-type]
+    assert bridge.stream_link == "reconnecting"
+    assert snapshot(bridge)["lights"]["server"] == "reconnecting"
+
+
+def test_bluetooth_light_goes_orange_when_the_board_drops(monkeypatch) -> None:
+    """Connected while the link holds, back to « searching » once it is gone."""
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
+    seen: list[str] = []
+
+    class Client:
+        is_connected = True
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc) -> bool:
+            return False
+
+        async def start_notify(self, *_args) -> None:
+            pass
+
+        async def write_gatt_char(self, *_args) -> None:
+            pass
+
+    class Scanner:
+        @staticmethod
+        async def find_device_by_filter(*_args, **_kwargs):
+            return types.SimpleNamespace(name="Chessnut Air")
+
+    async def tick(self, _write) -> None:
+        seen.append(self.board_link)
+        self.stopped.set()  # the link « drops » after one tick
+
+    fake_bleak = types.ModuleType("bleak")
+    fake_bleak.BleakClient = Client  # type: ignore[attr-defined]
+    fake_bleak.BleakScanner = Scanner  # type: ignore[attr-defined]
+    fake_exc = types.ModuleType("bleak.exc")
+    fake_exc.BleakError = type("BleakError", (Exception,), {})  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "bleak", fake_bleak)
+    monkeypatch.setitem(sys.modules, "bleak.exc", fake_exc)
+    monkeypatch.setattr(Bridge, "tick", tick)
+    bridge_module.asyncio.run(bridge.run_board())
+    assert seen == ["connected"]
+    assert bridge.board_link == "searching"
+
+
+# ---- closing the window, or failing to open it ----------------------------
+
+
+@pytest.fixture
+def window_app(monkeypatch):
+    """``app.main`` with a fake pywebview, a bridge thread that waits, a recorded page."""
+    monkeypatch.setenv("PALAMEDE_PLAYER_TOKEN", TOKEN)
+    pages: list[PageServer] = []
+
+    class RecordedPage(PageServer):
+        closed = False
+
+        def __init__(self, *args) -> None:
+            super().__init__(*args)
+            pages.append(self)
+
+        def server_close(self) -> None:
+            super().server_close()
+            self.closed = True
+
+    bridges: list[Bridge] = []
+
+    def waiting_bridge(bridge: Bridge) -> None:
+        bridges.append(bridge)
+        bridge.stopped.wait(5)
+
+    monkeypatch.setattr(app_module, "PageServer", RecordedPage)
+    monkeypatch.setattr(app_module, "run_bridge", waiting_bridge)
+    webview = types.ModuleType("webview")
+    webview.create_window = lambda *_a, **_k: None  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "webview", webview)
+    argv = ["--viewer", "https://viewer.test", "--game", "g1", "--color", "white"]
+    return webview, argv, pages, bridges
+
+
+def test_closing_the_window_stops_the_bridge(window_app) -> None:
+    webview, argv, pages, bridges = window_app
+    webview.start = lambda: None
+    app_module.main(argv)
+    assert bridges[0].stopped.is_set()
+    assert pages[0].closed
+
+
+def test_a_window_that_cannot_open_stops_the_bridge(window_app) -> None:
+    """No graphical session : pywebview raises, the LEDs must still go off."""
+    webview, argv, pages, bridges = window_app
+
+    def no_screen() -> None:
+        raise AttributeError("'NoneType' object has no attribute 'frame'")
+
+    webview.start = no_screen
+    with pytest.raises(AttributeError):
+        app_module.main(argv)
+    assert bridges[0].stopped.is_set()
+    assert pages[0].closed

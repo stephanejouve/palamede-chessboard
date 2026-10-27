@@ -51,8 +51,13 @@ def main(argv: list[str] | None = None) -> None:
     page.start()
     worker = threading.Thread(target=run_bridge, args=(bridge,), daemon=True)
     worker.start()
-    webview.create_window(f"Échiquier — {bridge.game_id}", page.url, width=900, height=640)
-    webview.start()
-    bridge.stopped.set()
-    worker.join(timeout=STOP_SECONDS)
-    page.shutdown()
+    try:
+        webview.create_window(f"Échiquier — {bridge.game_id}", page.url, width=900, height=640)
+        webview.start()
+    finally:
+        # Also when the window cannot open (no graphical session, review
+        # Junior #87) : the bridge switches the LEDs off before the exit.
+        bridge.stopped.set()
+        worker.join(timeout=STOP_SECONDS)
+        page.shutdown()
+        page.server_close()

@@ -44,3 +44,8 @@ a page served by the bridge on `127.0.0.1` only ; the player token stays
 in the bridge and never reaches the page. Closing the window stops the
 bridge, LEDs off. The window only shows the game : moves are still played
 on the board.
+
+On macOS, the first launch asks to allow Bluetooth for the terminal (or the
+app) that starts the bridge : without it, the Bluetooth light stays orange.
+The window needs a graphical session ; when it cannot open, the bridge
+stops, LEDs off.
