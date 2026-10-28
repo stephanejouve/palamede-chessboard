@@ -432,11 +432,14 @@ class Bridge:
                 if message != last_error:
                     log.info("%s", message)
                 last_error = message
+                self.board_link = "searching"  # the error is over (Junior #112)
             except errors() as exc:
                 # Once per cause : Bluetooth off repeats every few seconds (Mac smoke, 28/10).
                 message = f"board link lost ({exc})"
                 if message != last_error:
                     log.warning("%s", message)
+                # The same error twice in a row is no passing loss : red light.
+                self.board_link = "failing" if message == last_error else "searching"
                 last_error = message
             if not self.stopped.is_set():
                 await asyncio.sleep(RETRY_SECONDS)

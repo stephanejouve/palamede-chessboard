@@ -460,3 +460,46 @@ def test_auto_through_the_bridge_warns_once(monkeypatch, caplog) -> None:
         asyncio.run(asyncio.wait_for(go(), 5))
     assert tries[:4] == ["usb", "ble", "ble", "ble"]
     assert len([r for r in caplog.records if "not usable" in r.getMessage()]) == 1
+
+
+def test_the_same_error_twice_turns_the_light_red(monkeypatch) -> None:
+    """Bluetooth off : orange on the first failure, red once it repeats."""
+    lights: list[str] = []
+
+    class Off(Exception):
+        pass
+
+    def connect(on_frame):
+        lights.append(bridge.board_link)
+        if len(lights) == 3:
+            bridge.stopped.set()
+        raise Off("Bluetooth device is turned off")
+
+    monkeypatch.setitem(transport.TRANSPORTS, "ble", (connect, lambda: (Off,)))
+    monkeypatch.setattr("palamede_chessnut.bridge.RETRY_SECONDS", 0)
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "x", board_transport="ble")
+    asyncio.run(asyncio.wait_for(bridge.run_board(), 5))
+    assert lights == ["searching", "searching", "failing"]
+    assert bridge.board_link == "failing"
+
+
+def test_red_goes_back_to_orange_once_the_error_is_over(monkeypatch) -> None:
+    """Review Junior #112 : Bluetooth back on, board asleep : looking again, orange."""
+    lights: list[str] = []
+
+    class Off(Exception):
+        pass
+
+    def connect(on_frame):
+        lights.append(bridge.board_link)
+        if len(lights) == 4:
+            bridge.stopped.set()
+        if len(lights) <= 2:
+            raise Off("Bluetooth device is turned off")
+        raise transport.BoardNotFound("no Chessnut board in range")
+
+    monkeypatch.setitem(transport.TRANSPORTS, "ble", (connect, lambda: (Off,)))
+    monkeypatch.setattr("palamede_chessnut.bridge.RETRY_SECONDS", 0)
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "x", board_transport="ble")
+    asyncio.run(asyncio.wait_for(bridge.run_board(), 5))
+    assert lights == ["searching", "searching", "failing", "searching"]
