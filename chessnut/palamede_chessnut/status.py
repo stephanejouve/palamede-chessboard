@@ -70,6 +70,7 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
         "differing": differing,
         # Mouse play (#92) : what the page may play now, empty with a board.
         "mouse": not bridge.with_board,
+        "transport": bridge.board_transport,
         "dests": dests,
         "promotions": promotions,
         "lights": {

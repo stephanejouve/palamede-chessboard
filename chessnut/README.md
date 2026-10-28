@@ -1,7 +1,7 @@
 # palamede-chessnut
 
 Play a game of the palamède viewer on a Chessnut Air+ electronic board,
-over Bluetooth LE, without the vendor app.
+over Bluetooth LE or its USB cable, without the vendor app.
 
 ```
 uv run --with 'palamede-chessnut @ git+https://github.com/stephanejouve/palamede-chessboard#subdirectory=chessnut' \
@@ -27,6 +27,25 @@ On the board :
 - the opponent's move lights up its squares : play it for them ;
 - to resign, lift your king off the board for 5 seconds (the LEDs blink
   meanwhile ; put it back to cancel).
+
+## Over the USB cable instead of Bluetooth (#82)
+
+Add `--transport usb` (to both commands) and plug the board's cable : no
+pairing, no sleeping link. One transport at a time : while a Bluetooth
+central is connected, the board sends its pieces over Bluetooth only and
+the cable just charges, so close any Bluetooth bridge or app first.
+
+- Linux : nothing to install, but your session needs access to the
+  board's `/dev/hidrawN`. Once, as root, write the rule
+  `SUBSYSTEM=="hidraw", ATTRS{idVendor}=="2d80", ATTRS{idProduct}=="8202", MODE="0660", TAG+="uaccess"`
+  into `/etc/udev/rules.d/70-chessnut.rules`, run
+  `udevadm control --reload`, then replug the board.
+- macOS, Windows : install the `usb` extra
+  (`palamede-chessnut[usb]`, or `palamede-chessnut[app,usb]` for the
+  window), which brings hidapi. On macOS the board also declares itself a
+  keyboard : the system may ask to allow « Input Monitoring » for the
+  terminal that starts the bridge (System Settings, Privacy & Security).
+  It does not type anything, checked on 26/10.
 
 ## The « Échiquier » window (#78)
 

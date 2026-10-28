@@ -64,6 +64,12 @@ def bridge_from_args(argv: list[str] | None, description: str, *, app: bool = Fa
     parser.add_argument("--game", required=True, help="game_id")
     parser.add_argument("--color", required=True, choices=["white", "black"])
     parser.add_argument("--token-file", type=Path, help="file holding the player token")
+    parser.add_argument(
+        "--transport",
+        choices=["ble", "usb"],
+        default="ble",
+        help="reach the board over Bluetooth LE (default) or its USB cable (#82)",
+    )
     if app:
         parser.add_argument(
             "--no-board", action="store_true", help="no board : play with the mouse in the window"
@@ -73,7 +79,12 @@ def bridge_from_args(argv: list[str] | None, description: str, *, app: bool = Fa
     player = chess.WHITE if args.color == "white" else chess.BLACK
     with_board = not getattr(args, "no_board", False)
     return Bridge(
-        args.viewer, args.game, player, read_token(args.token_file), with_board=with_board
+        args.viewer,
+        args.game,
+        player,
+        read_token(args.token_file),
+        with_board=with_board,
+        board_transport=args.transport,
     )
 
 

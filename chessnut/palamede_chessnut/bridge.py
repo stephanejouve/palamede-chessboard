@@ -35,20 +35,12 @@ from urllib.parse import quote
 
 import chess
 
-from palamede_chessnut import leds, token_light, viewer
+from palamede_chessnut import leds, token_light, transport, viewer
 from palamede_chessnut.moves import differing_squares, find_move
-from palamede_chessnut.protocol import (
-    BOARD_UUID,
-    COMMAND_UUID,
-    ENABLE_REPORTING,
-    UnknownPieceCode,
-    decode_board,
-    led_frame,
-)
+from palamede_chessnut.protocol import UnknownPieceCode, decode_board, led_frame
 
 log = logging.getLogger(__name__)
 
-DEVICE_PREFIX = "Chessnut"
 SETTLE_SECONDS = 0.6
 GUIDE_SECONDS = 2.0
 #: Long enough for a king held in hand while thinking (arbitration of Stéphane, #75).
@@ -113,6 +105,7 @@ class Bridge:
         token: str,
         *,
         with_board: bool = True,
+        board_transport: str = "ble",
     ) -> None:
         self.viewer = viewer_url.rstrip("/")
         self.game_id = game_id
@@ -124,6 +117,8 @@ class Bridge:
         self.account: str | None = None
         #: ``False`` : no board, the app's window is played with the mouse (#92).
         self.with_board = with_board
+        #: ``"ble"`` or ``"usb"`` : how the board is reached (#82), see :mod:`.transport`.
+        self.board_transport = board_transport
         self.game: chess.Board | None = None
         self.live = False
         self.synced = False
@@ -412,37 +407,32 @@ class Bridge:
         return False
 
     async def run_board(self) -> None:
-        """Connect, stream, reconnect : the board may sleep or lose the link."""
-        from bleak import BleakClient, BleakScanner
-        from bleak.exc import BleakError
-
+        """Connect, stream, reconnect : the board may sleep, lose the link or be unplugged."""
+        connect, errors = transport.TRANSPORTS[self.board_transport]
+        last_error = None
         while not self.stopped.is_set():
             try:
-                device = await BleakScanner.find_device_by_filter(
-                    lambda d, _ad: (d.name or "").startswith(DEVICE_PREFIX), timeout=20
-                )
-                if device is None:
-                    log.info("no %s board in range, still looking", DEVICE_PREFIX)
-                    continue
-                async with BleakClient(device, timeout=20) as client:
-                    await client.start_notify(BOARD_UUID, self.on_frame)
-                    await client.write_gatt_char(COMMAND_UUID, ENABLE_REPORTING)
-                    log.info("connected to %s", device.name)
-                    self.leds = None
-                    self.board_link = "connected"
-
-                    async def write(command: bytes) -> None:
-                        await client.write_gatt_char(COMMAND_UUID, command)
-
+                async with connect(self.on_frame) as link:
+                    log.info("connected to %s", link.name)
+                    last_error, self.leds, self.board_link = None, None, "connected"
                     try:
-                        while client.is_connected and not self.stopped.is_set():
-                            await self.tick(write)
+                        while link.connected() and not self.stopped.is_set():
+                            await self.tick(link.write)
                             await asyncio.sleep(TICK_SECONDS)
                     finally:
                         self.board_link = "searching"
-                        await _switch_off(write)
-            except (BleakError, TimeoutError, OSError) as exc:
-                log.warning("board link lost (%s)", exc)
+                        await _switch_off(link.write)
+            except transport.BoardNotFound as exc:
+                message = f"{exc}, still looking"
+                if message != last_error:
+                    log.info("%s", message)
+                last_error = message
+            except errors() as exc:
+                # Once per cause : Bluetooth off repeats every few seconds (Mac smoke, 28/10).
+                message = f"board link lost ({exc})"
+                if message != last_error:
+                    log.warning("%s", message)
+                last_error = message
             if not self.stopped.is_set():
                 await asyncio.sleep(RETRY_SECONDS)
 
