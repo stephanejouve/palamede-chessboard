@@ -2,7 +2,8 @@
 
     palamede-chessnut --viewer <viewer URL> --game <game_id> --color white
 
-The player token (the one behind the viewer's 🔑 button) is read from
+``--viewer``, ``--token-file`` and ``--transport`` may come from the
+per-user file of :mod:`palamede_chessnut.config` instead (#90). The player token (the one behind the viewer's 🔑 button) is read from
 ``--token-file`` (readable by its owner only, under the user profile on
 Windows) or ``PALAMEDE_PLAYER_TOKEN`` ;
 it is never logged. The bridge exits by itself once the game is over and
@@ -21,6 +22,7 @@ from urllib.parse import urlsplit
 
 import chess
 
+from palamede_chessnut import config
 from palamede_chessnut.bridge import Bridge
 
 
@@ -59,15 +61,33 @@ def bridge_from_args(argv: list[str] | None, description: str, *, app: bool = Fa
     ``app`` adds ``--no-board`` : the window is then played with the mouse
     (#92). The CLI has no window, so it always needs a board.
     """
+    # --config first : the file gives the defaults of the other options (#90).
+    first = argparse.ArgumentParser(add_help=False)
+    first.add_argument("--config", type=Path)
+    known, _rest = first.parse_known_args(argv)
+    settings = config.load(known.config or config.config_path())
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("--viewer", required=True, help="viewer base URL")
+    parser.add_argument(
+        "--config", type=Path, help=f"settings file (default {config.config_path()})"
+    )
+    parser.add_argument(
+        "--viewer",
+        required="viewer" not in settings,
+        default=settings.get("viewer"),
+        help="viewer base URL",
+    )
     parser.add_argument("--game", required=True, help="game_id")
     parser.add_argument("--color", required=True, choices=["white", "black"])
-    parser.add_argument("--token-file", type=Path, help="file holding the player token")
+    parser.add_argument(
+        "--token-file",
+        type=Path,
+        default=settings.get("token_file"),
+        help="file holding the player token",
+    )
     parser.add_argument(
         "--transport",
-        choices=["auto", "ble", "usb"],
-        default="auto",
+        choices=list(config.TRANSPORTS),
+        default=settings.get("transport", "auto"),
         help="auto (default) : the USB cable when plugged in, Bluetooth LE otherwise (#110)",
     )
     if app:
