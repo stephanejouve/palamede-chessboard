@@ -432,6 +432,7 @@ class Bridge:
                 if message != last_error:
                     log.info("%s", message)
                 last_error = message
+                self.board_link = "searching"  # the error is over (Junior #112)
             except errors() as exc:
                 # Once per cause : Bluetooth off repeats every few seconds (Mac smoke, 28/10).
                 message = f"board link lost ({exc})"
