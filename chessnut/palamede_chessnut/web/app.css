@@ -96,6 +96,7 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
   -webkit-user-select: text;
   user-select: text;
 }
+#fen::selection, #log::selection { background: var(--blue); color: #fff; }
 button {
   font: inherit;
   padding: 4px 10px;

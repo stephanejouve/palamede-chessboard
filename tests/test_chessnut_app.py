@@ -515,6 +515,16 @@ def window_app(monkeypatch):
     return webview, argv, pages, bridges
 
 
+def test_the_window_allows_text_selection(window_app) -> None:
+    """The FEN and the journal can be selected : pywebview disables it by default."""
+    webview, argv, _pages, _bridges = window_app
+    seen: dict = {}
+    webview.create_window = lambda *_a, **kw: seen.update(kw)  # type: ignore[attr-defined]
+    webview.start = lambda: None
+    app_module.main(argv)
+    assert seen["text_select"] is True
+
+
 def test_closing_the_window_stops_the_bridge(window_app) -> None:
     webview, argv, pages, bridges = window_app
     webview.start = lambda: None
