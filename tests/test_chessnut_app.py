@@ -159,8 +159,17 @@ def test_board_light_is_grey_once_the_bridge_stops() -> None:
     bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
     bridge.board_link = "searching"
     assert snapshot(bridge)["lights"]["bluetooth"] == "searching"
+    bridge.finished = True
     bridge.stopped.set()
     assert snapshot(bridge)["lights"]["bluetooth"] == "closed"
+
+
+def test_board_light_is_red_when_the_bridge_stops_on_an_error() -> None:
+    """Review Admin #113 : a stream error or a redirect also stops the bridge : red."""
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
+    bridge.stopped.set()
+    assert not bridge.finished
+    assert snapshot(bridge)["lights"]["bluetooth"] == "failing"
 
 
 @pytest.mark.parametrize(
