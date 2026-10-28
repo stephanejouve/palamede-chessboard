@@ -201,6 +201,31 @@ def test_a_directory_others_may_change_is_refused(tmp_path) -> None:
     assert str(folder) in str(refused.value)
 
 
+def test_a_file_of_another_account_is_refused(monkeypatch, tmp_path) -> None:
+    """644 is not enough : its owner could still change it (review Junior #124, seen on hera)."""
+    path = write(tmp_path / "config.toml", 'viewer = "https://v.test"\n')
+    path.chmod(0o644)
+    monkeypatch.setattr(config.os, "getuid", lambda: path.stat().st_uid + 1)
+    with pytest.raises(SystemExit) as refused:
+        config.load(path)
+    assert "owned by another account" in str(refused.value)
+
+
+def test_a_link_from_a_directory_others_may_change_is_refused(tmp_path) -> None:
+    """The link itself can be replaced by whoever writes its directory (review Admin #124)."""
+    target = write(tmp_path / "config.toml", 'viewer = "https://v.test"\n')
+    shared = tmp_path / "shared"
+    shared.mkdir()
+    (shared / "config.toml").symlink_to(target)
+    shared.chmod(0o777)
+    try:
+        with pytest.raises(SystemExit) as refused:
+            config.load(shared / "config.toml")
+    finally:
+        shared.chmod(0o700)
+    assert str(shared) in str(refused.value)
+
+
 def test_a_readable_file_is_fine(tmp_path) -> None:
     """Nothing secret in it : others may read it."""
     path = write(tmp_path / "config.toml", 'viewer = "https://v.test"\n')

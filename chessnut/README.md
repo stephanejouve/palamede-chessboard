@@ -44,7 +44,7 @@ logged and ignored.
 
 The file chooses where the token is sent, so another account must not be
 able to change it : on macOS and Linux, neither the file nor its directory
-may be writable by group or others (`chmod go-w`) ; on Windows, it must be
+may be writable by group or others (`chmod go-w`), and both must be yours (or root's) ; on Windows, it must be
 under your user profile. A file named by `--config` or `PALAMEDE_CONFIG`
 must exist. `PALAMEDE_PLAYER_TOKEN`, when set, wins over the file's
 `token_file`.

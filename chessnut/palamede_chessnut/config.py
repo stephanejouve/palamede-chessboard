@@ -52,17 +52,25 @@ def named_by_environment() -> bool:
 def check_rights(path: Path) -> None:
     """Refuse a file that another account could change : it would send the token elsewhere.
 
-    POSIX : neither the file nor its directory writable by group or others.
-    Windows reports 0o666 whatever the NTFS ACL says : the file must be under
-    the user profile, as the token file (``cli.read_token``).
+    POSIX : the file and its directory owned by the user (or root), and
+    writable neither by group nor by others (review Junior #124). Through a
+    link, the link's directory too (review Admin #124). Windows reports 0o666
+    whatever the NTFS ACL says : the file must be under the user profile, as
+    the token file (``cli.read_token``).
     """
     real = path.resolve()
     if sys.platform == "win32":
         if not real.is_relative_to(Path.home().resolve()):
             raise SystemExit(f"{path} : outside your user profile, keep it under {Path.home()}")
         return
-    for place in (real, real.parent):
-        if place.stat().st_mode & 0o022:
+    owners = {os.getuid(), 0}
+    for place in dict.fromkeys((real, real.parent, path.absolute().parent)):
+        status = place.stat()
+        if status.st_uid not in owners:
+            raise SystemExit(
+                f"{place} : owned by another account, who could send your token elsewhere"
+            )
+        if status.st_mode & 0o022:
             raise SystemExit(
                 f"{place} : writable by other accounts, who could send your token "
                 "elsewhere ; chmod go-w it first"
