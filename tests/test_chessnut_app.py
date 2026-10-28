@@ -56,7 +56,13 @@ def test_snapshot_before_anything_is_known() -> None:
     assert state["fen"] is None and state["board_fen"] is None
     assert state["color"] == "black"
     assert state["differing"] == [] and state["history"] == []
-    assert state["lights"] == {"bluetooth": "searching", "server": "connecting", "sync": "waiting"}
+    assert state["lights"] == {
+        "bluetooth": "searching",
+        "server": "connecting",
+        "sync": "waiting",
+        "token": "checking",
+    }
+    assert state["account"] is None
 
 
 def test_snapshot_shows_the_squares_to_fix_and_the_moves() -> None:

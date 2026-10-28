@@ -7,6 +7,7 @@ const POLL_MS = 500;
 const NONCE = document.querySelector('meta[name="palamede-nonce"]').content;
 const LIGHT_CLASS = {
   on: 'on', searching: 'warn', connecting: 'warn', reconnecting: 'warn', fixing: 'warn',
+  checking: 'warn', unchecked: 'warn', refused: 'bad',
 };
 
 // Not viewOnly : chessground only binds the mouse at creation. Nobody may
@@ -117,6 +118,11 @@ function render(state) {
   setLight('bluetooth', state.lights.bluetooth);
   setLight('server', state.lights.server);
   setLight('sync', state.lights.sync);
+  setLight('token', state.lights.token);
+  // The account name only : the page never gets the token (#78, step A).
+  el('light-token').textContent = state.account ? `Jeton : ${state.account}` : 'Jeton';
+  el('token-msg').hidden = !state.token_message;
+  el('token-msg').textContent = state.token_message || '';
   el('status').textContent = statusText(state);
   el('relay').hidden = !state.to_relay;
   el('relay').textContent = state.to_relay ? `Coup à reproduire sur l'échiquier : ${state.to_relay}` : '';

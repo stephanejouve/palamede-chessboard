@@ -10,6 +10,8 @@ import chess
 
 from palamede_chessnut.mouse import legal_targets
 from palamede_chessnut.moves import differing_squares
+from palamede_chessnut.token_light import REFUSING
+from palamede_chessnut.token_light import message as token_message
 
 if TYPE_CHECKING:
     from palamede_chessnut.bridge import Bridge
@@ -74,7 +76,11 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
             "bluetooth": _bluetooth_light(bridge),
             "server": "on" if bridge.stream_link == "connected" else bridge.stream_link,
             "sync": sync_light(bridge),
+            "token": _token_light(bridge),
         },
+        # The account name, never the token nor its fingerprint (#78, step A).
+        "account": bridge.account,
+        "token_message": token_message(bridge),
         "log": list(recent.lines) if recent is not None else [],
     }
 
@@ -83,3 +89,8 @@ def _bluetooth_light(bridge: Bridge) -> str:
     if not bridge.with_board:
         return "none"
     return "on" if bridge.board_link == "connected" else "searching"
+
+
+def _token_light(bridge: Bridge) -> str:
+    """``"on"``, ``"checking"``, ``"unchecked"`` (orange) or ``"refused"`` (red)."""
+    return "refused" if bridge.token_light in REFUSING else bridge.token_light

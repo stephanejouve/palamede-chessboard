@@ -35,7 +35,7 @@ from urllib.parse import quote
 
 import chess
 
-from palamede_chessnut import leds, viewer
+from palamede_chessnut import leds, token_light, viewer
 from palamede_chessnut.moves import differing_squares, find_move
 from palamede_chessnut.protocol import (
     BOARD_UUID,
@@ -118,6 +118,10 @@ class Bridge:
         self.game_id = game_id
         self.player = player
         self._token = token
+        #: The token's light and account (#78, step A) : see :mod:`.token_light`.
+        self.token_print = token_light.fingerprint(token)
+        self.token_light = "checking"
+        self.account: str | None = None
         #: ``False`` : no board, the app's window is played with the mouse (#92).
         self.with_board = with_board
         self.game: chess.Board | None = None
@@ -227,6 +231,8 @@ class Bridge:
         status, text = viewer.post(url, self._token, {"uci": uci})
         if status is not None and 200 <= status < 300:
             return None, False
+        if status == 401:
+            self.token_light = "refused"
         if status is not None and 300 <= status < 400:
             log.error("the viewer redirects %s (HTTP %s) : check --viewer", url, status)
             self.stopped.set()
@@ -235,6 +241,11 @@ class Bridge:
 
     def _post_resign(self) -> tuple[int | None, str]:
         return viewer.post(f"{self.viewer}/api/games/{quote(self.game_id)}/resign", self._token)
+
+    def seat(self) -> tuple[int | None, Any]:
+        return viewer.get_with_token(
+            f"{self.viewer}/api/games/{quote(self.game_id)}/seat", self._token
+        )
 
     def server_position(self) -> dict[str, Any] | None:
         """The viewer's position as a stream snapshot (:func:`viewer.position`)."""
@@ -441,6 +452,7 @@ class Bridge:
         if task is not None:
             cancel_on_sigterm(loop, task)
         threading.Thread(target=self._follow_stream, args=(loop,), daemon=True).start()
+        await asyncio.to_thread(token_light.check, self)
         await (self.run_board() if self.with_board else self.watch_game())
 
     async def watch_game(self) -> None:

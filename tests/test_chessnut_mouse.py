@@ -32,6 +32,8 @@ def stream(board: chess.Board, over: bool = False) -> dict:
 def mouse_bridge(board: chess.Board | None = None, player: chess.Color = chess.WHITE) -> Bridge:
     bridge = Bridge("https://viewer.test", "g1", player, TOKEN, with_board=False)
     bridge.apply_stream(stream(board if board is not None else chess.Board()))
+    # Token checked at launch (#78, step A) : see tests/test_chessnut_token.py.
+    bridge.token_light = "on"
     return bridge
 
 

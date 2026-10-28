@@ -17,12 +17,14 @@
     <li id="light-bluetooth" class="light waiting" title="Liaison Bluetooth avec l'échiquier">Bluetooth</li>
     <li id="light-server" class="light waiting" title="Flux de la partie depuis le serveur">Serveur</li>
     <li id="light-sync" class="light waiting" title="L'échiquier correspond à la partie">Synchronisation</li>
+    <li id="light-token" class="light waiting" title="Le serveur reconnaît le jeton du joueur">Jeton</li>
   </ul>
 </header>
 <main>
   <div id="board"></div>
   <section id="side">
     <p id="status">En attente du pont…</p>
+    <p id="token-msg" role="alert" hidden></p>
     <p id="relay" hidden></p>
     <p id="differing" hidden></p>
     <p id="move-error" role="alert" hidden></p>
