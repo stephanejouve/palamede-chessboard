@@ -65,7 +65,8 @@ def bridge_from_args(argv: list[str] | None, description: str, *, app: bool = Fa
     first = argparse.ArgumentParser(add_help=False)
     first.add_argument("--config", type=Path)
     known, _rest = first.parse_known_args(argv)
-    settings = config.load(known.config or config.config_path())
+    named = known.config is not None or config.named_by_environment()
+    settings = config.load(known.config or config.config_path(), named=named)
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
         "--config", type=Path, help=f"settings file (default {config.config_path()})"
@@ -81,7 +82,10 @@ def bridge_from_args(argv: list[str] | None, description: str, *, app: bool = Fa
     parser.add_argument(
         "--token-file",
         type=Path,
-        default=settings.get("token_file"),
+        # PALAMEDE_PLAYER_TOKEN, set for this launch, wins over the file (review Admin #124).
+        default=None
+        if os.environ.get("PALAMEDE_PLAYER_TOKEN", "").strip()
+        else settings.get("token_file"),
         help="file holding the player token",
     )
     parser.add_argument(

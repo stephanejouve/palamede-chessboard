@@ -42,6 +42,13 @@ token : a `token` key is refused. The viewer URL and the token file are
 checked as when given as options (https, `chmod 600`). An unknown key is
 logged and ignored.
 
+The file chooses where the token is sent, so another account must not be
+able to change it : on macOS and Linux, neither the file nor its directory
+may be writable by group or others (`chmod go-w`) ; on Windows, it must be
+under your user profile. A file named by `--config` or `PALAMEDE_CONFIG`
+must exist. `PALAMEDE_PLAYER_TOKEN`, when set, wins over the file's
+`token_file`.
+
 On the board :
 
 - set the pieces up : the squares still wrong light up ; a short sweep of

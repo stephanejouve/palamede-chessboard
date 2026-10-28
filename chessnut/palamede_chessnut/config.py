@@ -9,7 +9,9 @@ on macOS and Linux, ``%APPDATA%\\palamede\\`` on Windows ; ``--config`` or
     transport = "auto"
 
 It names the token *file*, never the token : a ``token`` key is refused.
-Options given on the command line win over the file.
+Options given on the command line win over the file. The file chooses
+where the token is sent : one that another account could change is
+refused (review Admin #124), see :func:`check_rights`.
 """
 
 from __future__ import annotations
@@ -33,7 +35,7 @@ KEYS = {
 
 
 def config_path() -> Path:
-    """Where the file is looked for when neither ``--config`` nor ``PALAMEDE_CONFIG`` says."""
+    """Where the file is looked for when ``--config`` does not say."""
     named = os.environ.get("PALAMEDE_CONFIG", "").strip()
     if named:
         return Path(named).expanduser()
@@ -43,18 +45,46 @@ def config_path() -> Path:
     return Path(base) / "palamede" / "config.toml"
 
 
-def load(path: Path) -> dict[str, Any]:
+def named_by_environment() -> bool:
+    return bool(os.environ.get("PALAMEDE_CONFIG", "").strip())
+
+
+def check_rights(path: Path) -> None:
+    """Refuse a file that another account could change : it would send the token elsewhere.
+
+    POSIX : neither the file nor its directory writable by group or others.
+    Windows reports 0o666 whatever the NTFS ACL says : the file must be under
+    the user profile, as the token file (``cli.read_token``).
+    """
+    real = path.resolve()
+    if sys.platform == "win32":
+        if not real.is_relative_to(Path.home().resolve()):
+            raise SystemExit(f"{path} : outside your user profile, keep it under {Path.home()}")
+        return
+    for place in (real, real.parent):
+        if place.stat().st_mode & 0o022:
+            raise SystemExit(
+                f"{place} : writable by other accounts, who could send your token "
+                "elsewhere ; chmod go-w it first"
+            )
+
+
+def load(path: Path, *, named: bool = False) -> dict[str, Any]:
     """The file's settings, checked ; ``{}`` when it does not exist.
 
-    ``token_file`` comes back as a :class:`~pathlib.Path`, ``~`` expanded, and
-    relative to the file's own directory when not absolute.
+    ``named`` : given by ``--config`` or ``PALAMEDE_CONFIG``, it must exist
+    (review Admin #124). ``token_file`` comes back as a :class:`~pathlib.Path`,
+    ``~`` expanded, and relative to the file's own directory when not absolute.
     """
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
+        if named:
+            raise SystemExit(f"{path} : no such settings file") from None
         return {}
     except OSError as exc:
         raise SystemExit(f"{path} : unreadable ({exc.strerror or exc})") from None
+    check_rights(path)
     try:
         data = tomllib.loads(text)
     except tomllib.TOMLDecodeError as exc:

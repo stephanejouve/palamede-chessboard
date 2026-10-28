@@ -47,7 +47,7 @@ def test_palamede_config_names_the_file(monkeypatch, tmp_path) -> None:
 
 
 def test_default_place_follows_xdg(monkeypatch, tmp_path) -> None:
-    monkeypatch.delenv("PALAMEDE_CONFIG")
+    monkeypatch.delenv("PALAMEDE_CONFIG", raising=False)
     monkeypatch.setattr(config.sys, "platform", "darwin")
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     assert config.config_path() == tmp_path / "palamede" / "config.toml"
@@ -56,7 +56,7 @@ def test_default_place_follows_xdg(monkeypatch, tmp_path) -> None:
 
 
 def test_default_place_on_windows(monkeypatch, tmp_path) -> None:
-    monkeypatch.delenv("PALAMEDE_CONFIG")
+    monkeypatch.delenv("PALAMEDE_CONFIG", raising=False)
     monkeypatch.setattr(config.sys, "platform", "win32")
     monkeypatch.setenv("APPDATA", str(tmp_path))
     assert config.config_path() == tmp_path / "palamede" / "config.toml"
@@ -172,3 +172,70 @@ def test_the_file_token_file_is_checked_like_the_option(use, token_file) -> None
     with pytest.raises(SystemExit) as refused:
         bridge_from_args(GAME, "t")
     assert "chmod 600" in str(refused.value)
+
+
+# ---- who may change it (review Admin #124) --------------------------------
+
+
+@pytest.mark.parametrize("mode", [0o664, 0o646, 0o666])
+def test_a_file_others_may_change_is_refused(tmp_path, mode: int) -> None:
+    """It chooses where the token goes : another account must not be able to write it."""
+    path = write(tmp_path / "config.toml", 'viewer = "https://v.test"\n')
+    path.chmod(mode)
+    with pytest.raises(SystemExit) as refused:
+        config.load(path)
+    assert "chmod go-w" in str(refused.value)
+
+
+def test_a_directory_others_may_change_is_refused(tmp_path) -> None:
+    """Whoever writes the directory can put another file in its place."""
+    folder = tmp_path / "palamede"
+    folder.mkdir()
+    path = write(folder / "config.toml", 'viewer = "https://v.test"\n')
+    folder.chmod(0o777)
+    try:
+        with pytest.raises(SystemExit) as refused:
+            config.load(path)
+    finally:
+        folder.chmod(0o700)
+    assert str(folder) in str(refused.value)
+
+
+def test_a_readable_file_is_fine(tmp_path) -> None:
+    """Nothing secret in it : others may read it."""
+    path = write(tmp_path / "config.toml", 'viewer = "https://v.test"\n')
+    path.chmod(0o644)
+    assert config.load(path) == {"viewer": "https://v.test"}
+
+
+def test_windows_wants_the_file_under_the_profile(monkeypatch, tmp_path) -> None:
+    path = write(tmp_path / "config.toml", 'viewer = "https://v.test"\n')
+    monkeypatch.setattr(config.sys, "platform", "win32")
+    monkeypatch.setattr(config.Path, "home", classmethod(lambda _cls: tmp_path / "profile"))
+    with pytest.raises(SystemExit) as refused:
+        config.load(path)
+    assert "user profile" in str(refused.value)
+    monkeypatch.setattr(config.Path, "home", classmethod(lambda _cls: tmp_path))
+    assert config.load(path) == {"viewer": "https://v.test"}
+
+
+# ---- a named file, and the token from the environment ---------------------
+
+
+def test_a_named_file_must_exist(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("PALAMEDE_PLAYER_TOKEN", TOKEN)
+    argv = [*GAME, "--viewer", "https://v.test", "--config", str(tmp_path / "absent.toml")]
+    with pytest.raises(SystemExit) as refused:
+        bridge_from_args(argv, "t")
+    assert "no such settings file" in str(refused.value)
+    monkeypatch.setenv("PALAMEDE_CONFIG", str(tmp_path / "absent.toml"))
+    with pytest.raises(SystemExit) as refused:
+        bridge_from_args([*GAME, "--viewer", "https://v.test"], "t")
+    assert "no such settings file" in str(refused.value)
+
+
+def test_the_environment_token_wins_over_the_file(use, monkeypatch, tmp_path) -> None:
+    """Set for this launch, PALAMEDE_PLAYER_TOKEN is not hidden by the file's token_file."""
+    use(f'viewer = "https://v.test"\ntoken_file = "{tmp_path / "absent"}"\n')
+    monkeypatch.setenv("PALAMEDE_PLAYER_TOKEN", TOKEN)
+    assert bridge_from_args(GAME, "t").token_print == fingerprint(TOKEN)
