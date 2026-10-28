@@ -62,5 +62,8 @@ def message(bridge: Bridge) -> str | None:
         played = SIDES["white" if bridge.player else "black"]
         return f"Le compte {bridge.account} ne joue pas les {played} dans cette partie : vérifiez --color."
     if light == "unchecked":
-        return "Jeton non vérifié (serveur injoignable ou ancien) : il le sera au premier coup."
+        return (
+            "Jeton pas encore vérifié : le serveur ne sait pas encore le faire, "
+            "ou ne répond pas. Votre premier coup le vérifiera."
+        )
     return None

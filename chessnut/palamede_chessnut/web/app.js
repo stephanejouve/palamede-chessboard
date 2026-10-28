@@ -123,13 +123,16 @@ function render(state) {
   // The account name only : the page never gets the token (#78, step A).
   el('light-token').textContent = state.account ? `Jeton : ${state.account}` : 'Jeton';
   el('token-msg').hidden = !state.token_message;
+  // Orange while unchecked, red when refused : the colour of the light.
+  el('token-msg').classList.toggle('warn', state.lights.token !== 'refused');
   el('token-msg').textContent = state.token_message || '';
   el('status').textContent = statusText(state);
   el('relay').hidden = !state.to_relay;
-  el('relay').textContent = state.to_relay ? `Coup à reproduire sur l'échiquier : ${state.to_relay}` : '';
+  el('relay').textContent = state.relay_text || '';
   const fixing = state.lights.sync === 'fixing' && state.differing.length > 0;
   el('differing').hidden = !fixing;
-  el('differing').textContent = fixing ? `Cases à corriger : ${state.differing.join(', ')}` : '';
+  el('differing').textContent = fixing
+    ? `Remettez les pièces des cases en jaune : ${state.differing.join(', ')}` : '';
   el('fen').textContent = state.fen || '';
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');
 }

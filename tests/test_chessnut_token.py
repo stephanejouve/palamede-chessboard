@@ -62,7 +62,7 @@ def test_account_name_reaches_the_page_not_the_token() -> None:
         (401, None, "relancez l'app"),
         (403, None, "ne joue pas cette partie"),
         (200, {"player": "stephane", "colors": ["black"]}, "Blancs"),
-        (404, None, "non vérifié"),
+        (404, None, "pas encore vérifié"),
     ],
 )
 def test_the_page_says_what_is_wrong(status, body, words) -> None:

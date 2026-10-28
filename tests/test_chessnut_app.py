@@ -75,6 +75,29 @@ def test_snapshot_shows_the_squares_to_fix_and_the_moves() -> None:
     assert state["lights"]["sync"] == "fixing"
 
 
+@pytest.mark.parametrize(
+    ("before", "relay", "text"),
+    [
+        ("e4", "g8f6 (Nf6)", "Jouez le coup de l'adversaire : cavalier g8 → f6"),
+        ("e4", "e7e5 (e5)", "Jouez le coup de l'adversaire : pion e7 → e5"),
+        ("e4", "Nf6", "Jouez le coup de l'adversaire : Nf6"),
+    ],
+    ids=["piece", "pawn", "san only"],
+)
+def test_the_move_to_relay_is_said_plainly(before: str, relay: str, text: str) -> None:
+    """Review of Stéphane (28/10) : a piece name and squares, not « g8f6 (Nf6) »."""
+    game = chess.Board()
+    game.push_san(before)
+    game.push_san(relay.split(" (")[-1].rstrip(")"))
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
+    bridge.game, bridge.to_relay = game, relay
+    assert snapshot(bridge)["relay_text"] == text
+
+
+def test_no_move_to_relay_no_text() -> None:
+    assert snapshot(Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN))["relay_text"] is None
+
+
 def test_sync_light() -> None:
     bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
     assert sync_light(bridge) == "waiting"
