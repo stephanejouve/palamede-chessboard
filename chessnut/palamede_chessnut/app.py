@@ -56,7 +56,11 @@ def main(argv: list[str] | None = None) -> None:
     worker = threading.Thread(target=run_bridge, args=(bridge,), daemon=True)
     worker.start()
     try:
-        webview.create_window(f"Échiquier — {bridge.game_id}", page.url, width=900, height=640)
+        # text_select : pywebview disables selection by default, and the FEN or the
+        # journal could not be selected (review of Stéphane, 28/10).
+        webview.create_window(
+            f"Échiquier — {bridge.game_id}", page.url, width=900, height=640, text_select=True
+        )
         webview.start()
     finally:
         # Also when the window cannot open (no graphical session, review
