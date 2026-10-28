@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import urllib.error
@@ -48,6 +49,24 @@ def post(url: str, token: str, payload: dict[str, Any] | None = None) -> tuple[i
         return exc.code, exc.read().decode("utf-8", "replace")[:200]
     except OSError as exc:
         return None, str(exc)
+
+
+def get_with_token(url: str, token: str) -> tuple[int | None, Any]:
+    """GET with the player token : ``(status, JSON body or None)``, status ``None`` if unreachable.
+
+    Same unredirected header as :func:`post` ; a 3xx is reported, not followed.
+    """
+    request = urllib.request.Request(url, method="GET")
+    request.add_unredirected_header("Authorization", f"Bearer {token}")
+    try:
+        with _OPENER.open(request, timeout=10) as response:
+            return int(response.status), json.load(response)
+    except urllib.error.HTTPError as exc:
+        return exc.code, None
+    except (OSError, ValueError, http.client.HTTPException):
+        # A malformed answer (BadStatusLine, IncompleteRead) is no answer :
+        # the light stays orange and the bridge starts (review Junior #106).
+        return None, None
 
 
 def get_json(url: str) -> Any:

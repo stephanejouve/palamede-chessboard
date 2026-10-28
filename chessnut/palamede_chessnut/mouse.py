@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 
 import chess
 
+from palamede_chessnut.token_light import REFUSING
+
 if TYPE_CHECKING:
     from palamede_chessnut.bridge import Bridge
 
@@ -26,6 +28,8 @@ def playable(bridge: Bridge) -> chess.Board | None:
     """The position the page may play in now, or ``None``."""
     game = bridge.game
     if bridge.with_board or game is None or not bridge.live or bridge.pending is not None:
+        return None
+    if bridge.token_light in REFUSING or bridge.token_light == "checking":
         return None
     return game if game.turn == bridge.player else None
 
@@ -66,6 +70,8 @@ def _play(bridge: Bridge, uci: str) -> tuple[int, str]:
         return 409, "pas de partie en cours"
     if bridge.pending is not None:
         return 409, "coup précédent en attente du serveur"
+    if bridge.token_light in REFUSING or bridge.token_light == "checking":
+        return 409, "jeton non valide pour cette partie : voir le voyant Jeton"
     if bridge.undelivered is not None:
         stale = _catch_up(bridge, game)
         if stale is not None:

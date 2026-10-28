@@ -53,6 +53,14 @@ the token, which still never reaches the page. That request must come from
 the page itself : its `Origin`, and a nonce drawn at each launch and sent
 in the `X-Palamede-Nonce` header (#92).
 
+At launch, the bridge asks the viewer whose token it holds
+(`GET /api/games/<game>/seat`) : the « Jeton » light turns green with the
+account name, or red with the reason (token refused, account not in the
+game, wrong `--color`), and mouse moves wait for a green light. An older
+viewer without that route leaves the light orange : the first move tells.
+The log gets the token's length and a short SHA-256 fingerprint, never the
+token ; the page gets neither.
+
 The page embeds chessground 9.2.1 (lichess), under GPL-3.0-or-later : its
 licence, provenance and TypeScript source ship with it, in
 `palamede_chessnut/vendor/chessground/`. The rest of the bridge is MIT.

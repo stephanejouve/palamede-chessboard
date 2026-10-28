@@ -7,6 +7,7 @@
   --on: #2e9d4a;
   --warn: #d98a1c;
   --off: #a39a90;
+  --bad: #c8342c;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -39,6 +40,7 @@ h1 { font-size: 18px; margin: 0; }
 }
 .light.on::before { background: var(--on); }
 .light.warn::before { background: var(--warn); }
+.light.bad::before { background: var(--bad); }
 main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 /* Square by padding, not aspect-ratio : with aspect-ratio, the app's window on macOS
    Big Sur (Safari 16.6.1 installed) drew a board of zero height, cause not found
@@ -56,6 +58,7 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 #side p { margin: 0 0 8px; }
 #relay { font-weight: 600; }
 #differing, #move-error { color: var(--warn); }
+#token-msg { color: var(--bad); font-weight: 600; }
 #promotion-row { display: block; margin-bottom: 8px; }
 #promotion-row[hidden], .light[hidden] { display: none; }
 #moves {
