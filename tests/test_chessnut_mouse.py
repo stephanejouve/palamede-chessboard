@@ -286,7 +286,9 @@ def test_watch_game_stops_at_the_end() -> None:
     bridge.apply_stream(
         {**stream(chess.Board("7k/5QQ1/8/8/8/8/8/K7 b - - 0 1")), "is_game_over": True}
     )
-    bridge_module.asyncio.run(bridge.watch_game())
+    # Fails instead of hanging the suite if it never stops (review Junior #97).
+    asyncio = bridge_module.asyncio
+    asyncio.run(asyncio.wait_for(bridge.watch_game(), timeout=2))
     assert bridge.finished and bridge.stopped.is_set()
 
 
@@ -318,12 +320,13 @@ def test_no_board_is_an_app_option(monkeypatch) -> None:
 # ---- a lost answer (review Admin #97) -------------------------------------
 
 
-def lost_then(bridge: Bridge, posts: Posts, server: tuple[str, bool] | None) -> None:
+def lost_then(bridge: Bridge, posts: Posts, server: chess.Board | None) -> None:
     """``e2e4`` reaches the viewer but its answer is lost ; then the viewer says ``server``."""
     posts.answer[0] = (None, "timed out")
     assert mouse.play_from_page(bridge, "e2e4")[0] == 502
     posts.answer[0] = (200, "")
-    bridge.server_position = lambda: server  # type: ignore[method-assign]
+    snapshot = None if server is None else stream(server)
+    bridge.server_position = lambda: snapshot  # type: ignore[method-assign]
 
 
 def test_a_move_that_had_landed_is_not_followed_blind(posts) -> None:
@@ -332,18 +335,19 @@ def test_a_move_that_had_landed_is_not_followed_blind(posts) -> None:
     after = chess.Board()
     for san in ("e4", "e5"):
         after.push_san(san)
-    lost_then(bridge, posts, (after.fen(), False))
+    lost_then(bridge, posts, after)
     status, message = mouse.play_from_page(bridge, "d2d4")
     assert status == 409 and "bien arrivé" in message
     assert [p[2]["uci"] for p in posts] == ["e2e4"]  # d2d4 never posted
     assert bridge.game is not None and bridge.game.board_fen() == after.board_fen()
     assert bridge.undelivered is None
+    assert bridge.history == ["e4", "e5"]  # the move list follows (review Admin #97)
     assert mouse.play_from_page(bridge, "d2d4") == (200, "ok")  # now seen, now played
 
 
 def test_a_move_that_had_not_landed_is_replaced(posts) -> None:
     bridge = mouse_bridge()
-    lost_then(bridge, posts, (chess.STARTING_FEN, False))
+    lost_then(bridge, posts, chess.Board())
     assert mouse.play_from_page(bridge, "d2d4") == (200, "ok")
     assert [p[2]["uci"] for p in posts] == ["e2e4", "d2d4"]
     assert bridge.undelivered is None
@@ -361,3 +365,35 @@ def test_page_accepts_the_localhost_origin(page, posts) -> None:
     headers = {**good_headers(page), "Origin": f"http://localhost:{page.port}"}
     headers["Host"] = f"localhost:{page.port}"
     assert request(page, "POST", "/move", MOVE, **headers)[0] == 200
+
+
+def test_the_token_is_in_no_answer_of_the_page(page, posts) -> None:
+    """Every answer of POST /move, whatever its status (review Junior #97)."""
+    answers = []
+    for uci in ("e2e5", "e7e5", "e2e4", "d2d4"):  # 400, 400, 200, 409 (pending)
+        body = json.dumps({"uci": uci}).encode()
+        answers.append(request(page, "POST", "/move", body, **good_headers(page)))
+    page.bridge.pending = None
+    posts.answer[0] = (None, "down")
+    answers.append(request(page, "POST", "/move", MOVE, **good_headers(page)))  # 502
+    answers.append(request(page, "POST", "/move", MOVE, **{"X-Palamede-Nonce": "x"}))  # 403
+    assert {status for status, _ in answers} == {200, 400, 403, 409, 502}
+    for _status, body in answers:
+        assert TOKEN.encode() not in body
+        assert b"Bearer" not in body
+
+
+def test_server_position_keeps_the_moves(monkeypatch) -> None:
+    board = chess.Board()
+    positions = [{"fen": board.fen(), "san": None}]
+    for san in ("e4", "c5"):
+        board.push_san(san)
+        positions.append({"fen": board.fen(), "san": san})
+    monkeypatch.setattr(viewer, "get_json", lambda _url: {"positions": positions, "result": "*"})
+    snap = mouse_bridge().server_position()
+    assert snap is not None
+    assert (snap["fen"], snap["san_history"], snap["is_game_over"]) == (
+        board.fen(),
+        ["e4", "c5"],
+        False,
+    )

@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import urllib.error
 import urllib.request
 from typing import Any
+from urllib.parse import quote
+
+import chess
+
+log = logging.getLogger(__name__)
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -48,3 +54,21 @@ def get_json(url: str) -> Any:
     """GET a JSON document (no token) ; raises ``OSError`` / ``ValueError``."""
     with urllib.request.urlopen(url, timeout=10) as response:
         return json.load(response)
+
+
+def position(viewer_url: str, game_id: str) -> dict[str, Any] | None:
+    """The game's position on the viewer, shaped as a stream snapshot ; ``None`` if unreadable.
+
+    With its moves (``san_history``), so that catching up with it keeps the
+    move list (review Admin #97).
+    """
+    try:
+        data = get_json(f"{viewer_url}/api/positions?game_id={quote(game_id)}")
+        positions = data["positions"]
+        fen = str(positions[-1]["fen"])
+        over = data.get("result", "*") != "*" or chess.Board(fen).is_game_over()
+        history = [str(p["san"]) for p in positions[1:] if p.get("san")]
+    except (OSError, ValueError, KeyError, IndexError, TypeError) as exc:
+        log.warning("position of %s unreadable (%s)", game_id, exc)
+        return None
+    return {"fen": fen, "ply": "?", "turn": "?", "is_game_over": over, "san_history": history}

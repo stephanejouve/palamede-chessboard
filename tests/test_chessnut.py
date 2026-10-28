@@ -64,6 +64,11 @@ def after(*sans: str, fen: str = chess.STARTING_FEN) -> chess.Board:
     return board
 
 
+def snapshot_of(fen: str, over: bool = False) -> dict:
+    """What ``Bridge.server_position`` returns for ``fen``."""
+    return {"fen": fen, "ply": "?", "turn": "?", "is_game_over": over, "san_history": []}
+
+
 def placement(board: chess.Board) -> chess.BaseBoard:
     return chess.BaseBoard(board.board_fen())
 
@@ -283,7 +288,7 @@ async def test_undelivered_move_is_retried_not_refused() -> None:
         return "[Errno 65] No route to host", False
 
     bridge.post_move = unreachable  # type: ignore[method-assign]
-    bridge.server_position = lambda: (chess.STARTING_FEN, False)  # type: ignore[method-assign]
+    bridge.server_position = lambda: snapshot_of(chess.STARTING_FEN)  # type: ignore[method-assign]
     written: list[bytes] = []
 
     async def write(command: bytes) -> None:
@@ -514,7 +519,7 @@ async def _retry_after_network_error(server_fen: str | None) -> tuple[Bridge, li
 
     bridge.post_move = lost  # type: ignore[method-assign]
     bridge.server_position = lambda: (  # type: ignore[method-assign]
-        None if server_fen is None else (server_fen, False)
+        None if server_fen is None else snapshot_of(server_fen)
     )
 
     async def write(command: bytes) -> None:

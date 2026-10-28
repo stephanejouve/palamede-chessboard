@@ -102,10 +102,11 @@ def _catch_up(bridge: Bridge, game: chess.Board) -> tuple[int, str] | None:
     server = bridge.server_position()
     if server is None:
         return 502, "serveur injoignable : position inconnue, réessayez"
-    fen, over = server
-    if chess.Board(fen).epd() != game.epd():
+    if chess.Board(server["fen"]).epd() != game.epd():
         log.info("move %s had reached the viewer", bridge.undelivered)
-        bridge.apply_stream({"fen": fen, "ply": "?", "turn": "?", "is_game_over": over})
+        # From the HTTP thread, as the board path calls it from the loop's : the
+        # bridge loop only reads this state without a board (review Junior #97).
+        bridge.apply_stream(server)
         return 409, "votre coup précédent était bien arrivé : regardez la position avant de rejouer"
     bridge.undelivered = None
     return None

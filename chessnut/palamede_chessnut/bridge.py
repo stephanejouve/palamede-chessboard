@@ -236,15 +236,9 @@ class Bridge:
     def _post_resign(self) -> tuple[int | None, str]:
         return viewer.post(f"{self.viewer}/api/games/{quote(self.game_id)}/resign", self._token)
 
-    def server_position(self) -> tuple[str, bool] | None:
-        """``(fen, game over)`` according to the viewer, ``None`` if it cannot be read."""
-        try:
-            data = viewer.get_json(f"{self.viewer}/api/positions?game_id={quote(self.game_id)}")
-            fen = str(data["positions"][-1]["fen"])
-            return fen, data.get("result", "*") != "*" or chess.Board(fen).is_game_over()
-        except (OSError, ValueError, KeyError, IndexError) as exc:
-            log.warning("position of %s unreadable (%s)", self.game_id, exc)
-            return None
+    def server_position(self) -> dict[str, Any] | None:
+        """The viewer's position as a stream snapshot (:func:`viewer.position`)."""
+        return viewer.position(self.viewer, self.game_id)
 
     # ---- board side -------------------------------------------------------
 
@@ -400,10 +394,9 @@ class Bridge:
         if server is None:
             self.retry_at = time.monotonic() + RETRY_SECONDS
             return True
-        fen, over = server
-        if self.game is not None and chess.Board(fen).epd() != self.game.epd():
+        if self.game is not None and chess.Board(server["fen"]).epd() != self.game.epd():
             log.info("move %s had reached the viewer", self.undelivered)
-            self.apply_stream({"fen": fen, "ply": "?", "turn": "?", "is_game_over": over})
+            self.apply_stream(server)
             return True
         return False
 

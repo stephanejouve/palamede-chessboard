@@ -48,7 +48,8 @@ async function sendMove(orig, dest, promotions) {
       headers: { 'Content-Type': 'application/json', 'X-Palamede-Nonce': NONCE },
       body: JSON.stringify({ uci }),
     });
-    const answer = await response.json();
+    // A non-JSON answer is not « no answer » (review Junior #97).
+    const answer = await response.json().catch(() => ({ error: `réponse illisible (HTTP ${response.status})` }));
     showMoveError(response.ok ? '' : answer.error);
     if (!response.ok) cg.set({ fen: lastFen });
   } catch (_err) {
