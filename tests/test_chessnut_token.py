@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import http.client
 import logging
 
 import chess
@@ -147,6 +148,44 @@ def test_seat_sends_the_token_unredirected(monkeypatch) -> None:
     assert status == 200 and body["player"] == "stephane"
     assert seen["url"] == "https://viewer.test/api/games/g%201/seat"
     assert seen["auth"] == f"Bearer {TOKEN}" and seen["redirected"] is None
+
+
+@pytest.mark.parametrize(
+    "error",
+    [http.client.BadStatusLine("garbage"), http.client.IncompleteRead(b"{")],
+    ids=["bad status line", "incomplete read"],
+)
+def test_a_malformed_answer_leaves_the_light_orange(monkeypatch, error) -> None:
+    """Review Junior #106 : no exception out of the check, the bridge starts."""
+
+    def opener(request, timeout):
+        raise error
+
+    monkeypatch.setattr(viewer._OPENER, "open", opener)
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN, with_board=False)
+    assert bridge.seat() == (None, None)
+    token_light.check(bridge)
+    assert bridge.token_light == "unchecked"
+
+
+def test_page_move_waits_for_the_check(monkeypatch) -> None:
+    sent: list = []
+    monkeypatch.setattr(viewer, "post", lambda *a, **k: sent.append(a) or (200, ""))
+    bridge = bridge_with_seat(200, {"player": "stephane", "colors": ["white"]})
+    code, message = mouse.play_from_page(bridge, "e2e4")
+    assert code == 409 and "Jeton" in message
+    assert sent == []
+
+
+@pytest.mark.parametrize(
+    ("status", "body"),
+    [(403, None), (200, {"player": "stephane", "colors": ["black"]})],
+    ids=["not a player", "wrong colour"],
+)
+def test_every_refusal_shows_red(status, body) -> None:
+    bridge = bridge_with_seat(status, body)
+    token_light.check(bridge)
+    assert snapshot(bridge)["lights"]["token"] == "refused"
 
 
 def test_run_checks_the_token_before_watching(monkeypatch) -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import urllib.error
@@ -62,7 +63,9 @@ def get_with_token(url: str, token: str) -> tuple[int | None, Any]:
             return int(response.status), json.load(response)
     except urllib.error.HTTPError as exc:
         return exc.code, None
-    except (OSError, ValueError):
+    except (OSError, ValueError, http.client.HTTPException):
+        # A malformed answer (BadStatusLine, IncompleteRead) is no answer :
+        # the light stays orange and the bridge starts (review Junior #106).
         return None, None
 
 
