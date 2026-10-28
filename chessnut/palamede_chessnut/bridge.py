@@ -437,6 +437,8 @@ class Bridge:
                 message = f"board link lost ({exc})"
                 if message != last_error:
                     log.warning("%s", message)
+                # The same error twice in a row is no passing loss : red light.
+                self.board_link = "failing" if message == last_error else "searching"
                 last_error = message
             if not self.stopped.is_set():
                 await asyncio.sleep(RETRY_SECONDS)

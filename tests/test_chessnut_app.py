@@ -150,9 +150,26 @@ def test_link_lights_follow_the_bridge() -> None:
     bridge.stream_opened()
     bridge.board_link = "connected"
     assert snapshot(bridge)["lights"]["server"] == "on"
-    assert snapshot(bridge)["lights"]["bluetooth"] == "on"
     bridge.stream_link = "reconnecting"
     assert snapshot(bridge)["lights"]["server"] == "reconnecting"
+
+
+@pytest.mark.parametrize(
+    ("transport", "kind", "link", "light"),
+    [
+        ("auto", "ble", "connected", "ble"),
+        ("auto", "usb", "connected", "usb"),
+        ("ble", None, "connected", "ble"),
+        ("usb", None, "connected", "usb"),
+        ("auto", None, "searching", "searching"),
+        ("auto", "usb", "failing", "failing"),
+    ],
+)
+def test_board_light_says_the_link_and_its_trouble(transport, kind, link, light) -> None:
+    """Review of Stéphane (28/10) : blue Bluetooth, green USB, orange between, red on errors."""
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN, board_transport=transport)
+    bridge.link_kind, bridge.board_link = kind, link
+    assert snapshot(bridge)["lights"]["bluetooth"] == light
 
 
 def test_the_token_never_reaches_the_page() -> None:
