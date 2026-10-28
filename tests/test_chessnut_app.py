@@ -532,7 +532,11 @@ def window_app(monkeypatch):
     monkeypatch.setattr(app_module, "run_bridge", waiting_bridge)
     webview = types.ModuleType("webview")
     webview.create_window = lambda *_a, **_k: None  # type: ignore[attr-defined]
+    menu = types.ModuleType("webview.menu")
+    menu.Menu = lambda title, items: (title, items)  # type: ignore[attr-defined]
+    menu.MenuAction = lambda title, function: (title, function)  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "webview", webview)
+    monkeypatch.setitem(sys.modules, "webview.menu", menu)
     argv = ["--viewer", "https://viewer.test", "--game", "g1", "--color", "white"]
     return webview, argv, pages, bridges
 
@@ -542,14 +546,14 @@ def test_the_window_allows_text_selection(window_app) -> None:
     webview, argv, _pages, _bridges = window_app
     seen: dict = {}
     webview.create_window = lambda *_a, **kw: seen.update(kw)  # type: ignore[attr-defined]
-    webview.start = lambda: None
+    webview.start = lambda **_k: None
     app_module.main(argv)
     assert seen["text_select"] is True
 
 
 def test_closing_the_window_stops_the_bridge(window_app) -> None:
     webview, argv, pages, bridges = window_app
-    webview.start = lambda: None
+    webview.start = lambda **_k: None
     app_module.main(argv)
     assert bridges[0].stopped.is_set()
     assert pages[0].closed
@@ -559,7 +563,7 @@ def test_a_window_that_cannot_open_stops_the_bridge(window_app) -> None:
     """No graphical session : pywebview raises, the LEDs must still go off."""
     webview, argv, pages, bridges = window_app
 
-    def no_screen() -> None:
+    def no_screen(**_k) -> None:
         raise AttributeError("'NoneType' object has no attribute 'frame'")
 
     webview.start = no_screen

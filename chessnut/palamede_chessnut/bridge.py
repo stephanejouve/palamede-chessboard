@@ -204,6 +204,8 @@ class Bridge:
                     loop.call_soon_threadsafe(self.stream_opened, lost)
                     lost = False
                     for raw in response:
+                        if self.stopped.is_set():  # window closed, or another game opened (#90)
+                            return
                         line = raw.decode("utf-8").strip()
                         if not line.startswith("data:"):
                             continue

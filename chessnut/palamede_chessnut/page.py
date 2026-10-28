@@ -5,8 +5,9 @@ never receives the player token, which stays in the bridge. Requests whose
 ``Host`` is not this loopback address are refused, so that a web page
 reaching the port through a rebound DNS name reads nothing.
 
-Its only write is ``POST /move``, for mouse play without a board (#92,
-frame of Admin on #78) : the ``Origin`` must be this page, and the
+Its writes are ``POST /move``, for mouse play without a board (#92,
+frame of Admin on #78), and ``POST /open``, another game of the player
+(#90) : the ``Origin`` must be this page, and the
 ``X-Palamede-Nonce`` header must carry the nonce drawn at launch and
 written into the page. Another site open in a browser of the machine
 knows neither, and a plain form cannot set the header.
@@ -27,6 +28,7 @@ from palamede_chessnut.status import RecentLog, snapshot
 
 if TYPE_CHECKING:
     from palamede_chessnut.bridge import Bridge
+    from palamede_chessnut.games import Session
 
 HERE = Path(__file__).parent
 #: chessground 9.2.1, GPL-3.0-or-later : an identical copy of the viewer's vendor
@@ -36,8 +38,8 @@ PAGE = HERE / "web"
 TYPES = {".html": "text/html", ".js": "text/javascript", ".css": "text/css"}
 #: Replaced in ``index.html`` by the nonce of this launch.
 NONCE_PLACEHOLDER = b"__PALAMEDE_NONCE__"
-#: ``{"uci": "e7e8q"}`` and a little room : anything bigger is not a move.
-MAX_MOVE_BYTES = 256
+#: ``{"uci": "e7e8q"}`` or ``{"game_id": ...}`` and a little room : anything bigger is refused.
+MAX_BODY_BYTES = 256
 #: chessground's pieces are SVG data URIs in its CSS ; everything else is local.
 CONTENT_SECURITY_POLICY = "; ".join(
     [
@@ -76,6 +78,13 @@ class PageServer(http.server.ThreadingHTTPServer):
         self.url = f"http://127.0.0.1:{self.port}/"
         #: Drawn per launch, only for this page : not a player token.
         self.nonce = secrets.token_urlsafe(32)
+        #: The app's session (#90) : without it, no game list and no ``/open``.
+        self.session: Session | None = None
+        #: Bumped by the menu « Fichier ▸ Ouvrir » : the page opens its list when it changes.
+        self.open_requests = 0
+
+    def request_open(self) -> None:
+        self.open_requests += 1
 
     def allowed_hosts(self) -> set[str]:
         return {f"127.0.0.1:{self.port}", f"localhost:{self.port}"}
@@ -98,8 +107,13 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             return
         path = self.path.split("?", 1)[0]
         if path == "/state":
-            body = json.dumps(snapshot(self.server.bridge, self.server.recent))
-            self._send(200, "application/json", body.encode("utf-8"))
+            state = snapshot(self.server.bridge, self.server.recent)
+            state["open_requests"] = self.server.open_requests
+            self._send(200, "application/json", json.dumps(state).encode("utf-8"))
+            return
+        if path == "/games" and self.server.session is not None:
+            status, body = self.server.session.games()
+            self._send(status, "application/json", json.dumps(body).encode("utf-8"))
             return
         file = self.server.files.get(path)
         if file is None:
@@ -111,11 +125,15 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self._send(200, TYPES[file.suffix], content)
 
     def do_POST(self) -> None:  # noqa: N802 (http.server's naming)
-        """``POST /move`` ``{"uci": ...}`` : the move goes through the bridge's checks."""
+        """``POST /move`` ``{"uci": ...}`` : the move goes through the bridge's checks.
+
+        ``POST /open`` ``{"game_id": ...}`` : see :meth:`.games.Session.open_game`.
+        """
         if self.headers.get("Host") not in self.server.allowed_hosts():
             self._send(421, "text/plain", b"wrong host")
             return
-        if self.path != "/move":
+        session = self.server.session
+        if self.path not in ("/move", "/open") or (self.path == "/open" and session is None):
             self._send(404, "text/plain", b"not found")
             return
         if self.headers.get("Origin") not in self.server.allowed_origins():
@@ -125,14 +143,18 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if not hmac.compare_digest(nonce, self.server.nonce.encode("ascii")):
             self._answer(403, "nonce refusé")
             return
-        uci = self._read_move()
-        if uci is None:
+        field = "uci" if self.path == "/move" else "game_id"
+        value = self._read_field(field)
+        if value is None:
             return
-        status, message = play_from_page(self.server.bridge, uci)
+        if session is not None and self.path == "/open":
+            status, message = session.open_game(value)
+        else:
+            status, message = play_from_page(self.server.bridge, value)
         self._answer(status, message)
 
-    def _read_move(self) -> str | None:
-        """The ``uci`` of the body, or ``None`` once the error is answered."""
+    def _read_field(self, field: str) -> str | None:
+        """The body's string ``field``, or ``None`` once the error is answered."""
         if self.headers.get_content_type() != "application/json":
             self._answer(415, "JSON attendu")
             return None
@@ -141,17 +163,17 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         except ValueError:
             self._answer(411, "longueur absente")
             return None
-        if not 0 < length <= MAX_MOVE_BYTES:
+        if not 0 < length <= MAX_BODY_BYTES:
             self._answer(413, "corps trop long")
             return None
         try:
-            uci = json.loads(self.rfile.read(length))["uci"]
+            value = json.loads(self.rfile.read(length))[field]
         except (ValueError, KeyError, TypeError):
-            uci = None
-        if not isinstance(uci, str):
-            self._answer(400, "coup illisible")
+            value = None
+        if not isinstance(value, str):
+            self._answer(400, "coup illisible" if field == "uci" else "partie illisible")
             return None
-        return uci
+        return value
 
     def _answer(self, status: int, message: str) -> None:
         body = {"ok": True} if status == 200 else {"error": message}
