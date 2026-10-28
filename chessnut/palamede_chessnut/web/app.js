@@ -29,6 +29,9 @@ let lastFen = null;
 let lastColor = null;
 let lastDests = '';
 let sending = false;
+let lastGame = null;
+// The menu « Fichier ▸ Ouvrir » bumps a counter in /state (#90).
+let openRequests = null;
 
 // Squares to fix : a red LED in the corner, as on the eBoard (review of
 // Stéphane, 28/10), rather than drawn circles. Set only when they change.
@@ -148,7 +151,81 @@ function renderMoves(history, firstPly) {
   list.scrollTop = list.scrollHeight;
 }
 
+// Another game opened (#90) : nothing of the previous one may stay on screen.
+function forgetGame() {
+  lastFen = null;
+  lastColor = null;
+  lastDests = '';
+  lastLeds = null;
+  cg.set({ fen: '8/8/8/8/8/8/8/8', lastMove: undefined });
+  el('moves').replaceChildren();
+  showMoveError('');
+}
+
+function pickerMessage(message) {
+  el('picker-msg').hidden = !message;
+  el('picker-msg').textContent = message || '';
+}
+
+async function openGame(gameId) {
+  pickerMessage('Ouverture…');
+  try {
+    const response = await fetch('/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Palamede-Nonce': NONCE },
+      body: JSON.stringify({ game_id: gameId }),
+    });
+    const answer = await response.json().catch(() => ({ error: `réponse illisible (HTTP ${response.status})` }));
+    if (!response.ok) {
+      pickerMessage(answer.error);
+      return;
+    }
+    el('picker').hidden = true;
+  } catch (_err) {
+    pickerMessage('Le pont ne répond plus.');
+  }
+}
+
+// One button per game in progress : « 008d — stephane contre relais ».
+function gameItem(game, current) {
+  const li = document.createElement('li');
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = `${game.game_id} — ${game.white} contre ${game.black}`;
+  if (game.game_id === current) {
+    button.disabled = true;
+    button.textContent += ' (ouverte)';
+  }
+  button.addEventListener('click', () => openGame(game.game_id));
+  li.append(button);
+  return li;
+}
+
+async function showPicker() {
+  el('picker').hidden = false;
+  el('picker-list').replaceChildren();
+  pickerMessage('Recherche de vos parties…');
+  try {
+    const response = await fetch('/games', { cache: 'no-store' });
+    const answer = await response.json().catch(() => ({ error: `réponse illisible (HTTP ${response.status})` }));
+    if (!response.ok) {
+      pickerMessage(answer.error);
+      return;
+    }
+    pickerMessage(answer.games.length ? '' : `Aucune partie en cours pour ${answer.account}.`);
+    el('picker-list').replaceChildren(...answer.games.map((game) => gameItem(game, answer.current)));
+  } catch (_err) {
+    pickerMessage('Le pont ne répond plus.');
+  }
+}
+
 function render(state) {
+  if (state.game_id !== lastGame) {
+    if (lastGame !== null) forgetGame();
+    lastGame = state.game_id;
+  }
+  if (openRequests !== null && state.open_requests !== openRequests) showPicker();
+  openRequests = state.open_requests;
   el('game').textContent = `Échiquier : ${state.game_id}`;
   if (state.color !== lastColor) {
     cg.set({ orientation: state.color });
@@ -192,6 +269,9 @@ async function poll() {
   }
   setTimeout(poll, POLL_MS);
 }
+
+el('open-btn').addEventListener('click', showPicker);
+el('picker-close').addEventListener('click', () => { el('picker').hidden = true; });
 
 // Display only (#91) : the bridge, the moves allowed and /state are unchanged.
 el('flip-btn').addEventListener('click', () => {

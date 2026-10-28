@@ -131,3 +131,17 @@ cg-board square.led::after {
   background: radial-gradient(circle at 35% 35%, #ff9a8f, #e5392f 55%, #8c1a14);
   box-shadow: 0 0 6px 2px rgba(229, 57, 47, 0.65);
 }
+/* « Fichier ▸ Ouvrir » (#90) : the player's games in progress, above the status. */
+#picker {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px 12px;
+  margin-bottom: 12px;
+}
+#picker h2 { font-size: 16px; margin: 4px 0 8px; }
+#picker-msg { color: var(--muted); margin: 0 0 8px; }
+#picker-list { list-style: none; margin: 0 0 8px; padding: 0; max-height: 260px; overflow: auto; }
+#picker-list li { margin-bottom: 6px; }
+#picker-list button { width: 100%; text-align: left; overflow-wrap: anywhere; }
+#picker-list button:disabled { color: var(--muted); cursor: default; }

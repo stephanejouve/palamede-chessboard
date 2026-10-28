@@ -23,6 +23,12 @@
 <main>
   <div id="board"></div>
   <section id="side">
+    <section id="picker" aria-labelledby="picker-title" hidden>
+      <h2 id="picker-title">Ouvrir une partie</h2>
+      <p id="picker-msg" role="status" hidden></p>
+      <ul id="picker-list"></ul>
+      <button type="button" id="picker-close">Fermer</button>
+    </section>
     <p id="status">En attente du pont…</p>
     <p id="token-msg" role="alert" hidden></p>
     <p id="relay" hidden></p>
@@ -38,6 +44,7 @@
     </label>
     <ol id="moves"></ol>
     <div id="fen-row">
+      <button type="button" id="open-btn" title="Une autre de vos parties en cours (menu Fichier ▸ Ouvrir)">Ouvrir…</button>
       <button type="button" id="flip-btn" aria-pressed="false" title="Voir l'échiquier depuis l'autre camp">Retourner</button>
       <button type="button" id="fen-btn">FEN</button>
       <input id="fen" type="text" readonly spellcheck="false" aria-label="FEN de la position" hidden>
