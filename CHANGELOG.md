@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.9.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.8.0...v0.9.0) (2026-10-28)
+
+
+### Features
+
+* **chessnut:** --transport auto, the cable when plugged in, Bluetooth otherwise ([#111](https://github.com/stephanejouve/palamede-chessboard/issues/111)) ([0d1ebd5](https://github.com/stephanejouve/palamede-chessboard/commit/0d1ebd52195376aad2420dacb7d9d6a10fc4b85d))
+* **chessnut:** button to flip the board in the app ([#101](https://github.com/stephanejouve/palamede-chessboard/issues/101)) ([e636968](https://github.com/stephanejouve/palamede-chessboard/commit/e6369688f1e3780668f1201efe4f60cb33c3808c))
+* **chessnut:** play with the mouse in the app, without a board ([#97](https://github.com/stephanejouve/palamede-chessboard/issues/97)) ([09c5346](https://github.com/stephanejouve/palamede-chessboard/commit/09c5346cea6da736d4208b49a5a2d4c5ff07e35a))
+* **chessnut:** reach the board over its USB cable, --transport usb ([#108](https://github.com/stephanejouve/palamede-chessboard/issues/108)) ([799cb08](https://github.com/stephanejouve/palamede-chessboard/commit/799cb0828a5f84c217aba1e10ba8fe7294910261))
+* **chessnut:** read-only app window for the bridge ([#87](https://github.com/stephanejouve/palamede-chessboard/issues/87)) ([48bff6b](https://github.com/stephanejouve/palamede-chessboard/commit/48bff6be68d9868cec016fa965a5e893c84a7446))
+* **chessnut:** the board light says the link and its trouble ([#112](https://github.com/stephanejouve/palamede-chessboard/issues/112)) ([6da9deb](https://github.com/stephanejouve/palamede-chessboard/commit/6da9debc655f8986ccb450db67774bb9eb5c0615))
+* **chessnut:** token light in the app, checked at launch ([#106](https://github.com/stephanejouve/palamede-chessboard/issues/106)) ([7b46a1d](https://github.com/stephanejouve/palamede-chessboard/commit/7b46a1d888067c6a27fd9044b2775c63c6fc9450))
+* **viewer:** GET /api/games/{id}/seat, the token's player and side ([#102](https://github.com/stephanejouve/palamede-chessboard/issues/102)) ([3f407a6](https://github.com/stephanejouve/palamede-chessboard/commit/3f407a6e3547ce5c7e72e3e86eeb633397d0b49a))
+
+
+### Bug Fixes
+
+* **chessnut:** plainer page messages, after the USB smoke ([#109](https://github.com/stephanejouve/palamede-chessboard/issues/109)) ([43fbfc7](https://github.com/stephanejouve/palamede-chessboard/commit/43fbfc7452617bd688e264bf4df30964af02cae1))
+* **chessnut:** token file check on Windows ([#88](https://github.com/stephanejouve/palamede-chessboard/issues/88)) ([fcd4f97](https://github.com/stephanejouve/palamede-chessboard/commit/fcd4f97ee10df80f6e71b346e1288710ec933823))
+* **viewer:** a missing game's 404 names the game, not the PGN path ([#105](https://github.com/stephanejouve/palamede-chessboard/issues/105)) ([a0c43a3](https://github.com/stephanejouve/palamede-chessboard/commit/a0c43a395e2ee8ce5e5ddb8238a058fb333aa7a8))
+
 ## [0.8.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.7.0...v0.8.0) (2026-10-26)
 
 
