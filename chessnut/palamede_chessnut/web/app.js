@@ -105,6 +105,7 @@ function render(state) {
   if (state.color !== lastColor) {
     cg.set({ orientation: state.color });
     lastColor = state.color;
+    el('flip-btn').setAttribute('aria-pressed', 'false');
   }
   if (state.fen && state.fen !== lastFen) {
     cg.set({ fen: state.fen });
