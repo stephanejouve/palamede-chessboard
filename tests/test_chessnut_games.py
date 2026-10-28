@@ -355,3 +355,26 @@ def test_no_second_bridge_while_the_first_still_runs(session, monkeypatch) -> No
     stuck.join(1)
     assert session.open_game("009") == (200, "")
     assert session.bridge.game_id == "009"
+
+
+@pytest.mark.parametrize("transport", ["usb", "ble"])
+def test_the_new_bridge_keeps_the_board(monkeypatch, transport: str) -> None:
+    """With a board, the opened game is played on it too (mutant of Junior, #121)."""
+    runs = Runs()
+    old = Bridge(
+        "https://viewer.test",
+        "008d",
+        chess.WHITE,
+        TOKEN,
+        with_board=True,
+        board_transport=transport,
+    )
+    board_session = Session(old, runs)
+    board_session.start()
+    answer_seat(monkeypatch, 200, {"colors": ["white"]})
+    try:
+        assert board_session.open_game("009") == (200, "")
+        new = board_session.bridge
+        assert (new.with_board, new.board_transport) == (True, transport)
+    finally:
+        board_session.stop()
