@@ -145,6 +145,9 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
         "fen": game.fen() if game is not None else None,
         "board_fen": observed.board_fen() if observed is not None else None,
         "history": list(bridge.history),
+        # Half-move of history[0], from the FEN : a game set up with Black to
+        # move does not start at « 1. » with a White move (008d, 28/10).
+        "first_ply": game.ply() - len(bridge.history) if game is not None else 0,
         "live": bridge.live,
         "finished": bridge.finished,
         "to_relay": bridge.to_relay,

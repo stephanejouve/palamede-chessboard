@@ -121,13 +121,22 @@ function statusText(state) {
   return turn === state.color ? 'À vous de jouer.' : 'Au tour de l\'adversaire.';
 }
 
-function renderMoves(history) {
+// Numbered from the game's own move numbers : a game set up with Black to move
+// starts with « 29. … c3 », not « 1. c3 » (008d, review of Stéphane, 28/10).
+function renderMoves(history, firstPly) {
   const list = el('moves');
   const items = [];
-  for (let i = 0; i < history.length; i += 2) {
+  let ply = Math.max(firstPly || 0, 0);
+  let i = 0;
+  while (i < history.length) {
     const li = document.createElement('li');
-    li.textContent = history.slice(i, i + 2).join('  ');
+    li.value = Math.floor(ply / 2) + 1;
+    const take = ply % 2 === 1 ? 1 : 2;
+    const moves = history.slice(i, i + take);
+    li.textContent = (take === 1 ? ['…', ...moves] : moves).join('  ');
     items.push(li);
+    i += take;
+    ply += take;
   }
   list.replaceChildren(...items);
   list.scrollTop = list.scrollHeight;
@@ -143,7 +152,7 @@ function render(state) {
   if (state.fen && state.fen !== lastFen) {
     cg.set({ fen: state.fen });
     lastFen = state.fen;
-    renderMoves(state.history);
+    renderMoves(state.history, state.first_ply);
   }
   renderMouse(state);
   renderLeds(state.differing);

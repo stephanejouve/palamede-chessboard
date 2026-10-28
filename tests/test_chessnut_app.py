@@ -158,6 +158,28 @@ def test_link_lights_follow_the_bridge() -> None:
     assert snapshot(bridge)["lights"]["server"] == "reconnecting"
 
 
+def test_first_ply_follows_the_fen() -> None:
+    """008d (28/10) : set up with Black to move at 29, not a game from « 1. »."""
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
+    bridge.apply_stream(
+        {
+            "fen": "6k1/5pp1/4p2p/b3P3/2Q5/2p1P1KP/5PP1/8 w - - 2 33",
+            "ply": 64,
+            "turn": "white",
+            "san_history": ["c3", "Qxd3", "Bb4", "Kg3", "h6", "Qc4", "Ba5"],
+            "is_game_over": False,
+        }
+    )
+    state = snapshot(bridge)
+    assert state["first_ply"] == 57  # 29... c3 : half-move 57, Black's 29th
+    assert state["first_ply"] % 2 == 1 and state["first_ply"] // 2 + 1 == 29
+
+
+def test_first_ply_of_an_ordinary_game_is_zero() -> None:
+    bridge = bridge_on(e4())
+    assert snapshot(bridge)["first_ply"] == 0
+
+
 def test_setup_says_which_piece_goes_where() -> None:
     """Review of Stéphane (28/10) : piece symbols and colours, top rank first."""
     game = chess.BaseBoard("6k1/5pp1/4p2p/b3P3/2Q5/2p1P1KP/5PP1/8")
