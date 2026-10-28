@@ -116,6 +116,7 @@ function render(state) {
   renderMouse(state);
   cg.setAutoShapes(state.differing.map((key) => ({ orig: key, brush: 'yellow' })));
   setLight('bluetooth', state.lights.bluetooth);
+  el('light-bluetooth').textContent = state.transport === 'usb' ? 'USB' : 'Bluetooth';
   setLight('server', state.lights.server);
   setLight('sync', state.lights.sync);
   setLight('token', state.lights.token);

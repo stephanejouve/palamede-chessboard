@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "palamede-chessnut"
 version = "0.1.0"
-description = "Play palamède games on a Chessnut Air+ electronic board, over Bluetooth LE"
+description = "Play palamède games on a Chessnut Air+ electronic board, over Bluetooth LE or USB"
 readme = "README.md"
 license = "MIT AND GPL-3.0-or-later"
 authors = [{ name = "Stéphane Jouve" }]
@@ -21,6 +21,10 @@ app = [
     "pywebview>=5; sys_platform != 'linux'",
     "pywebview[qt]>=5; sys_platform == 'linux'",
 ]
+
+# USB instead of Bluetooth (#82) : hidapi on macOS and Windows ; Linux
+# reads the board's hidraw node with the standard library.
+usb = ["hidapi>=0.14; sys_platform != 'linux'"]
 
 [project.scripts]
 palamede-chessnut = "palamede_chessnut.cli:main"
