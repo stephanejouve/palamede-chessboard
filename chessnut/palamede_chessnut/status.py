@@ -57,6 +57,45 @@ PIECE_NAMES = {
 }
 
 
+#: After a chess symbol : drawn as text, not as an emoji (♟ is one on macOS).
+TEXT_STYLE = "\ufe0e"
+
+
+def setup_steps(
+    game: chess.BaseBoard, observed: chess.BaseBoard
+) -> dict[str, list[dict[str, str]]]:
+    """What to do on the board (review of Stéphane and Admin, 28/10), top rank first.
+
+    ``put`` : the piece each square needs (symbol, colour, square). ``remove`` :
+    the squares to clear, including those holding a wrong piece, which must
+    go before the right one is put there.
+    """
+    put, remove = [], []
+    squares = sorted(differing_squares(game, observed), key=lambda s: (-chess.square_rank(s), s))
+    for square in squares:
+        name = chess.square_name(square)
+        if observed.piece_at(square) is not None:
+            remove.append({"square": name})
+        wanted = game.piece_at(square)
+        if wanted is not None:
+            colour = "white" if wanted.color == chess.WHITE else "black"
+            put.append(
+                {"symbol": wanted.unicode_symbol() + TEXT_STYLE, "colour": colour, "square": name}
+            )
+    return {"put": put, "remove": remove}
+
+
+def setup_text(game: chess.BaseBoard, observed: chess.BaseBoard) -> str | None:
+    """« Poser : ♚g8 ♝a5 · Retirer : b7 c1 », or ``None`` when the board is right."""
+    steps = setup_steps(game, observed)
+    parts = []
+    if steps["put"]:
+        parts.append("Poser : " + " ".join(p["symbol"] + p["square"] for p in steps["put"]))
+    if steps["remove"]:
+        parts.append("Retirer : " + " ".join(r["square"] for r in steps["remove"]))
+    return " · ".join(parts) or None
+
+
 def relay_text(bridge: Bridge) -> str | None:
     """« Jouez le coup de l'adversaire : cavalier g8 → f6 », or ``None``.
 
@@ -120,6 +159,11 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
         "to_relay": bridge.to_relay,
         "relay_text": relay_text(bridge),
         "differing": differing,
+        "setup": (
+            setup_steps(chess.BaseBoard(game.board_fen()), observed)
+            if game is not None and observed is not None
+            else None
+        ),
         # Mouse play (#92) : what the page may play now, empty with a board.
         "mouse": not bridge.with_board,
         # The link in use : with --transport auto, USB or Bluetooth (#110).

@@ -60,6 +60,18 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 #side p { margin: 0 0 8px; }
 #relay { font-weight: 600; }
 #differing, #move-error { color: var(--warn); }
+.chip {
+  display: inline-block;
+  min-width: 1.25em;
+  margin: 1px 1px 1px 0;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 1.6em;
+  line-height: 1.15;
+  vertical-align: middle;
+}
+.chip.white { background: #f4efe6; color: #1d1b19; border: 1px solid #b5aa9c; }
+.chip.black { background: #3a3530; color: #f4efe6; border: 1px solid var(--border); }
 #token-msg { color: var(--bad); font-weight: 600; }
 #token-msg.warn { color: var(--warn); }
 #promotion-row { display: block; margin-bottom: 8px; }
