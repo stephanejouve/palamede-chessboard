@@ -11,7 +11,8 @@ script was carved into one ``APIRouter`` per domain
 * SSE timings (``SSE_HEARTBEAT_SECONDS`` /
   ``SSE_POLL_INTERVAL_SECONDS``) ;
 * pydantic payloads (``CommentaryPayload``, ``MovePayload``) ;
-* internal helpers (``_games_dir``, ``_game_stream_payload``).
+* internal helpers (``_games_dir``, ``_not_found_detail``,
+  ``_game_stream_payload``).
 
 The module is intentionally dependency-light (chess + pydantic +
 palamede state only) — importing it must NOT drag FastAPI in, so
@@ -78,6 +79,15 @@ def _games_dir() -> Path:
     """Return the games directory (env override honored for tests)."""
     raw = os.environ.get("MCP_CHESSBOARD_GAMES_DIR", "").strip()
     return Path(raw) if raw else GAMES_DIR
+
+
+def _not_found_detail(game_id: str) -> str:
+    """Public detail of a 404 for a missing game : its id, never the PGN path (#104).
+
+    :class:`GameNotFoundError` carries the absolute path on the server,
+    which a request without a token must not learn.
+    """
+    return f"Partie inconnue : {game_id}"
 
 
 class CommentaryPayload(BaseModel):

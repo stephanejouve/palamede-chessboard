@@ -34,7 +34,7 @@ from palamede_chessboard.viewer.games_query import (
     listing_etag,
     select_games,
 )
-from palamede_chessboard.viewer.models import MovePayload, _games_dir
+from palamede_chessboard.viewer.models import MovePayload, _games_dir, _not_found_detail
 
 log = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ def build_games_router() -> APIRouter:
         try:
             state = GameState.load(game_id, games_dir=_games_dir())
         except GameNotFoundError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(404, _not_found_detail(game_id)) from exc
         return {"game_id": game_id, "pgn": state.raw_pgn()}
 
     @router.post("/api/games/{game_id}/move")
@@ -116,7 +116,7 @@ def seat_of_token(game_id: str, request: Request) -> dict:
     try:
         state = GameState.load(game_id, games_dir=gdir)
     except GameNotFoundError as exc:
-        raise HTTPException(404, str(exc)) from exc
+        raise HTTPException(404, _not_found_detail(game_id)) from exc
     who = _authorized_mover(request, state, gdir, tool="chess_resign")
     roles = roles_of(state)
     colors = [color for color in ("white", "black") if roles[color] == who]
@@ -134,7 +134,7 @@ def resign_from_viewer(game_id: str, request: Request) -> dict:
     try:
         state = GameState.load(game_id, games_dir=gdir)
     except GameNotFoundError as exc:
-        raise HTTPException(404, str(exc)) from exc
+        raise HTTPException(404, _not_found_detail(game_id)) from exc
 
     who = _authorized_mover(request, state, gdir, tool="chess_resign")
     roles = roles_of(state)
@@ -169,7 +169,7 @@ def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> di
     try:
         state = GameState.load(game_id, games_dir=gdir)
     except GameNotFoundError as exc:
-        raise HTTPException(404, str(exc)) from exc
+        raise HTTPException(404, _not_found_detail(game_id)) from exc
 
     who = _authorized_mover(request, state, gdir)
     san_to_play = _resolve_san(state, payload)

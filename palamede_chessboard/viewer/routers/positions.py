@@ -26,7 +26,7 @@ from palamede_chessboard.chessboard_state import (
     GameState,
 )
 from palamede_chessboard.viewer.games_query import etag_matches
-from palamede_chessboard.viewer.models import _games_dir
+from palamede_chessboard.viewer.models import _games_dir, _not_found_detail
 
 #: Letter → ``chess.Color`` whitelist for ``/api/piece.svg?color=``.
 _PIECE_COLORS = {"w": chess.WHITE, "b": chess.BLACK}
@@ -66,7 +66,7 @@ def build_positions_router() -> APIRouter:
         try:
             state = GameState.load(game_id, games_dir=_games_dir())
         except GameNotFoundError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(404, _not_found_detail(game_id)) from exc
         # Root position, not chess.Board() : a game created from
         # ``starting_fen`` (#36) starts elsewhere.
         board = state.board.root()
@@ -96,7 +96,7 @@ def build_positions_router() -> APIRouter:
         try:
             state = GameState.load(game_id, games_dir=_games_dir())
         except GameNotFoundError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(404, _not_found_detail(game_id)) from exc
         except ChessboardError as exc:
             raise HTTPException(400, str(exc)) from exc
 
