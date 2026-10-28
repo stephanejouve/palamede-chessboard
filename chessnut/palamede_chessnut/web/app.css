@@ -80,9 +80,13 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
   max-height: 260px;
   overflow-y: auto;
   margin: 0 0 12px;
-  padding-left: 32px;
+  padding-left: 0;
+  list-style: none;
   font-variant-numeric: tabular-nums;
 }
+/* The list's own markers vanish in a grid : the number is the first cell. */
+#moves li { display: grid; grid-template-columns: 4ch 7ch 7ch; column-gap: 1ch; }
+#moves li span:first-child { color: var(--muted); text-align: right; }
 #fen-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
 #fen {
   flex: 1 1 100%;

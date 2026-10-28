@@ -133,7 +133,13 @@ function renderMoves(history, firstPly) {
     li.value = Math.floor(ply / 2) + 1;
     const take = ply % 2 === 1 ? 1 : 2;
     const moves = history.slice(i, i + take);
-    li.textContent = (take === 1 ? ['…', ...moves] : moves).join('  ');
+    // Three aligned columns : number, White, Black (review of Stéphane, 28/10).
+    // « … » holds White's place when the game starts with Black.
+    for (const san of [`${li.value}.`, ...(take === 1 ? ['…', ...moves] : moves)]) {
+      const cell = document.createElement('span');
+      cell.textContent = san;
+      li.append(cell);
+    }
     items.push(li);
     i += take;
     ply += take;
