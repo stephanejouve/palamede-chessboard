@@ -84,7 +84,18 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
   font-variant-numeric: tabular-nums;
 }
 #fen-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
-#fen { overflow-wrap: anywhere; font-size: 13px; }
+#fen {
+  flex: 1 1 100%;
+  min-width: 0;
+  font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-user-select: text;
+  user-select: text;
+}
 button {
   font: inherit;
   padding: 4px 10px;

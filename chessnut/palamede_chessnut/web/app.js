@@ -164,7 +164,7 @@ function render(state) {
   const fixing = state.lights.sync === 'fixing' && state.differing.length > 0;
   el('differing').hidden = !fixing;
   renderSetup(fixing ? state.setup : null);
-  el('fen').textContent = state.fen || '';
+  if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');
 }
 
@@ -184,11 +184,24 @@ el('flip-btn').addEventListener('click', () => {
   el('flip-btn').setAttribute('aria-pressed', String(cg.state.orientation !== lastColor));
 });
 
+// A read-only field, not text : the window disables text selection (pywebview),
+// and the clipboard API may be refused there (review of Stéphane, 28/10).
 el('fen-btn').addEventListener('click', async () => {
   const fen = el('fen');
   fen.hidden = !fen.hidden;
-  if (!fen.hidden && fen.textContent) {
-    try { await navigator.clipboard.writeText(fen.textContent); } catch (_err) { /* shown anyway */ }
+  if (fen.hidden || !fen.value) return;
+  fen.focus();
+  fen.select();
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(fen.value);
+    copied = true;
+  } catch (_err) {
+    copied = document.execCommand('copy');
+  }
+  if (copied) {
+    el('fen-btn').textContent = 'FEN copiée';
+    setTimeout(() => { el('fen-btn').textContent = 'FEN'; }, 1500);
   }
 });
 
