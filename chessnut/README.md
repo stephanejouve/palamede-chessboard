@@ -19,6 +19,36 @@ keep the file :
   OneDrive. Rights changed by hand on the file, or a hard link to it, are not
   detected.
 
+## Settings file (#90)
+
+`--viewer`, `--token-file` and `--transport` may come from a per-user file,
+so that only the game remains on the command line :
+
+```toml
+# ~/.config/palamede/config.toml  (macOS, Linux ; $XDG_CONFIG_HOME if set)
+# %APPDATA%\palamede\config.toml  (Windows)
+viewer = "https://<viewer>"
+token_file = "~/.config/palamede/token"
+transport = "auto"
+```
+
+```
+palamede-chessnut --game <game_id> --color white
+```
+
+`--config <file>` or `PALAMEDE_CONFIG` name another file. Options given on
+the command line win over it. The file names the token *file*, never the
+token : a `token` key is refused. The viewer URL and the token file are
+checked as when given as options (https, `chmod 600`). An unknown key is
+logged and ignored.
+
+The file chooses where the token is sent, so another account must not be
+able to change it : on macOS and Linux, neither the file nor its directory
+may be writable by group or others (`chmod go-w`), and both must be yours (or root's) ; on Windows, it must be
+under your user profile. A file named by `--config` or `PALAMEDE_CONFIG`
+must exist. `PALAMEDE_PLAYER_TOKEN`, when set, wins over the file's
+`token_file`.
+
 On the board :
 
 - set the pieces up : the squares still wrong light up ; a short sweep of
