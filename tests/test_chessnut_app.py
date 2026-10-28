@@ -17,7 +17,7 @@ from palamede_chessnut import bridge as bridge_module
 from palamede_chessnut.bridge import Bridge, cancel_on_sigterm
 from palamede_chessnut.cli import bridge_from_args
 from palamede_chessnut.page import CHESSGROUND, CONTENT_SECURITY_POLICY, PageServer
-from palamede_chessnut.status import RecentLog, setup_text, snapshot, sync_light
+from palamede_chessnut.status import RecentLog, setup_steps, snapshot, sync_light
 
 import palamede_chessboard
 
@@ -159,16 +159,19 @@ def test_link_lights_follow_the_bridge() -> None:
 
 
 def test_setup_says_which_piece_goes_where() -> None:
-    """Review of Stéphane (28/10) : piece symbols, grouped by gesture, top rank first."""
+    """Review of Stéphane (28/10) : piece symbols and colours, top rank first."""
     game = chess.BaseBoard("6k1/5pp1/4p2p/b3P3/2Q5/2p1P1KP/5PP1/8")
     observed = chess.BaseBoard("6k1/1p3pp1/3p3p/4P3/1P2P3/4P1KP/5PPP/5B2")
-    text = setup_text(game, observed)
-    assert text is not None and "\ufe0e" in text
-    text = text.replace("\ufe0e", "")
-    put, remove = text.split(" · ")
-    assert put.startswith("Poser : ♟e6 ♝a5 ♕c4")
-    assert "♟c3" in put
-    assert remove == "Retirer : b7 d6 b4 e4 h2 f1"
+    steps = setup_steps(game, observed)
+    put = [(p["symbol"].rstrip("\ufe0e"), p["colour"], p["square"]) for p in steps["put"]]
+    assert put == [
+        ("♟", "black", "e6"),
+        ("♝", "black", "a5"),
+        ("♕", "white", "c4"),
+        ("♟", "black", "c3"),
+    ]
+    assert all(p["symbol"].endswith("\ufe0e") for p in steps["put"])
+    assert [r["square"] for r in steps["remove"]] == ["b7", "d6", "b4", "e4", "h2", "f1"]
 
 
 def test_setup_names_a_wrong_piece_by_what_belongs_there() -> None:
@@ -176,11 +179,14 @@ def test_setup_names_a_wrong_piece_by_what_belongs_there() -> None:
     game = chess.BaseBoard()
     observed = chess.BaseBoard()
     observed.set_piece_at(chess.C1, chess.Piece(chess.KNIGHT, chess.WHITE))
-    assert setup_text(game, observed) == "Poser : ♗\ufe0ec1 · Retirer : c1"
+    assert setup_steps(game, observed) == {
+        "put": [{"symbol": "♗\ufe0e", "colour": "white", "square": "c1"}],
+        "remove": [{"square": "c1"}],
+    }
 
 
 def test_nothing_to_set_up() -> None:
-    assert setup_text(chess.BaseBoard(), chess.BaseBoard()) is None
+    assert setup_steps(chess.BaseBoard(), chess.BaseBoard()) == {"put": [], "remove": []}
 
 
 def test_board_light_is_grey_once_the_bridge_stops() -> None:

@@ -66,6 +66,8 @@ def setup_steps(
 ) -> dict[str, list[dict[str, str]]]:
     """What to do on the board (review of Stéphane and Admin, 28/10), top rank first.
 
+    The page shows ``remove`` first, then ``put`` : the order of the gestures.
+
     ``put`` : the piece each square needs (symbol, colour, square). ``remove`` :
     the squares to clear, including those holding a wrong piece, which must
     go before the right one is put there.
@@ -83,17 +85,6 @@ def setup_steps(
                 {"symbol": wanted.unicode_symbol() + TEXT_STYLE, "colour": colour, "square": name}
             )
     return {"put": put, "remove": remove}
-
-
-def setup_text(game: chess.BaseBoard, observed: chess.BaseBoard) -> str | None:
-    """« Poser : ♚g8 ♝a5 · Retirer : b7 c1 », or ``None`` when the board is right."""
-    steps = setup_steps(game, observed)
-    parts = []
-    if steps["put"]:
-        parts.append("Poser : " + " ".join(p["symbol"] + p["square"] for p in steps["put"]))
-    if steps["remove"]:
-        parts.append("Retirer : " + " ".join(r["square"] for r in steps["remove"]))
-    return " · ".join(parts) or None
 
 
 def relay_text(bridge: Bridge) -> str | None:

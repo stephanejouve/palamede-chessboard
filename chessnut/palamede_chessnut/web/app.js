@@ -83,22 +83,22 @@ function renderMouse(state) {
   });
 }
 
-// By piece symbol, on a light or dark chip for its colour (review of Stéphane
-// and Admin, 28/10) : « Poser : ♚g8 ♝a5 · Retirer : b7 c1 ».
+// By piece symbol, on a light or dark chip for its colour, in the order of the
+// gestures (review of Stéphane, Admin, Junior, 28/10) : « Retirer : b7 c1 ·
+// Poser : ♚g8 ♝a5 ».
 function renderSetup(setup) {
   const nodes = [];
+  if (setup && setup.remove.length) {
+    nodes.push(`Retirer : ${setup.remove.map((r) => r.square).join(' ')}`);
+  }
   if (setup && setup.put.length) {
-    nodes.push('Poser : ');
+    nodes.push(nodes.length ? ' · Poser : ' : 'Poser : ');
     for (const step of setup.put) {
       const chip = document.createElement('span');
       chip.className = `chip ${step.colour}`;
       chip.textContent = step.symbol;
       nodes.push(chip, `${step.square} `);
     }
-  }
-  if (setup && setup.remove.length) {
-    if (nodes.length) nodes.push('· ');
-    nodes.push(`Retirer : ${setup.remove.map((r) => r.square).join(' ')}`);
   }
   el('differing').replaceChildren(...nodes);
 }
