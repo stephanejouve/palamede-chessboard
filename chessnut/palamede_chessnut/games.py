@@ -113,7 +113,9 @@ class Session:
         entries = player_games(self.bridge.viewer, account)
         if entries is None:
             return 502, {"error": NO_SERVER}
-        return 200, {"account": account, "current": self.bridge.game_id, "games": entries}
+        # A stopped game is not « open » : the page lets the player choose it again (Junior #123).
+        current = None if self.bridge.stopped.is_set() else self.bridge.game_id
+        return 200, {"account": account, "current": current, "games": entries}
 
     def open_game(self, game_id: str) -> tuple[int, str]:
         """``(HTTP status, message)`` : 200 once the new bridge runs."""

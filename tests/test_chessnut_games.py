@@ -107,6 +107,14 @@ def test_the_list_when_the_server_does_not_answer(session, monkeypatch) -> None:
     assert session.games() == (502, {"error": NO_SERVER})
 
 
+def test_a_stopped_game_is_not_named_open(session, monkeypatch) -> None:
+    """After a 503 or a finished game, the page must let the player choose it again (Junior #123)."""
+    monkeypatch.setattr(viewer, "get_json", lambda _url: LISTING)
+    session.bridge.stopped.set()
+    status, body = session.games()
+    assert status == 200 and body["current"] is None
+
+
 def test_the_list_names_the_open_game(session, monkeypatch) -> None:
     monkeypatch.setattr(viewer, "get_json", lambda _url: LISTING)
     status, body = session.games()
@@ -212,7 +220,6 @@ def test_opening_after_the_game_ended(session, monkeypatch) -> None:
 def page(session):
     server = PageServer(session.bridge, RecentLog())
     server.session = session
-    session.on_change = lambda new: setattr(server, "bridge", new)
     server.start()
     yield server
     server.shutdown()
@@ -459,3 +466,13 @@ def test_a_window_closed_during_the_opening_is_not_told(session, monkeypatch) ->
     session.lock = ReleaseThenWait()
     assert session.open_game("009") == (200, "")
     assert session.closed and told == []
+
+
+def test_the_page_shows_the_sessions_bridge_whatever_it_was_told(page) -> None:
+    """Two crossing openings may call on_change out of order : the page never keeps a copy."""
+    other = running_bridge("009", chess.BLACK)
+    session = page.session
+    session.bridge = other
+    state = json.loads(request(page, "GET", "/state")[1])
+    assert (state["game_id"], state["color"]) == ("009", "black")
+    assert page.bridge is other

@@ -70,11 +70,9 @@ def main(argv: list[str] | None = None) -> None:
             title(bridge), page.url, width=900, height=640, text_select=True
         )
 
-        def changed(new: Bridge) -> None:
-            page.bridge = new
-            window.set_title(title(new))
-
-        session.on_change = changed
+        # The title of the session's bridge, not of the one told : two crossing
+        # openings may tell them out of order (review Junior #123).
+        session.on_change = lambda _new: window.set_title(title(session.bridge))
         webview.start(menu=[Menu("Fichier", [MenuAction("Ouvrir une partie…", page.request_open)])])
     finally:
         # Also when the window cannot open (no graphical session, review
