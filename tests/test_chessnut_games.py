@@ -357,6 +357,48 @@ def test_no_second_bridge_while_the_first_still_runs(session, monkeypatch) -> No
     assert session.bridge.game_id == "009"
 
 
+def test_the_stopped_game_can_be_opened_again(session, monkeypatch) -> None:
+    """After a 503, the game left on screen is stopped : choosing it restarts it (Junior #121)."""
+    old = session.bridge
+    old.stopped.set()
+    asked = answer_seat(monkeypatch, 200, {"colors": ["white"]})
+    assert session.open_game("008d") == (200, "")
+    assert session.bridge is not old and session.bridge.game_id == "008d"
+    assert not session.bridge.stopped.is_set()
+    assert asked == [f"008d {TOKEN}"]
+
+
+def test_no_game_opens_once_the_window_closes(session, monkeypatch) -> None:
+    asked = answer_seat(monkeypatch, 200, {"colors": ["white"]})
+    session.close()
+    assert session.bridge.stopped.is_set()
+    assert session.open_game("009")[0] == 503
+    assert asked == [] and session.changes == []
+
+
+def test_closing_waits_for_an_opening_under_way(session, monkeypatch) -> None:
+    """The window closes while /seat is asked : the bridge that opening starts is stopped too."""
+    asking = threading.Event()
+    answer = threading.Event()
+
+    def slow_seat(_self: Bridge):
+        asking.set()
+        answer.wait(5)
+        return 200, {"colors": ["white"]}
+
+    monkeypatch.setattr(Bridge, "seat", slow_seat)
+    opening = threading.Thread(target=session.open_game, args=("009",))
+    opening.start()
+    assert asking.wait(5)
+    closing = threading.Thread(target=session.close)
+    closing.start()
+    answer.set()
+    opening.join(5)
+    closing.join(5)
+    assert session.bridge.game_id == "009"
+    assert session.bridge.stopped.is_set()
+
+
 @pytest.mark.parametrize("transport", ["usb", "ble"])
 def test_the_new_bridge_keeps_the_board(monkeypatch, transport: str) -> None:
     """With a board, the opened game is played on it too (mutant of Junior, #121)."""

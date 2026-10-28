@@ -82,6 +82,8 @@ class Session:
         self.on_change = on_change
         self.worker: threading.Thread | None = None
         self.lock = threading.Lock()
+        #: The window is closed : no game may be opened any more.
+        self.closed = False
 
     def start(self) -> None:
         self.worker = threading.Thread(target=self.run, args=(self.bridge,), daemon=True)
@@ -96,6 +98,12 @@ class Session:
                 log.warning("the bridge of %s is still stopping", self.bridge.game_id)
                 return False
         return True
+
+    def close(self) -> None:
+        """The window is closing : stop the bridge, after any opening under way (review Junior #121)."""
+        with self.lock:
+            self.closed = True
+            self.stop()
 
     def games(self) -> tuple[int, dict[str, Any]]:
         """``(HTTP status, body)`` for the page's list."""
@@ -113,7 +121,10 @@ class Session:
             return 400, "nom de partie illisible"
         with self.lock:
             old = self.bridge
-            if game_id == old.game_id:
+            if self.closed:
+                return 503, "La fenêtre se ferme."
+            # A stopped bridge (503 above, game over) may be opened again (review Junior #121).
+            if game_id == old.game_id and not old.stopped.is_set():
                 return 200, ""
             new = Bridge(
                 old.viewer,

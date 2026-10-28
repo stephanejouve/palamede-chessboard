@@ -79,6 +79,6 @@ def main(argv: list[str] | None = None) -> None:
     finally:
         # Also when the window cannot open (no graphical session, review
         # Junior #87) : the bridge switches the LEDs off before the exit.
-        session.stop()
+        session.close()
         page.shutdown()
         page.server_close()
