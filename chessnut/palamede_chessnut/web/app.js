@@ -136,6 +136,12 @@ async function poll() {
   setTimeout(poll, POLL_MS);
 }
 
+// Display only (#91) : the bridge, the moves allowed and /state are unchanged.
+el('flip-btn').addEventListener('click', () => {
+  cg.toggleOrientation();
+  el('flip-btn').setAttribute('aria-pressed', String(cg.state.orientation !== lastColor));
+});
+
 el('fen-btn').addEventListener('click', async () => {
   const fen = el('fen');
   fen.hidden = !fen.hidden;
