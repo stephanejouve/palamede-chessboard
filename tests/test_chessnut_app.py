@@ -72,7 +72,10 @@ def test_snapshot_shows_the_squares_to_fix_and_the_moves() -> None:
     assert state["fen"] == e4().fen()
     assert state["history"] == ["e4"]
     assert state["differing"] == ["e2", "e4"]
-    assert state["setup_text"] == "Poser : ♙\ufe0ee4 · Retirer : e2"
+    assert state["setup"] == {
+        "put": [{"symbol": "♙\ufe0e", "colour": "white", "square": "e4"}],
+        "remove": [{"square": "e2"}],
+    }
     assert state["lights"]["sync"] == "fixing"
 
 
@@ -169,11 +172,11 @@ def test_setup_says_which_piece_goes_where() -> None:
 
 
 def test_setup_names_a_wrong_piece_by_what_belongs_there() -> None:
-    """A knight where a bishop belongs : « Poser : ♗c1 », the knight goes away."""
+    """A knight where a bishop belongs : the knight to remove, the bishop to put (Admin)."""
     game = chess.BaseBoard()
     observed = chess.BaseBoard()
     observed.set_piece_at(chess.C1, chess.Piece(chess.KNIGHT, chess.WHITE))
-    assert setup_text(game, observed) == "Poser : ♗\ufe0ec1"
+    assert setup_text(game, observed) == "Poser : ♗\ufe0ec1 · Retirer : c1"
 
 
 def test_nothing_to_set_up() -> None:

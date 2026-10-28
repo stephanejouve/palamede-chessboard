@@ -61,26 +61,38 @@ PIECE_NAMES = {
 TEXT_STYLE = "\ufe0e"
 
 
-def setup_text(game: chess.BaseBoard, observed: chess.BaseBoard) -> str | None:
-    """What to do on the board, by piece symbol (review of Stéphane, 28/10) ; ``None`` if nothing.
+def setup_steps(
+    game: chess.BaseBoard, observed: chess.BaseBoard
+) -> dict[str, list[dict[str, str]]]:
+    """What to do on the board (review of Stéphane and Admin, 28/10), top rank first.
 
-    « Poser : ♚g8 ♝a5 ♕c4 · Retirer : b7 d6 », top rank first. A square
-    holding the wrong piece is under « Poser » : the piece there goes away.
+    ``put`` : the piece each square needs (symbol, colour, square). ``remove`` :
+    the squares to clear, including those holding a wrong piece, which must
+    go before the right one is put there.
     """
     put, remove = [], []
     squares = sorted(differing_squares(game, observed), key=lambda s: (-chess.square_rank(s), s))
     for square in squares:
-        wanted = game.piece_at(square)
         name = chess.square_name(square)
-        if wanted is None:
-            remove.append(name)
-        else:
-            put.append(wanted.unicode_symbol() + TEXT_STYLE + name)
+        if observed.piece_at(square) is not None:
+            remove.append({"square": name})
+        wanted = game.piece_at(square)
+        if wanted is not None:
+            colour = "white" if wanted.color == chess.WHITE else "black"
+            put.append(
+                {"symbol": wanted.unicode_symbol() + TEXT_STYLE, "colour": colour, "square": name}
+            )
+    return {"put": put, "remove": remove}
+
+
+def setup_text(game: chess.BaseBoard, observed: chess.BaseBoard) -> str | None:
+    """« Poser : ♚g8 ♝a5 · Retirer : b7 c1 », or ``None`` when the board is right."""
+    steps = setup_steps(game, observed)
     parts = []
-    if put:
-        parts.append("Poser : " + " ".join(put))
-    if remove:
-        parts.append("Retirer : " + " ".join(remove))
+    if steps["put"]:
+        parts.append("Poser : " + " ".join(p["symbol"] + p["square"] for p in steps["put"]))
+    if steps["remove"]:
+        parts.append("Retirer : " + " ".join(r["square"] for r in steps["remove"]))
     return " · ".join(parts) or None
 
 
@@ -147,8 +159,8 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
         "to_relay": bridge.to_relay,
         "relay_text": relay_text(bridge),
         "differing": differing,
-        "setup_text": (
-            setup_text(chess.BaseBoard(game.board_fen()), observed)
+        "setup": (
+            setup_steps(chess.BaseBoard(game.board_fen()), observed)
             if game is not None and observed is not None
             else None
         ),

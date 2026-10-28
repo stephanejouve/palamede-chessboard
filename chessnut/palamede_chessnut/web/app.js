@@ -83,6 +83,26 @@ function renderMouse(state) {
   });
 }
 
+// By piece symbol, on a light or dark chip for its colour (review of Stéphane
+// and Admin, 28/10) : « Poser : ♚g8 ♝a5 · Retirer : b7 c1 ».
+function renderSetup(setup) {
+  const nodes = [];
+  if (setup && setup.put.length) {
+    nodes.push('Poser : ');
+    for (const step of setup.put) {
+      const chip = document.createElement('span');
+      chip.className = `chip ${step.colour}`;
+      chip.textContent = step.symbol;
+      nodes.push(chip, `${step.square} `);
+    }
+  }
+  if (setup && setup.remove.length) {
+    if (nodes.length) nodes.push('· ');
+    nodes.push(`Retirer : ${setup.remove.map((r) => r.square).join(' ')}`);
+  }
+  el('differing').replaceChildren(...nodes);
+}
+
 function statusText(state) {
   if (!state.fen) return 'En attente de la partie…';
   if (state.finished || (state.mouse && !state.live)) return 'Partie terminée.';
@@ -133,8 +153,7 @@ function render(state) {
   el('relay').textContent = state.relay_text || '';
   const fixing = state.lights.sync === 'fixing' && state.differing.length > 0;
   el('differing').hidden = !fixing;
-  // By piece, not a list of squares (review of Stéphane, 28/10).
-  el('differing').textContent = fixing ? state.setup_text || '' : '';
+  renderSetup(fixing ? state.setup : null);
   el('fen').textContent = state.fen || '';
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');
 }
