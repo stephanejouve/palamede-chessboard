@@ -105,6 +105,7 @@ function render(state) {
   if (state.color !== lastColor) {
     cg.set({ orientation: state.color });
     lastColor = state.color;
+    el('flip-btn').setAttribute('aria-pressed', 'false');
   }
   if (state.fen && state.fen !== lastFen) {
     cg.set({ fen: state.fen });
@@ -135,6 +136,12 @@ async function poll() {
   }
   setTimeout(poll, POLL_MS);
 }
+
+// Display only (#91) : the bridge, the moves allowed and /state are unchanged.
+el('flip-btn').addEventListener('click', () => {
+  cg.toggleOrientation();
+  el('flip-btn').setAttribute('aria-pressed', String(cg.state.orientation !== lastColor));
+});
 
 el('fen-btn').addEventListener('click', async () => {
   const fen = el('fen');
