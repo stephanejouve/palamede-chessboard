@@ -148,9 +148,9 @@ class Session:
                 return 503, BOARD_BUSY
             self.bridge = new
             self.start()
-            closed = self.closed
         # Outside the lock, which close() waits for on the main thread : a backend that
         # sets the title synchronously on that thread would wait for us (review Admin #123).
-        if self.on_change is not None and not closed:
+        # Read after the lock : a close() that came in meanwhile has set it.
+        if self.on_change is not None and not self.closed:
             self.on_change(new)
         return 200, ""

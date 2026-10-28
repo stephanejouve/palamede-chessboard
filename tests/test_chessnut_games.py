@@ -429,3 +429,33 @@ def test_the_window_is_told_outside_the_lock(session, monkeypatch) -> None:
     session.on_change = lambda _new: held.append(session.lock.locked())
     assert session.open_game("009") == (200, "")
     assert held == [False]
+
+
+def test_a_window_closed_during_the_opening_is_not_told(session, monkeypatch) -> None:
+    """close() wins the lock once the bridge is started : no title for a closed window."""
+    answer_seat(monkeypatch, 200, {"colors": ["white"]})
+    told: list[Bridge] = []
+    session.on_change = told.append
+    start = session.start
+
+    def start_then_close() -> None:
+        start()
+        threading.Thread(target=session.close).start()
+
+    monkeypatch.setattr(session, "start", start_then_close)
+    real_lock = session.lock
+
+    class ReleaseThenWait:
+        def __enter__(self):
+            return real_lock.__enter__()
+
+        def __exit__(self, *exc):
+            real_lock.__exit__(*exc)
+            for _ in range(100):
+                if session.closed:
+                    break
+                threading.Event().wait(0.01)
+
+    session.lock = ReleaseThenWait()
+    assert session.open_game("009") == (200, "")
+    assert session.closed and told == []
