@@ -219,7 +219,7 @@ async def test_tick_posts_the_move_and_lights_the_reply() -> None:
         posted.append(uci)
         return None, False
 
-    bridge._post_move = accept  # type: ignore[method-assign]
+    bridge.post_move = accept  # type: ignore[method-assign]
     written: list[bytes] = []
 
     async def write(command: bytes) -> None:
@@ -244,7 +244,7 @@ async def test_refused_move_is_not_posted_twice() -> None:
         posted.append(uci)
         return "HTTP 403 NOT_YOUR_TURN", True
 
-    bridge._post_move = refuse  # type: ignore[method-assign]
+    bridge.post_move = refuse  # type: ignore[method-assign]
 
     async def write(command: bytes) -> None:
         pass
@@ -282,8 +282,8 @@ async def test_undelivered_move_is_retried_not_refused() -> None:
         posted.append(uci)
         return "[Errno 65] No route to host", False
 
-    bridge._post_move = unreachable  # type: ignore[method-assign]
-    bridge._server_position = lambda: (chess.STARTING_FEN, False)  # type: ignore[method-assign]
+    bridge.post_move = unreachable  # type: ignore[method-assign]
+    bridge.server_position = lambda: (chess.STARTING_FEN, False)  # type: ignore[method-assign]
     written: list[bytes] = []
 
     async def write(command: bytes) -> None:
@@ -333,7 +333,7 @@ def test_token_is_not_forwarded_on_a_redirect() -> None:
         threading.Thread(target=server.handle_request, daemon=True).start()
     try:
         bridge = Bridge(f"http://127.0.0.1:{viewer.server_port}", "g1", chess.WHITE, "secret")
-        message, refused = bridge._post_move("e2e4")
+        message, refused = bridge.post_move("e2e4")
     finally:
         target.server_close()
         viewer.server_close()
@@ -360,7 +360,7 @@ def test_only_a_4xx_is_a_refusal(monkeypatch, error: Exception, expected: bool) 
             raise error
 
     monkeypatch.setattr(viewer_module, "_OPENER", Opener())
-    message, refused = Bridge("https://viewer.test", "g1", chess.WHITE, "t")._post_move("e2e4")
+    message, refused = Bridge("https://viewer.test", "g1", chess.WHITE, "t").post_move("e2e4")
     assert message and refused is expected
 
 
@@ -512,8 +512,8 @@ async def _retry_after_network_error(server_fen: str | None) -> tuple[Bridge, li
         posted.append(uci)
         return "timed out", False
 
-    bridge._post_move = lost  # type: ignore[method-assign]
-    bridge._server_position = lambda: (  # type: ignore[method-assign]
+    bridge.post_move = lost  # type: ignore[method-assign]
+    bridge.server_position = lambda: (  # type: ignore[method-assign]
         None if server_fen is None else (server_fen, False)
     )
 
@@ -657,7 +657,7 @@ async def test_mating_move_is_relayed_before_the_end(caplog: pytest.LogCaptureFi
 
 async def test_move_read_is_logged_with_its_san(caplog: pytest.LogCaptureFixture) -> None:
     bridge = ready_bridge()
-    bridge._post_move = lambda uci: (None, False)  # type: ignore[method-assign]
+    bridge.post_move = lambda uci: (None, False)  # type: ignore[method-assign]
     bridge.on_frame(None, bytearray(frame(placement(after("Nf3")))))
     bridge.settled_since = time.monotonic() - 1.0
     with caplog.at_level("INFO", logger=bridge_module.log.name):

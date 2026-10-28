@@ -66,6 +66,10 @@ def _play(bridge: Bridge, uci: str) -> tuple[int, str]:
         return 409, "pas de partie en cours"
     if bridge.pending is not None:
         return 409, "coup précédent en attente du serveur"
+    if bridge.undelivered is not None:
+        stale = _catch_up(bridge, game)
+        if stale is not None:
+            return stale
     if game.turn != bridge.player:
         return 409, "ce n'est pas votre tour"
     try:
@@ -76,11 +80,32 @@ def _play(bridge: Bridge, uci: str) -> tuple[int, str]:
         return 400, "coup illégal"
     log.info("move played in the window : %s (%s)", move.uci(), game.san(move))
     bridge.pending = move
-    error, refused = bridge._post_move(move.uci())
+    error, refused = bridge.post_move(move.uci())
     if error is None:
         return 200, "ok"
     bridge.pending = None
     log.warning("move %s %s : %s", move.uci(), "refused" if refused else "not delivered", error)
     if refused:
         return 409, "coup refusé par le serveur"
+    # The answer may be lost while the move landed : checked before the next one.
+    bridge.undelivered = move
     return 502, "coup non transmis : serveur injoignable, réessayez"
+
+
+def _catch_up(bridge: Bridge, game: chess.Board) -> tuple[int, str] | None:
+    """After a lost answer : did that move reach the viewer ? (review Admin #97)
+
+    As on the board path (``_already_played``), the viewer's position
+    decides, compared as positions. If it moved, the page is behind : the
+    player must see the new position before playing, whoever moved since.
+    """
+    server = bridge.server_position()
+    if server is None:
+        return 502, "serveur injoignable : position inconnue, réessayez"
+    fen, over = server
+    if chess.Board(fen).epd() != game.epd():
+        log.info("move %s had reached the viewer", bridge.undelivered)
+        bridge.apply_stream({"fen": fen, "ply": "?", "turn": "?", "is_game_over": over})
+        return 409, "votre coup précédent était bien arrivé : regardez la position avant de rejouer"
+    bridge.undelivered = None
+    return None

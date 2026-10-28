@@ -313,3 +313,51 @@ def test_no_board_is_an_app_option(monkeypatch) -> None:
     assert bridge_from_args([*argv, "--no-board"], "t", app=True).with_board is False
     with pytest.raises(SystemExit):
         bridge_from_args([*argv, "--no-board"], "t")  # the CLI has no window
+
+
+# ---- a lost answer (review Admin #97) -------------------------------------
+
+
+def lost_then(bridge: Bridge, posts: Posts, server: tuple[str, bool] | None) -> None:
+    """``e2e4`` reaches the viewer but its answer is lost ; then the viewer says ``server``."""
+    posts.answer[0] = (None, "timed out")
+    assert mouse.play_from_page(bridge, "e2e4")[0] == 502
+    posts.answer[0] = (200, "")
+    bridge.server_position = lambda: server  # type: ignore[method-assign]
+
+
+def test_a_move_that_had_landed_is_not_followed_blind(posts) -> None:
+    """The opponent already answered : the next move waits for the new position."""
+    bridge = mouse_bridge()
+    after = chess.Board()
+    for san in ("e4", "e5"):
+        after.push_san(san)
+    lost_then(bridge, posts, (after.fen(), False))
+    status, message = mouse.play_from_page(bridge, "d2d4")
+    assert status == 409 and "bien arrivé" in message
+    assert [p[2]["uci"] for p in posts] == ["e2e4"]  # d2d4 never posted
+    assert bridge.game is not None and bridge.game.board_fen() == after.board_fen()
+    assert bridge.undelivered is None
+    assert mouse.play_from_page(bridge, "d2d4") == (200, "ok")  # now seen, now played
+
+
+def test_a_move_that_had_not_landed_is_replaced(posts) -> None:
+    bridge = mouse_bridge()
+    lost_then(bridge, posts, (chess.STARTING_FEN, False))
+    assert mouse.play_from_page(bridge, "d2d4") == (200, "ok")
+    assert [p[2]["uci"] for p in posts] == ["e2e4", "d2d4"]
+    assert bridge.undelivered is None
+
+
+def test_an_unreadable_viewer_posts_nothing(posts) -> None:
+    bridge = mouse_bridge()
+    lost_then(bridge, posts, None)
+    assert mouse.play_from_page(bridge, "d2d4")[0] == 502
+    assert [p[2]["uci"] for p in posts] == ["e2e4"]
+    assert bridge.undelivered == chess.Move.from_uci("e2e4")  # still checked next time
+
+
+def test_page_accepts_the_localhost_origin(page, posts) -> None:
+    headers = {**good_headers(page), "Origin": f"http://localhost:{page.port}"}
+    headers["Host"] = f"localhost:{page.port}"
+    assert request(page, "POST", "/move", MOVE, **headers)[0] == 200

@@ -216,7 +216,7 @@ class Bridge:
                 self.stream_link = "reconnecting"
             time.sleep(RETRY_SECONDS)
 
-    def _post_move(self, uci: str) -> tuple[str | None, bool]:
+    def post_move(self, uci: str) -> tuple[str | None, bool]:
         """Play ``uci`` through the viewer : ``(None, False)``, or ``(message, refused)``.
 
         ``refused`` only for a 4xx, when the viewer judged the move. A network
@@ -236,7 +236,7 @@ class Bridge:
     def _post_resign(self) -> tuple[int | None, str]:
         return viewer.post(f"{self.viewer}/api/games/{quote(self.game_id)}/resign", self._token)
 
-    def _server_position(self) -> tuple[str, bool] | None:
+    def server_position(self) -> tuple[str, bool] | None:
         """``(fen, game over)`` according to the viewer, ``None`` if it cannot be read."""
         try:
             data = viewer.get_json(f"{self.viewer}/api/positions?game_id={quote(self.game_id)}")
@@ -375,7 +375,7 @@ class Bridge:
         self.pending = move
         assert self.game is not None
         log.info("move read on the board : %s (%s)", move.uci(), self.game.san(move))
-        error, refused = await asyncio.to_thread(self._post_move, move.uci())
+        error, refused = await asyncio.to_thread(self.post_move, move.uci())
         self.undelivered = None
         if error is None:
             return
@@ -396,7 +396,7 @@ class Bridge:
         compared as positions rather than FEN strings ; if it cannot be read,
         the retry waits.
         """
-        server = await asyncio.to_thread(self._server_position)
+        server = await asyncio.to_thread(self.server_position)
         if server is None:
             self.retry_at = time.monotonic() + RETRY_SECONDS
             return True
