@@ -1,10 +1,12 @@
-"""The « Échiquier » app (#78, part 1) : the bridge with a window, read-only.
+"""The « Échiquier » app (#78) : the bridge with a window.
 
-    palamede-chessnut-app --viewer <viewer URL> --game <game_id> --color white
+    palamede-chessnut-app --viewer <viewer URL> --game <game_id> --color white [--no-board]
 
-Same options as ``palamede-chessnut``. The window (pywebview : WebKit on
-macOS, Qt on Linux, Edge WebView2 on Windows) shows the local page
-of :mod:`palamede_chessnut.page`. pywebview needs the main thread for its
+Same options as ``palamede-chessnut``, plus ``--no-board`` : no Chessnut,
+the player's moves are made with the mouse in the window (#92).
+
+The window (pywebview : WebKit on macOS, Qt on Linux, Edge WebView2 on
+Windows) shows the local page of :mod:`palamede_chessnut.page`. pywebview needs the main thread for its
 window, so the bridge runs beside it, in a thread with its own event loop.
 Closing the window stops the bridge, LEDs off.
 """
@@ -39,7 +41,9 @@ def run_bridge(bridge: Bridge) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    bridge = bridge_from_args(argv, "Play a viewer game on a Chessnut Air+ board, in a window.")
+    bridge = bridge_from_args(
+        argv, "Play a viewer game on a Chessnut Air+ board, in a window.", app=True
+    )
     try:
         import webview
     except ImportError:

@@ -53,17 +53,28 @@ def read_token(token_file: Path | None) -> str:
     return token
 
 
-def bridge_from_args(argv: list[str] | None, description: str) -> Bridge:
-    """Parse the command line shared by the CLI and the app (#78), and build the bridge."""
+def bridge_from_args(argv: list[str] | None, description: str, *, app: bool = False) -> Bridge:
+    """Parse the command line shared by the CLI and the app (#78), and build the bridge.
+
+    ``app`` adds ``--no-board`` : the window is then played with the mouse
+    (#92). The CLI has no window, so it always needs a board.
+    """
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("--viewer", required=True, help="viewer base URL")
     parser.add_argument("--game", required=True, help="game_id")
     parser.add_argument("--color", required=True, choices=["white", "black"])
     parser.add_argument("--token-file", type=Path, help="file holding the player token")
+    if app:
+        parser.add_argument(
+            "--no-board", action="store_true", help="no board : play with the mouse in the window"
+        )
     args = parser.parse_args(argv)
     check_viewer_url(args.viewer)
     player = chess.WHITE if args.color == "white" else chess.BLACK
-    return Bridge(args.viewer, args.game, player, read_token(args.token_file))
+    with_board = not getattr(args, "no_board", False)
+    return Bridge(
+        args.viewer, args.game, player, read_token(args.token_file), with_board=with_board
+    )
 
 
 def main(argv: list[str] | None = None) -> None:

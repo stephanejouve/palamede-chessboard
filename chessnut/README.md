@@ -42,8 +42,16 @@ Same options as `palamede-chessnut`. The `app` extra brings pywebview :
 WebKit on macOS, Edge WebView2 on Windows, Qt on Linux. The window reads
 a page served by the bridge on `127.0.0.1` only ; the player token stays
 in the bridge and never reaches the page. Closing the window stops the
-bridge, LEDs off. The window only shows the game : moves are still played
-on the board.
+bridge, LEDs off. With a board, the window only shows the game : moves are
+played on the board, which is the reference.
+
+Without a board, add `--no-board` : the bridge looks for no Chessnut, and
+the player's moves are made with the mouse in the window (click-click or
+drag, legal squares shown, promotion piece chosen beside the board). The
+page asks the bridge for the move ; the bridge checks it and posts it with
+the token, which still never reaches the page. That request must come from
+the page itself : its `Origin`, and a nonce drawn at each launch and sent
+in the `X-Palamede-Nonce` header (#92).
 
 The page embeds chessground 9.2.1 (lichess), under GPL-3.0-or-later : its
 licence, provenance and TypeScript source ship with it, in

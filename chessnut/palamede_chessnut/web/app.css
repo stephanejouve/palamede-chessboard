@@ -51,7 +51,9 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 }
 #side p { margin: 0 0 8px; }
 #relay { font-weight: 600; }
-#differing { color: var(--warn); }
+#differing, #move-error { color: var(--warn); }
+#promotion-row { display: block; margin-bottom: 8px; }
+#promotion-row[hidden], .light[hidden] { display: none; }
 #moves {
   max-height: 260px;
   overflow-y: auto;

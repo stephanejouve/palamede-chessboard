@@ -105,11 +105,21 @@ def decide(
 class Bridge:
     """One physical board bound to one game of the viewer."""
 
-    def __init__(self, viewer_url: str, game_id: str, player: chess.Color, token: str) -> None:
+    def __init__(
+        self,
+        viewer_url: str,
+        game_id: str,
+        player: chess.Color,
+        token: str,
+        *,
+        with_board: bool = True,
+    ) -> None:
         self.viewer = viewer_url.rstrip("/")
         self.game_id = game_id
         self.player = player
         self._token = token
+        #: ``False`` : no board, the app's window is played with the mouse (#92).
+        self.with_board = with_board
         self.game: chess.Board | None = None
         self.live = False
         self.synced = False
@@ -438,7 +448,16 @@ class Bridge:
         if task is not None:
             cancel_on_sigterm(loop, task)
         threading.Thread(target=self._follow_stream, args=(loop,), daemon=True).start()
-        await self.run_board()
+        await (self.run_board() if self.with_board else self.watch_game())
+
+    async def watch_game(self) -> None:
+        """No board (#92) : the stream alone, until the game is over."""
+        while not self.stopped.is_set():
+            if self.game is not None and not self.live:
+                self.finished = True
+                log.info("game %s over", self.game_id)
+                self.stopped.set()
+            await asyncio.sleep(TICK_SECONDS)
 
 
 def cancel_on_sigterm(loop: asyncio.AbstractEventLoop, task: asyncio.Task[Any]) -> None:

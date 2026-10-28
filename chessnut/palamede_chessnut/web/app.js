@@ -1,14 +1,21 @@
-// Local page of the app (#78) : polls the bridge's /state, read-only.
+// Local page of the app (#78) : polls the bridge's /state. Without a board,
+// the player's moves are made here with the mouse (#92) and sent to the
+// bridge, which checks them and posts them with the token.
 import { Chessground } from '/vendor/chessground.min.js';
 
 const POLL_MS = 500;
+const NONCE = document.querySelector('meta[name="palamede-nonce"]').content;
 const LIGHT_CLASS = {
   on: 'on', searching: 'warn', connecting: 'warn', reconnecting: 'warn', fixing: 'warn',
 };
 
+// Not viewOnly : chessground only binds the mouse at creation. Nobody may
+// move until renderMouse() gives the player's colour (never with a board).
 const cg = Chessground(document.getElementById('board'), {
   fen: 'start',
-  viewOnly: true,
+  movable: { free: false, color: undefined },
+  premovable: { enabled: false },
+  draggable: { showGhost: true },
   coordinates: true,
   animation: { enabled: true, duration: 200 },
   drawable: { enabled: false },
@@ -17,15 +24,64 @@ const cg = Chessground(document.getElementById('board'), {
 const el = (id) => document.getElementById(id);
 let lastFen = null;
 let lastColor = null;
+let lastDests = '';
+let sending = false;
 
 function setLight(name, value) {
   const node = el(`light-${name}`);
+  node.hidden = value === 'none';
   node.className = `light ${LIGHT_CLASS[value] || 'waiting'}`;
+}
+
+function showMoveError(message) {
+  el('move-error').hidden = !message;
+  el('move-error').textContent = message || '';
+}
+
+async function sendMove(orig, dest, promotions) {
+  const uci = orig + dest + (promotions.includes(orig + dest) ? el('promotion').value : '');
+  sending = true;
+  cg.set({ movable: { color: undefined, dests: new Map() } });
+  try {
+    const response = await fetch('/move', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Palamede-Nonce': NONCE },
+      body: JSON.stringify({ uci }),
+    });
+    const answer = await response.json();
+    showMoveError(response.ok ? '' : answer.error);
+    if (!response.ok) cg.set({ fen: lastFen });
+  } catch (_err) {
+    showMoveError('Le pont ne répond plus.');
+    cg.set({ fen: lastFen });
+  }
+  sending = false;
+  lastDests = '';
+}
+
+// Only the player's colour, only on their turn : the bridge sends the dests.
+function renderMouse(state) {
+  el('promotion-row').hidden = !state.mouse;
+  if (!state.mouse || sending) return;
+  const key = JSON.stringify([state.fen, state.dests]);
+  if (key === lastDests) return;
+  lastDests = key;
+  const dests = new Map(Object.entries(state.dests));
+  cg.set({
+    turnColor: state.fen && state.fen.split(' ')[1] === 'w' ? 'white' : 'black',
+    movable: {
+      free: false,
+      color: dests.size ? state.color : undefined,
+      dests,
+      showDests: true,
+      events: { after: (orig, dest) => sendMove(orig, dest, state.promotions) },
+    },
+  });
 }
 
 function statusText(state) {
   if (!state.fen) return 'En attente de la partie…';
-  if (state.finished) return 'Partie terminée.';
+  if (state.finished || (state.mouse && !state.live)) return 'Partie terminée.';
   if (!state.live) return 'Partie terminée : remettez la position finale sur l\'échiquier.';
   const turn = state.fen.split(' ')[1] === 'w' ? 'white' : 'black';
   return turn === state.color ? 'À vous de jouer.' : 'Au tour de l\'adversaire.';
@@ -54,6 +110,7 @@ function render(state) {
     lastFen = state.fen;
     renderMoves(state.history);
   }
+  renderMouse(state);
   cg.setAutoShapes(state.differing.map((key) => ({ orig: key, brush: 'yellow' })));
   setLight('bluetooth', state.lights.bluetooth);
   setLight('server', state.lights.server);

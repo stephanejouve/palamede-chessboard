@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import chess
 
+from palamede_chessnut.mouse import legal_targets
 from palamede_chessnut.moves import differing_squares
 
 if TYPE_CHECKING:
@@ -30,7 +31,12 @@ class RecentLog(logging.Handler):
 
 
 def sync_light(bridge: Bridge) -> str:
-    """``"waiting"`` (no game or board yet), ``"on"`` (the board matches), ``"fixing"``."""
+    """``"waiting"`` (no game or board yet), ``"on"`` (the board matches), ``"fixing"``.
+
+    ``"none"`` without a board (#92) : nothing to keep in step.
+    """
+    if not bridge.with_board:
+        return "none"
     if bridge.game is None or bridge.observed is None:
         return "waiting"
     if bridge.observed.board_fen() == bridge.game.board_fen():
@@ -49,6 +55,7 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
         if game is not None and observed is not None
         else []
     )
+    dests, promotions = legal_targets(bridge)
     return {
         "game_id": bridge.game_id,
         "color": "white" if bridge.player == chess.WHITE else "black",
@@ -59,10 +66,20 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
         "finished": bridge.finished,
         "to_relay": bridge.to_relay,
         "differing": differing,
+        # Mouse play (#92) : what the page may play now, empty with a board.
+        "mouse": not bridge.with_board,
+        "dests": dests,
+        "promotions": promotions,
         "lights": {
-            "bluetooth": "on" if bridge.board_link == "connected" else "searching",
+            "bluetooth": _bluetooth_light(bridge),
             "server": "on" if bridge.stream_link == "connected" else bridge.stream_link,
             "sync": sync_light(bridge),
         },
         "log": list(recent.lines) if recent is not None else [],
     }
+
+
+def _bluetooth_light(bridge: Bridge) -> str:
+    if not bridge.with_board:
+        return "none"
+    return "on" if bridge.board_link == "connected" else "searching"
