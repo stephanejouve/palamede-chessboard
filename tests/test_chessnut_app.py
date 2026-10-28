@@ -17,7 +17,7 @@ from palamede_chessnut import bridge as bridge_module
 from palamede_chessnut.bridge import Bridge, cancel_on_sigterm
 from palamede_chessnut.cli import bridge_from_args
 from palamede_chessnut.page import CHESSGROUND, CONTENT_SECURITY_POLICY, PageServer
-from palamede_chessnut.status import RecentLog, snapshot, sync_light
+from palamede_chessnut.status import RecentLog, setup_text, snapshot, sync_light
 
 import palamede_chessboard
 
@@ -72,6 +72,7 @@ def test_snapshot_shows_the_squares_to_fix_and_the_moves() -> None:
     assert state["fen"] == e4().fen()
     assert state["history"] == ["e4"]
     assert state["differing"] == ["e2", "e4"]
+    assert state["setup_text"] == "À poser : pion blanc en e4 — À retirer : e2"
     assert state["lights"]["sync"] == "fixing"
 
 
@@ -154,6 +155,30 @@ def test_link_lights_follow_the_bridge() -> None:
     assert snapshot(bridge)["lights"]["server"] == "reconnecting"
 
 
+def test_setup_says_which_piece_goes_where() -> None:
+    """Review of Stéphane (28/10) : piece names, grouped by gesture, top rank first."""
+    game = chess.BaseBoard("6k1/5pp1/4p2p/b3P3/2Q5/2p1P1KP/5PP1/8")
+    observed = chess.BaseBoard("6k1/1p3pp1/3p3p/4P3/1P2P3/4P1KP/5PPP/5B2")
+    text = setup_text(game, observed)
+    assert text is not None
+    put, remove = text.split(" — ")
+    assert put.startswith("À poser : pion noir en e6, fou noir en a5, dame blanche en c4")
+    assert "pion noir en c3" in put
+    assert remove == "À retirer : b7, d6, b4, e4, h2, f1"
+
+
+def test_setup_names_a_wrong_piece_by_what_belongs_there() -> None:
+    """A knight where a bishop belongs : « à poser : fou blanc », the knight goes away."""
+    game = chess.BaseBoard()
+    observed = chess.BaseBoard()
+    observed.set_piece_at(chess.C1, chess.Piece(chess.KNIGHT, chess.WHITE))
+    assert setup_text(game, observed) == "À poser : fou blanc en c1"
+
+
+def test_nothing_to_set_up() -> None:
+    assert setup_text(chess.BaseBoard(), chess.BaseBoard()) is None
+
+
 def test_board_light_is_grey_once_the_bridge_stops() -> None:
     """Game over, the bridge has closed the link : grey, not orange (Mac smoke, 28/10)."""
     bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
@@ -162,6 +187,19 @@ def test_board_light_is_grey_once_the_bridge_stops() -> None:
     bridge.finished = True
     bridge.stopped.set()
     assert snapshot(bridge)["lights"]["bluetooth"] == "closed"
+
+
+def test_board_light_after_the_end_without_a_board_or_while_connected() -> None:
+    """Review Junior #113 : --no-board keeps no light ; connected then stopped is grey."""
+    mouse = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN, with_board=False)
+    mouse.finished = True
+    mouse.stopped.set()
+    assert snapshot(mouse)["lights"]["bluetooth"] == "none"
+    board = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
+    board.board_link, board.link_kind = "connected", "usb"
+    board.finished = True
+    board.stopped.set()
+    assert snapshot(board)["lights"]["bluetooth"] == "closed"
 
 
 def test_board_light_is_red_when_the_bridge_stops_on_an_error() -> None:

@@ -57,6 +57,43 @@ PIECE_NAMES = {
 }
 
 
+COLOUR_NAMES = {chess.WHITE: ("blanc", "blanche"), chess.BLACK: ("noir", "noire")}
+#: Feminine piece names take the feminine colour : « dame blanche », « tour noire ».
+FEMININE = {chess.ROOK, chess.QUEEN}
+
+
+def piece_name(piece: chess.Piece) -> str:
+    """« cavalier noir », « dame blanche »."""
+    masculine, feminine = COLOUR_NAMES[piece.color]
+    return (
+        f"{PIECE_NAMES[piece.piece_type]} {feminine if piece.piece_type in FEMININE else masculine}"
+    )
+
+
+def setup_text(game: chess.BaseBoard, observed: chess.BaseBoard) -> str | None:
+    """What to do on the board, by piece (review of Stéphane, 28/10) ; ``None`` if nothing.
+
+    « À poser : roi noir en g8, fou noir en a5 — À retirer : b7, d6 ». A square
+    holding the wrong piece is under « à poser » : the piece there goes away.
+    """
+    put, remove = [], []
+    for square in sorted(
+        differing_squares(game, observed), key=lambda s: (-chess.square_rank(s), s)
+    ):
+        wanted = game.piece_at(square)
+        name = chess.square_name(square)
+        if wanted is None:
+            remove.append(name)
+        else:
+            put.append(f"{piece_name(wanted)} en {name}")
+    parts = []
+    if put:
+        parts.append("À poser : " + ", ".join(put))
+    if remove:
+        parts.append("À retirer : " + ", ".join(remove))
+    return " — ".join(parts) or None
+
+
 def relay_text(bridge: Bridge) -> str | None:
     """« Jouez le coup de l'adversaire : cavalier g8 → f6 », or ``None``.
 
@@ -120,6 +157,11 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
         "to_relay": bridge.to_relay,
         "relay_text": relay_text(bridge),
         "differing": differing,
+        "setup_text": (
+            setup_text(chess.BaseBoard(game.board_fen()), observed)
+            if game is not None and observed is not None
+            else None
+        ),
         # Mouse play (#92) : what the page may play now, empty with a board.
         "mouse": not bridge.with_board,
         # The link in use : with --transport auto, USB or Bluetooth (#110).

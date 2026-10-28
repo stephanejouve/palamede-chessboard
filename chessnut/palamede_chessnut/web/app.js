@@ -133,8 +133,8 @@ function render(state) {
   el('relay').textContent = state.relay_text || '';
   const fixing = state.lights.sync === 'fixing' && state.differing.length > 0;
   el('differing').hidden = !fixing;
-  el('differing').textContent = fixing
-    ? `Remettez les pièces des cases en jaune : ${state.differing.join(', ')}` : '';
+  // By piece, not a list of squares (review of Stéphane, 28/10).
+  el('differing').textContent = fixing ? state.setup_text || '' : '';
   el('fen').textContent = state.fen || '';
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');
 }
