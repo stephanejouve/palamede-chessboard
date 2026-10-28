@@ -374,6 +374,9 @@ def test_the_token_is_in_no_answer_of_the_page(page, posts) -> None:
         body = json.dumps({"uci": uci}).encode()
         answers.append(request(page, "POST", "/move", body, **good_headers(page)))
     page.bridge.pending = None
+    posts.answer[0] = (409, "stale")  # the viewer refuses : its own branch (review Junior #97)
+    answers.append(request(page, "POST", "/move", MOVE, **good_headers(page)))
+    assert json.loads(answers[-1][1]) == {"error": "coup refusé par le serveur"}
     posts.answer[0] = (None, "down")
     answers.append(request(page, "POST", "/move", MOVE, **good_headers(page)))  # 502
     answers.append(request(page, "POST", "/move", MOVE, **{"X-Palamede-Nonce": "x"}))  # 403
@@ -381,6 +384,12 @@ def test_the_token_is_in_no_answer_of_the_page(page, posts) -> None:
     for _status, body in answers:
         assert TOKEN.encode() not in body
         assert b"Bearer" not in body
+
+
+def test_the_page_offers_to_flip_the_board(page) -> None:
+    """#91 : display only, nothing new on the bridge's side."""
+    status, html = request(page, "GET", "/")
+    assert status == 200 and b'id="flip-btn"' in html
 
 
 def test_server_position_keeps_the_moves(monkeypatch) -> None:
