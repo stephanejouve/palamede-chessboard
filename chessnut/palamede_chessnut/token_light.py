@@ -51,7 +51,11 @@ def message(bridge: Bridge) -> str | None:
     """What the page says about the token, or ``None`` when all is well."""
     light = bridge.token_light
     if light == "refused":
-        return "Jeton refusé par le serveur : vérifiez le fichier du jeton (bouton 🔑 du viewer)."
+        # The token is read once, at launch (review Admin #106).
+        return (
+            "Jeton refusé par le serveur : corrigez le fichier du jeton "
+            "(bouton 🔑 du viewer), puis relancez l'app."
+        )
     if light == "not_player":
         return "Ce jeton est valide, mais son compte ne joue pas cette partie."
     if light == "wrong_color":

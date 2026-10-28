@@ -58,7 +58,7 @@ def test_account_name_reaches_the_page_not_the_token() -> None:
 @pytest.mark.parametrize(
     ("status", "body", "words"),
     [
-        (401, None, "refusé"),
+        (401, None, "relancez l'app"),
         (403, None, "ne joue pas cette partie"),
         (200, {"player": "stephane", "colors": ["black"]}, "Blancs"),
         (404, None, "non vérifié"),
