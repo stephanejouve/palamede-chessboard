@@ -235,7 +235,7 @@ def test_same_bluetooth_error_is_logged_once(monkeypatch, caplog) -> None:
 
     monkeypatch.setitem(transport.TRANSPORTS, "ble", (connect, lambda: (Off,)))
     monkeypatch.setattr("palamede_chessnut.bridge.RETRY_SECONDS", 0)
-    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "x")
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "x", board_transport="ble")
     with caplog.at_level(logging.INFO):
         asyncio.run(asyncio.wait_for(bridge.run_board(), 5))
     lost = [r for r in caplog.records if "turned off" in r.getMessage()]
@@ -245,10 +245,218 @@ def test_same_bluetooth_error_is_logged_once(monkeypatch, caplog) -> None:
 # ---- command line, page ------------------------------------------------------
 
 
-@pytest.mark.parametrize(("args", "expected"), [([], "ble"), (["--transport", "usb"], "usb")])
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [([], "auto"), (["--transport", "ble"], "ble"), (["--transport", "usb"], "usb")],
+)
 def test_transport_option(monkeypatch, args, expected) -> None:
     monkeypatch.setenv("PALAMEDE_PLAYER_TOKEN", "x")
     argv = ["--viewer", "https://viewer.test", "--game", "g1", "--color", "white", *args]
     bridge = bridge_from_args(argv, "test")
     assert bridge.board_transport == expected
     assert snapshot(bridge)["transport"] == expected
+
+
+# ---- auto : the cable first, Bluetooth otherwise (#110) ------------------------
+
+
+class FakeLink:
+    """A session of a fake transport : connected until told otherwise."""
+
+    def __init__(self, kind: str, log: list[str]) -> None:
+        self.kind, self.name, self.log = kind, f"fake {kind}", log
+        self.up = True
+
+    def connected(self) -> bool:
+        return self.up
+
+    async def write(self, command: bytes) -> None:
+        pass
+
+
+def fake_auto(present: list[bool], opened: list[str], usb_fails: str | None = None):
+    import contextlib
+
+    def make(kind: str):
+        @contextlib.asynccontextmanager
+        async def connect(on_frame):
+            if kind == "usb" and usb_fails:
+                raise PermissionError(usb_fails)
+            opened.append(kind)
+            yield FakeLink(kind, opened)
+            opened.append(f"closed {kind}")
+
+        return connect
+
+    return transport.Auto(make("ble"), make("usb"), lambda: present[0])
+
+
+def run_sessions(auto, sessions: int, between=None) -> None:
+    """Open ``sessions`` sessions in a row ; ``between(i, link)`` runs inside each."""
+
+    async def go() -> None:
+        for i in range(sessions):
+            async with auto(lambda *_: None) as link:
+                if between is not None:
+                    between(i, link)
+
+    asyncio.run(go())
+
+
+def test_auto_takes_the_cable_when_plugged_in() -> None:
+    opened: list[str] = []
+    run_sessions(fake_auto([True], opened), 1)
+    assert opened == ["usb", "closed usb"]
+
+
+def test_auto_takes_bluetooth_without_the_cable() -> None:
+    opened: list[str] = []
+    run_sessions(fake_auto([False], opened), 1)
+    assert opened == ["ble", "closed ble"]
+
+
+def test_plugging_the_cable_ends_the_bluetooth_session(monkeypatch) -> None:
+    """Bluetooth closed first, then USB opened : the board feeds one link only (#82)."""
+    monkeypatch.setattr(transport, "PRESENCE_SECONDS", 0)
+    present, opened = [False], []
+    auto = fake_auto(present, opened)
+    states: list[bool] = []
+
+    def between(i: int, link) -> None:
+        if i == 0:
+            states.append(link.connected())
+            present[0] = True  # the cable is plugged in
+            states.append(link.connected())
+
+    run_sessions(auto, 2, between)
+    assert states == [True, False]
+    assert opened == ["ble", "closed ble", "usb", "closed usb"]
+
+
+def test_unplugging_goes_back_to_bluetooth() -> None:
+    present, opened = [True], []
+    auto = fake_auto(present, opened)
+
+    def between(i: int, link) -> None:
+        if i == 0:
+            present[0] = False  # unplugged : the USB session ends as « lost »
+
+    run_sessions(auto, 2, between)
+    assert opened == ["usb", "closed usb", "ble", "closed ble"]
+
+
+def test_unusable_usb_stays_on_bluetooth_until_replugged(monkeypatch, caplog) -> None:
+    """No udev rule, no hidapi, macOS refusal : one message, Bluetooth, no retry loop."""
+    monkeypatch.setattr(transport, "PRESENCE_SECONDS", 0)
+    present, opened = [True], []
+    auto = fake_auto(present, opened, usb_fails="no access to /dev/hidraw2")
+    seen: list[bool] = []
+
+    def between(i: int, link) -> None:
+        seen.append(link.connected())  # USB still there but refused : stay
+
+    with caplog.at_level(logging.WARNING):
+        run_sessions(auto, 2, between)
+    assert opened == ["ble", "closed ble", "ble", "closed ble"]
+    assert seen == [True, True]
+    assert len([r for r in caplog.records if "not usable" in r.getMessage()]) == 1
+    present[0] = False
+    assert not auto.usb_usable()  # unplugged : forgiven
+    present[0] = True
+    assert auto.usb_usable()
+
+
+def test_the_page_shows_the_link_in_use(monkeypatch) -> None:
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "x")
+    assert snapshot(bridge)["transport"] == "auto"
+    bridge.link_kind = "usb"
+    assert snapshot(bridge)["transport"] == "usb"
+
+
+def test_bridge_switches_link_without_losing_the_position(monkeypatch) -> None:
+    """Through run_board : Bluetooth, then the cable ; the placement keeps flowing."""
+    monkeypatch.setattr(transport, "PRESENCE_SECONDS", 0)
+    monkeypatch.setattr("palamede_chessnut.bridge.RETRY_SECONDS", 0)
+    present, kinds = [False], []
+    usb_device = FakeUsb([START])
+
+    import contextlib
+
+    @contextlib.asynccontextmanager
+    async def ble_connect(on_frame):
+        on_frame(None, bytearray(transport.from_usb(START)))
+        yield FakeLink("ble", [])
+
+    auto = transport.Auto(
+        ble_connect, lambda f: transport.usb(f, opener=lambda: usb_device), lambda: present[0]
+    )
+    monkeypatch.setattr(transport, "connector", lambda kind: (auto, auto.errors))
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "x")
+
+    async def tick(self, write) -> None:
+        kinds.append(self.link_kind)
+        if self.link_kind == "ble":
+            present[0] = True
+        elif self.link_kind == "usb" and self.observed is not None:
+            self.stopped.set()
+
+    monkeypatch.setattr(Bridge, "tick", tick)
+    asyncio.run(asyncio.wait_for(bridge.run_board(), 5))
+    assert kinds[0] == "ble" and kinds[-1] == "usb"
+    assert bridge.observed == chess.BaseBoard()
+    assert usb_device.written[0] == ENABLE_REPORTING
+
+
+def test_a_lost_bluetooth_link_ends_the_auto_session(monkeypatch) -> None:
+    """Review Junior #111 : no cable, Bluetooth gone : the session must end, not idle."""
+    monkeypatch.setattr(transport, "PRESENCE_SECONDS", 0)
+    present, opened = [False], []
+    auto = fake_auto(present, opened)
+    states: list[bool] = []
+
+    def between(i: int, link) -> None:
+        states.append(link.connected())
+        link._link.up = False  # the board went to sleep
+        states.append(link.connected())
+
+    run_sessions(auto, 1, between)
+    assert states == [True, False]
+
+
+def test_auto_through_the_bridge_warns_once(monkeypatch, caplog) -> None:
+    """Review Junior #111 : the refusal is kept across sessions of connector("auto")."""
+    import contextlib
+
+    monkeypatch.setattr("palamede_chessnut.bridge.RETRY_SECONDS", 0)
+    tries: list[str] = []
+
+    @contextlib.asynccontextmanager
+    async def refused_usb(on_frame):
+        tries.append("usb")
+        raise PermissionError("no access to /dev/hidraw2")
+        yield  # pragma: no cover
+
+    @contextlib.asynccontextmanager
+    async def short_ble(on_frame):
+        tries.append("ble")
+        link = FakeLink("ble", [])
+        link.up = False  # each Bluetooth session ends at once
+        yield link
+
+    monkeypatch.setattr(transport, "usb", refused_usb)
+    monkeypatch.setattr(transport, "ble", short_ble)
+    monkeypatch.setattr(transport, "usb_present", lambda: True)
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "x")
+
+    async def stop_after(seconds: float) -> None:
+        while tries.count("ble") < 3:
+            await asyncio.sleep(0.01)
+        bridge.stopped.set()
+
+    async def go() -> None:
+        await asyncio.gather(bridge.run_board(), stop_after(0))
+
+    with caplog.at_level(logging.WARNING):
+        asyncio.run(asyncio.wait_for(go(), 5))
+    assert tries[:4] == ["usb", "ble", "ble", "ble"]
+    assert len([r for r in caplog.records if "not usable" in r.getMessage()]) == 1

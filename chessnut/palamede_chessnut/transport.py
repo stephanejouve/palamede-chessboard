@@ -27,6 +27,7 @@ import os
 import select
 import sys
 import threading
+import time
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 from typing import Any, Protocol
@@ -59,6 +60,8 @@ class BoardNotFound(Exception):
 
 class Session(Protocol):
     name: str
+    #: ``"ble"`` or ``"usb"`` : the link actually in use, for the page.
+    kind: str
 
     def connected(self) -> bool: ...
 
@@ -76,6 +79,8 @@ def from_usb(report: bytes) -> bytes:
 
 
 class _BleSession:
+    kind = "ble"
+
     def __init__(self, client: Any, name: str) -> None:
         self._client = client
         self.name = name
@@ -215,6 +220,8 @@ def open_usb() -> UsbDevice:
 
 
 class _UsbSession:
+    kind = "usb"
+
     def __init__(self, device: UsbDevice) -> None:
         self._device = device
         self.name = device.name
@@ -261,6 +268,114 @@ async def usb(
 
 def usb_errors() -> tuple[type[BaseException], ...]:
     return (OSError,)
+
+
+# ---- auto : USB when the cable is plugged in, Bluetooth otherwise (#110) -----
+
+#: How often a Bluetooth session looks for a board plugged in by USB.
+PRESENCE_SECONDS = 2.0
+
+
+def usb_present() -> bool:
+    """Is the board plugged into this computer ? Cheap : no device is opened.
+
+    A cable to a charger does not count : only the HID device seen here.
+    """
+    if sys.platform.startswith("linux"):
+        try:
+            find_hidraw()
+        except BoardNotFound:
+            return False
+        return True
+    try:
+        import hid
+    except ImportError:
+        return False
+    return any(
+        d.get("usage_page") == VENDOR_USAGE_PAGE for d in hid.enumerate(USB_VENDOR, USB_PRODUCT)
+    )
+
+
+class _WatchingUsb:
+    """A Bluetooth session that ends once the board is plugged in by USB."""
+
+    kind = "ble"
+
+    def __init__(self, link: Session, auto: Auto) -> None:
+        self._link, self._auto = link, auto
+        self.name = link.name
+        self._checked = 0.0
+
+    def connected(self) -> bool:
+        if not self._link.connected():
+            return False
+        now = time.monotonic()
+        if now - self._checked < PRESENCE_SECONDS:
+            return True
+        self._checked = now
+        if self._auto.usb_usable():
+            log.info("board plugged in by USB : leaving Bluetooth")
+            return False
+        return True
+
+    async def write(self, command: bytes) -> None:
+        await self._link.write(command)
+
+
+class Auto:
+    """``--transport auto`` : one link at a time, the cable first (#110).
+
+    The board sends its placement to one link only (#82, 27/10) : Bluetooth
+    is closed before USB is opened, by ending the Bluetooth session. A USB
+    board that cannot be opened (no udev rule, no hidapi, macOS refusal) is
+    left alone, with one message, until it is unplugged and plugged again.
+    """
+
+    def __init__(
+        self,
+        ble_connect: Callable[[OnFrame], Any] | None = None,
+        usb_connect: Callable[[OnFrame], Any] | None = None,
+        present: Callable[[], bool] | None = None,
+    ) -> None:
+        self._ble = ble_connect or ble
+        self._usb = usb_connect or usb
+        self._present = present or usb_present
+        #: Why the plugged-in USB board is not used, until it is unplugged.
+        self.usb_refused: str | None = None
+
+    def usb_usable(self) -> bool:
+        present = self._present()
+        if not present:
+            self.usb_refused = None
+        return present and self.usb_refused is None
+
+    @contextlib.asynccontextmanager
+    async def __call__(self, on_frame: OnFrame) -> AsyncIterator[Session]:
+        async with contextlib.AsyncExitStack() as stack:
+            link: Session | None = None
+            if await asyncio.to_thread(self.usb_usable):
+                try:
+                    link = await stack.enter_async_context(self._usb(on_frame))
+                except (OSError, BoardNotFound) as exc:
+                    self.usb_refused = str(exc)
+                    log.warning("board plugged in by USB but not usable (%s) : Bluetooth", exc)
+            if link is None:
+                link = _WatchingUsb(await stack.enter_async_context(self._ble(on_frame)), self)
+            yield link
+
+    @staticmethod
+    def errors() -> tuple[type[BaseException], ...]:
+        return (*ble_errors(), *usb_errors())
+
+
+def connector(
+    kind: str,
+) -> tuple[Callable[[OnFrame], Any], Callable[[], tuple[type[BaseException], ...]]]:
+    """``--transport`` → (connector, errors) ; ``auto`` keeps its state across sessions."""
+    if kind == "auto":
+        auto = Auto()
+        return auto, auto.errors
+    return TRANSPORTS[kind]
 
 
 #: ``--transport`` → (connector, errors that mean « link lost, try again »).
