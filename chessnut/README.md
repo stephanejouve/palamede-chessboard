@@ -28,12 +28,21 @@ On the board :
 - to resign, lift your king off the board for 5 seconds (the LEDs blink
   meanwhile ; put it back to cancel).
 
-## Over the USB cable instead of Bluetooth (#82)
+## Over the USB cable or Bluetooth (#82, #110)
 
-Add `--transport usb` (to both commands) and plug the board's cable : no
-pairing, no sleeping link. One transport at a time : while a Bluetooth
-central is connected, the board sends its pieces over Bluetooth only and
-the cable just charges, so close any Bluetooth bridge or app first.
+By default (`--transport auto`), the bridge takes the USB cable when it
+links the board to this computer, Bluetooth otherwise, and switches during
+the game : plug the cable in and Bluetooth is closed, USB opened ; unplug
+it and the bridge looks for the board over Bluetooth again. The board
+feeds one link at a time (a Bluetooth central takes its pieces, the cable
+then only charges), hence Bluetooth is closed before USB is opened. A
+cable to a charger does not count. The light shows the link in use, « USB »
+or « Bluetooth » ; a switch only resynchronises, no move is lost.
+`--transport usb` or `--transport ble` force one of them.
+
+If the board is plugged in but USB cannot be used (rule, extra or
+permission below missing), the bridge says so once and stays on
+Bluetooth until the cable is unplugged and plugged again.
 
 - Linux : nothing to install, but your session needs access to the
   board's `/dev/hidrawN`. Once, as root, write the rule

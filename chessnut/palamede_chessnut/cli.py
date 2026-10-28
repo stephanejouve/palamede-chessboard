@@ -66,9 +66,9 @@ def bridge_from_args(argv: list[str] | None, description: str, *, app: bool = Fa
     parser.add_argument("--token-file", type=Path, help="file holding the player token")
     parser.add_argument(
         "--transport",
-        choices=["ble", "usb"],
-        default="ble",
-        help="reach the board over Bluetooth LE (default) or its USB cable (#82)",
+        choices=["auto", "ble", "usb"],
+        default="auto",
+        help="auto (default) : the USB cable when plugged in, Bluetooth LE otherwise (#110)",
     )
     if app:
         parser.add_argument(

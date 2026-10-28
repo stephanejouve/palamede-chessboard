@@ -354,7 +354,7 @@ def test_server_light_goes_orange_when_the_stream_drops(monkeypatch) -> None:
 
 def test_bluetooth_light_goes_orange_when_the_board_drops(monkeypatch) -> None:
     """Connected while the link holds, back to « searching » once it is gone."""
-    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN, board_transport="ble")
     seen: list[str] = []
 
     class Client:

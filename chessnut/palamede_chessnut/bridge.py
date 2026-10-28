@@ -105,7 +105,7 @@ class Bridge:
         token: str,
         *,
         with_board: bool = True,
-        board_transport: str = "ble",
+        board_transport: str = "auto",
     ) -> None:
         self.viewer = viewer_url.rstrip("/")
         self.game_id = game_id
@@ -119,6 +119,7 @@ class Bridge:
         self.with_board = with_board
         #: ``"ble"`` or ``"usb"`` : how the board is reached (#82), see :mod:`.transport`.
         self.board_transport = board_transport
+        self.link_kind: str | None = None
         self.game: chess.Board | None = None
         self.live = False
         self.synced = False
@@ -411,13 +412,14 @@ class Bridge:
 
     async def run_board(self) -> None:
         """Connect, stream, reconnect : the board may sleep, lose the link or be unplugged."""
-        connect, errors = transport.TRANSPORTS[self.board_transport]
+        connect, errors = transport.connector(self.board_transport)
         last_error = None
         while not self.stopped.is_set():
             try:
                 async with connect(self.on_frame) as link:
                     log.info("connected to %s", link.name)
                     last_error, self.leds, self.board_link = None, None, "connected"
+                    self.link_kind = link.kind
                     try:
                         while link.connected() and not self.stopped.is_set():
                             await self.tick(link.write)
