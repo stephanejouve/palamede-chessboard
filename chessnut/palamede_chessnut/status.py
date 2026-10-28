@@ -61,19 +61,40 @@ def relay_text(bridge: Bridge) -> str | None:
     """« Jouez le coup de l'adversaire : cavalier g8 → f6 », or ``None``.
 
     :attr:`Bridge.to_relay` is ``g8f6 (Nf6)``, or the SAN alone when the
-    move could not be replayed : then the SAN is shown as is.
+    move could not be replayed : then the SAN is shown as is. Castling,
+    promotion and en passant say what else to move (review Junior #109).
     """
-    relay, game = bridge.to_relay, bridge.game
+    relay, before = bridge.to_relay, bridge.relay_from
     if not relay:
         return None
     try:
         move = chess.Move.from_uci(relay.split(" ", 1)[0])
     except ValueError:
+        move = None
+    if move is None or before is None or move not in before.legal_moves:
         return f"Jouez le coup de l'adversaire : {relay}"
-    piece = game.piece_at(move.to_square) if game is not None else None
-    name = PIECE_NAMES[piece.piece_type] + " " if piece is not None and not move.promotion else ""
+    return f"Jouez le coup de l'adversaire : {_said(before, move)}"
+
+
+def _said(before: chess.Board, move: chess.Move) -> str:
+    """The move in plain French, as the player must make it on the board."""
     origin, target = chess.square_name(move.from_square), chess.square_name(move.to_square)
-    return f"Jouez le coup de l'adversaire : {name}{origin} → {target}"
+    if before.is_castling(move):
+        rook_from, rook_to = ("h", "f") if before.is_kingside_castling(move) else ("a", "d")
+        rank = origin[1]
+        side = "petit" if rook_from == "h" else "grand"
+        return f"{side} roque, roi {origin} → {target} et tour {rook_from}{rank} → {rook_to}{rank}"
+    piece = before.piece_at(move.from_square)
+    name = PIECE_NAMES[piece.piece_type] if piece is not None else "pièce"
+    text = f"{name} {origin} → {target}"
+    if move.promotion is not None:
+        text += f", promu en {PIECE_NAMES[move.promotion]}"
+    if before.is_en_passant(move):
+        taken = chess.square_name(
+            chess.square(chess.square_file(move.to_square), chess.square_rank(move.from_square))
+        )
+        text += f", en passant : retirez le pion {taken}"
+    return text
 
 
 def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:

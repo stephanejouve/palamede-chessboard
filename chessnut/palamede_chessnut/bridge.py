@@ -133,6 +133,8 @@ class Bridge:
         self.retry_at = 0.0
         #: Move received from the viewer (``g8f6 (Nf6)``), still to be played on the board.
         self.to_relay: str | None = None
+        #: The position :attr:`to_relay` was played from : castling, en passant (#109).
+        self.relay_from: chess.Board | None = None
         #: Posted move whose outcome is unknown (network error, 5xx).
         self.undelivered: chess.Move | None = None
         self.king_gone_since: float | None = None
@@ -168,6 +170,7 @@ class Bridge:
         self.to_relay = (
             _relayed(self.game, history[-1], game) if self.ready and history and behind else None
         )
+        self.relay_from = self.game
         self.game = game
         self.synced = False
         self.pending = None
