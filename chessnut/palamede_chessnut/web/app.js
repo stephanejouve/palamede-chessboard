@@ -30,6 +30,16 @@ let lastColor = null;
 let lastDests = '';
 let sending = false;
 
+// Squares to fix : a red LED in the corner, as on the eBoard (review of
+// Stéphane, 28/10), rather than drawn circles. Set only when they change.
+let lastLeds = null;
+function renderLeds(squares) {
+  const key = squares.join();
+  if (key === lastLeds) return;
+  lastLeds = key;
+  cg.set({ highlight: { custom: new Map(squares.map((square) => [square, 'led'])) } });
+}
+
 function setLight(name, value) {
   const node = el(`light-${name}`);
   node.hidden = value === 'none';
@@ -136,7 +146,7 @@ function render(state) {
     renderMoves(state.history);
   }
   renderMouse(state);
-  cg.setAutoShapes(state.differing.map((key) => ({ orig: key, brush: 'yellow' })));
+  renderLeds(state.differing);
   setLight('bluetooth', state.lights.bluetooth);
   el('light-bluetooth').textContent = state.transport === 'usb' ? 'USB' : 'Bluetooth';
   setLight('server', state.lights.server);

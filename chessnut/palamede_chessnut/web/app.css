@@ -101,3 +101,17 @@ button {
   white-space: pre-wrap;
   margin: 8px 0 0;
 }
+/* Squares to fix : a red LED in the corner of the square, as on the eBoard,
+   above the piece (the square itself stays transparent). */
+cg-board square.led { z-index: 3; }
+cg-board square.led::after {
+  content: "";
+  position: absolute;
+  top: 9%;
+  right: 9%;
+  width: 17%;
+  height: 17%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ff9a8f, #e5392f 55%, #8c1a14);
+  box-shadow: 0 0 6px 2px rgba(229, 57, 47, 0.65);
+}
