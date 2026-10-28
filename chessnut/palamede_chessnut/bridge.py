@@ -105,11 +105,21 @@ def decide(
 class Bridge:
     """One physical board bound to one game of the viewer."""
 
-    def __init__(self, viewer_url: str, game_id: str, player: chess.Color, token: str) -> None:
+    def __init__(
+        self,
+        viewer_url: str,
+        game_id: str,
+        player: chess.Color,
+        token: str,
+        *,
+        with_board: bool = True,
+    ) -> None:
         self.viewer = viewer_url.rstrip("/")
         self.game_id = game_id
         self.player = player
         self._token = token
+        #: ``False`` : no board, the app's window is played with the mouse (#92).
+        self.with_board = with_board
         self.game: chess.Board | None = None
         self.live = False
         self.synced = False
@@ -206,7 +216,7 @@ class Bridge:
                 self.stream_link = "reconnecting"
             time.sleep(RETRY_SECONDS)
 
-    def _post_move(self, uci: str) -> tuple[str | None, bool]:
+    def post_move(self, uci: str) -> tuple[str | None, bool]:
         """Play ``uci`` through the viewer : ``(None, False)``, or ``(message, refused)``.
 
         ``refused`` only for a 4xx, when the viewer judged the move. A network
@@ -226,15 +236,9 @@ class Bridge:
     def _post_resign(self) -> tuple[int | None, str]:
         return viewer.post(f"{self.viewer}/api/games/{quote(self.game_id)}/resign", self._token)
 
-    def _server_position(self) -> tuple[str, bool] | None:
-        """``(fen, game over)`` according to the viewer, ``None`` if it cannot be read."""
-        try:
-            data = viewer.get_json(f"{self.viewer}/api/positions?game_id={quote(self.game_id)}")
-            fen = str(data["positions"][-1]["fen"])
-            return fen, data.get("result", "*") != "*" or chess.Board(fen).is_game_over()
-        except (OSError, ValueError, KeyError, IndexError) as exc:
-            log.warning("position of %s unreadable (%s)", self.game_id, exc)
-            return None
+    def server_position(self) -> dict[str, Any] | None:
+        """The viewer's position as a stream snapshot (:func:`viewer.position`)."""
+        return viewer.position(self.viewer, self.game_id)
 
     # ---- board side -------------------------------------------------------
 
@@ -365,7 +369,7 @@ class Bridge:
         self.pending = move
         assert self.game is not None
         log.info("move read on the board : %s (%s)", move.uci(), self.game.san(move))
-        error, refused = await asyncio.to_thread(self._post_move, move.uci())
+        error, refused = await asyncio.to_thread(self.post_move, move.uci())
         self.undelivered = None
         if error is None:
             return
@@ -386,14 +390,13 @@ class Bridge:
         compared as positions rather than FEN strings ; if it cannot be read,
         the retry waits.
         """
-        server = await asyncio.to_thread(self._server_position)
+        server = await asyncio.to_thread(self.server_position)
         if server is None:
             self.retry_at = time.monotonic() + RETRY_SECONDS
             return True
-        fen, over = server
-        if self.game is not None and chess.Board(fen).epd() != self.game.epd():
+        if self.game is not None and chess.Board(server["fen"]).epd() != self.game.epd():
             log.info("move %s had reached the viewer", self.undelivered)
-            self.apply_stream({"fen": fen, "ply": "?", "turn": "?", "is_game_over": over})
+            self.apply_stream(server)
             return True
         return False
 
@@ -438,7 +441,16 @@ class Bridge:
         if task is not None:
             cancel_on_sigterm(loop, task)
         threading.Thread(target=self._follow_stream, args=(loop,), daemon=True).start()
-        await self.run_board()
+        await (self.run_board() if self.with_board else self.watch_game())
+
+    async def watch_game(self) -> None:
+        """No board (#92) : the stream alone, until the game is over."""
+        while not self.stopped.is_set():
+            if self.game is not None and not self.live:
+                self.finished = True
+                log.info("game %s over", self.game_id)
+                self.stopped.set()
+            await asyncio.sleep(TICK_SECONDS)
 
 
 def cancel_on_sigterm(loop: asyncio.AbstractEventLoop, task: asyncio.Task[Any]) -> None:

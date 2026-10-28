@@ -40,7 +40,11 @@ h1 { font-size: 18px; margin: 0; }
 .light.on::before { background: var(--on); }
 .light.warn::before { background: var(--warn); }
 main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
-#board { width: min(520px, 100%); aspect-ratio: 1; }
+/* Square by padding, not aspect-ratio : with aspect-ratio, the app's window on macOS
+   Big Sur (Safari 16.6.1 installed) drew a board of zero height, cause not found
+   (Mac smoke #97). A percentage padding follows the container's width, as the width
+   does ; chessground's absolute cg-container fills the padding box. */
+#board { width: min(520px, 100%); height: 0; padding-bottom: min(520px, 100%); }
 #side {
   flex: 1 1 240px;
   min-width: 0;
@@ -51,7 +55,9 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 }
 #side p { margin: 0 0 8px; }
 #relay { font-weight: 600; }
-#differing { color: var(--warn); }
+#differing, #move-error { color: var(--warn); }
+#promotion-row { display: block; margin-bottom: 8px; }
+#promotion-row[hidden], .light[hidden] { display: none; }
 #moves {
   max-height: 260px;
   overflow-y: auto;
