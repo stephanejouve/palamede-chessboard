@@ -1,11 +1,12 @@
 """Routes for the ``games`` domain : listing, raw PGN export, move push.
 
-Three endpoints covered :
+Endpoints covered :
 
 * ``GET /api/games`` — in-progress games and a page of finished ones
   (viewer game selector, #46), with filters and ETag/304.
 * ``GET /api/raw`` — raw PGN text for a game.
 * ``POST /api/games/{game_id}/move`` — drag&drop move from the viewer UI.
+* ``GET /api/games/{game_id}/seat`` — whose token, which side (Tablier, #78).
 
 Routes are mounted at the root of the FastAPI app (no prefix) to
 preserve the exact URL contract of the pre-split monolith.
@@ -33,7 +34,7 @@ from palamede_chessboard.viewer.games_query import (
     listing_etag,
     select_games,
 )
-from palamede_chessboard.viewer.models import MovePayload, _games_dir
+from palamede_chessboard.viewer.models import MovePayload, _games_dir, _not_found_detail
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ def build_games_router() -> APIRouter:
         try:
             state = GameState.load(game_id, games_dir=_games_dir())
         except GameNotFoundError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(404, _not_found_detail(game_id)) from exc
         return {"game_id": game_id, "pgn": state.raw_pgn()}
 
     @router.post("/api/games/{game_id}/move")
@@ -94,7 +95,32 @@ def build_games_router() -> APIRouter:
         """Resignation of the token's player ; see :func:`resign_from_viewer`."""
         return resign_from_viewer(game_id, request)
 
+    @router.get("/api/games/{game_id}/seat")
+    def game_seat(game_id: str, request: Request, response: Response) -> dict:
+        """The token's player and their side(s) ; see :func:`seat_of_token`."""
+        response.headers["Cache-Control"] = "no-store"
+        return seat_of_token(game_id, request)
+
     return router
+
+
+def seat_of_token(game_id: str, request: Request) -> dict:
+    """Who the token is, and which side they hold in the game ; nothing played.
+
+    Lets the Tablier app check its token at launch instead of at the first
+    move (#78, step A). Same refusals as a resignation : 401 for a missing
+    or unknown token, 403 for a valid token whose player is not in the game.
+    It tells the caller only their own account name.
+    """
+    gdir = _games_dir()
+    try:
+        state = GameState.load(game_id, games_dir=gdir)
+    except GameNotFoundError as exc:
+        raise HTTPException(404, _not_found_detail(game_id)) from exc
+    who = _authorized_mover(request, state, gdir, tool="chess_resign")
+    roles = roles_of(state)
+    colors = [color for color in ("white", "black") if roles[color] == who]
+    return {"game_id": game_id, "player": who, "colors": colors}
 
 
 def resign_from_viewer(game_id: str, request: Request) -> dict:
@@ -108,7 +134,7 @@ def resign_from_viewer(game_id: str, request: Request) -> dict:
     try:
         state = GameState.load(game_id, games_dir=gdir)
     except GameNotFoundError as exc:
-        raise HTTPException(404, str(exc)) from exc
+        raise HTTPException(404, _not_found_detail(game_id)) from exc
 
     who = _authorized_mover(request, state, gdir, tool="chess_resign")
     roles = roles_of(state)
@@ -143,7 +169,7 @@ def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> di
     try:
         state = GameState.load(game_id, games_dir=gdir)
     except GameNotFoundError as exc:
-        raise HTTPException(404, str(exc)) from exc
+        raise HTTPException(404, _not_found_detail(game_id)) from exc
 
     who = _authorized_mover(request, state, gdir)
     san_to_play = _resolve_san(state, payload)

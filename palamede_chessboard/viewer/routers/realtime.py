@@ -43,6 +43,7 @@ from palamede_chessboard.viewer.models import (
     CommentaryPayload,
     _game_stream_payload,
     _games_dir,
+    _not_found_detail,
 )
 
 
@@ -69,7 +70,7 @@ def build_realtime_router() -> APIRouter:
         try:
             state = GameState.load(game_id, games_dir=_games_dir())
         except GameNotFoundError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(404, _not_found_detail(game_id)) from exc
 
         _enforce_engine_gate(state, viewer)
 
