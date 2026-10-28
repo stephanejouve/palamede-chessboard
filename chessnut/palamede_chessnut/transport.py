@@ -333,11 +333,13 @@ class Auto:
 
     def __init__(
         self,
-        ble_connect: Callable[[OnFrame], Any] = ble,
-        usb_connect: Callable[[OnFrame], Any] = usb,
-        present: Callable[[], bool] = usb_present,
+        ble_connect: Callable[[OnFrame], Any] | None = None,
+        usb_connect: Callable[[OnFrame], Any] | None = None,
+        present: Callable[[], bool] | None = None,
     ) -> None:
-        self._ble, self._usb, self._present = ble_connect, usb_connect, present
+        self._ble = ble_connect or ble
+        self._usb = usb_connect or usb
+        self._present = present or usb_present
         #: Why the plugged-in USB board is not used, until it is unplugged.
         self.usb_refused: str | None = None
 

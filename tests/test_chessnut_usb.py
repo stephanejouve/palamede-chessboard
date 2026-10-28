@@ -405,3 +405,58 @@ def test_bridge_switches_link_without_losing_the_position(monkeypatch) -> None:
     assert kinds[0] == "ble" and kinds[-1] == "usb"
     assert bridge.observed == chess.BaseBoard()
     assert usb_device.written[0] == ENABLE_REPORTING
+
+
+def test_a_lost_bluetooth_link_ends_the_auto_session(monkeypatch) -> None:
+    """Review Junior #111 : no cable, Bluetooth gone : the session must end, not idle."""
+    monkeypatch.setattr(transport, "PRESENCE_SECONDS", 0)
+    present, opened = [False], []
+    auto = fake_auto(present, opened)
+    states: list[bool] = []
+
+    def between(i: int, link) -> None:
+        states.append(link.connected())
+        link._link.up = False  # the board went to sleep
+        states.append(link.connected())
+
+    run_sessions(auto, 1, between)
+    assert states == [True, False]
+
+
+def test_auto_through_the_bridge_warns_once(monkeypatch, caplog) -> None:
+    """Review Junior #111 : the refusal is kept across sessions of connector("auto")."""
+    import contextlib
+
+    monkeypatch.setattr("palamede_chessnut.bridge.RETRY_SECONDS", 0)
+    tries: list[str] = []
+
+    @contextlib.asynccontextmanager
+    async def refused_usb(on_frame):
+        tries.append("usb")
+        raise PermissionError("no access to /dev/hidraw2")
+        yield  # pragma: no cover
+
+    @contextlib.asynccontextmanager
+    async def short_ble(on_frame):
+        tries.append("ble")
+        link = FakeLink("ble", [])
+        link.up = False  # each Bluetooth session ends at once
+        yield link
+
+    monkeypatch.setattr(transport, "usb", refused_usb)
+    monkeypatch.setattr(transport, "ble", short_ble)
+    monkeypatch.setattr(transport, "usb_present", lambda: True)
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "x")
+
+    async def stop_after(seconds: float) -> None:
+        while tries.count("ble") < 3:
+            await asyncio.sleep(0.01)
+        bridge.stopped.set()
+
+    async def go() -> None:
+        await asyncio.gather(bridge.run_board(), stop_after(0))
+
+    with caplog.at_level(logging.WARNING):
+        asyncio.run(asyncio.wait_for(go(), 5))
+    assert tries[:4] == ["usb", "ble", "ble", "ble"]
+    assert len([r for r in caplog.records if "not usable" in r.getMessage()]) == 1
