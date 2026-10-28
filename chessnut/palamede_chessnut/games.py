@@ -31,6 +31,9 @@ GAME_ID = re.compile(r"[a-zA-Z0-9_-][a-zA-Z0-9_.-]{0,63}")
 STOP_SECONDS = 5.0
 NO_ACCOUNT = "Le jeton n'est pas encore reconnu : la liste attend le voyant Jeton vert."
 NO_SERVER = "Le serveur ne répond pas : réessayez dans un instant."
+BOARD_BUSY = (
+    "L'échiquier n'est pas encore libéré par la partie précédente : réessayez dans un instant."
+)
 NOT_PLAYED = "Votre compte ne joue pas cette partie."
 #: ``/seat`` status → what the page gets ; anything else is :data:`NO_SERVER`.
 SEAT_REFUSALS = {
@@ -84,12 +87,15 @@ class Session:
         self.worker = threading.Thread(target=self.run, args=(self.bridge,), daemon=True)
         self.worker.start()
 
-    def stop(self) -> None:
+    def stop(self) -> bool:
+        """Stop the running bridge : ``False`` while its thread still runs after :data:`STOP_SECONDS`."""
         self.bridge.stopped.set()
         if self.worker is not None:
             self.worker.join(timeout=STOP_SECONDS)
             if self.worker.is_alive():
                 log.warning("the bridge of %s is still stopping", self.bridge.game_id)
+                return False
+        return True
 
     def games(self) -> tuple[int, dict[str, Any]]:
         """``(HTTP status, body)`` for the page's list."""
@@ -125,7 +131,10 @@ class Session:
                 return 403, NOT_PLAYED
             new.player = color
             log.info("opening %s as %s", game_id, "white" if color else "black")
-            self.stop()
+            if not self.stop():
+                # Two bridges would talk to the same board (review Admin #121) :
+                # the old one, stopped, stays shown until a new try finds it gone.
+                return 503, BOARD_BUSY
             self.bridge = new
             if self.on_change is not None:
                 self.on_change(new)

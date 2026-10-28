@@ -337,3 +337,21 @@ def test_the_window_has_a_fichier_menu_and_follows_the_game(monkeypatch) -> None
     assert titles == ["Échiquier — 009"]
     assert pages[0].bridge.game_id == "009"
     assert pages[0].bridge.stopped.is_set()
+
+
+def test_no_second_bridge_while_the_first_still_runs(session, monkeypatch) -> None:
+    """A bridge slow to stop keeps the board : no new one beside it (review Admin #121)."""
+    old = session.bridge
+    release = threading.Event()
+    stuck = threading.Thread(target=release.wait, args=(5,), daemon=True)
+    stuck.start()
+    session.worker = stuck
+    monkeypatch.setattr(games, "STOP_SECONDS", 0.05)
+    answer_seat(monkeypatch, 200, {"colors": ["white"]})
+    assert session.open_game("009") == (503, games.BOARD_BUSY)
+    assert session.bridge is old and old.stopped.is_set()
+    assert session.changes == []
+    release.set()
+    stuck.join(1)
+    assert session.open_game("009") == (200, "")
+    assert session.bridge.game_id == "009"
