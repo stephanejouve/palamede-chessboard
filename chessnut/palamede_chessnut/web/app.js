@@ -9,7 +9,7 @@ const LIGHT_CLASS = {
   on: 'on', searching: 'warn', connecting: 'warn', reconnecting: 'warn', fixing: 'warn',
   checking: 'warn', unchecked: 'warn', refused: 'bad',
   // The board's link : blue over Bluetooth, green over USB, red when it keeps failing.
-  ble: 'blue', usb: 'on', failing: 'bad',
+  ble: 'blue', usb: 'on', failing: 'bad', closed: 'waiting',
 };
 
 // Not viewOnly : chessground only binds the mouse at creation. Nobody may
