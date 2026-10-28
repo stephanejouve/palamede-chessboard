@@ -141,10 +141,15 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
 
 def _bluetooth_light(bridge: Bridge) -> str:
     """The board's link (review of Stéphane, 28/10) : ``"ble"`` blue, ``"usb"`` green,
-    ``"searching"`` orange (looking, switching), ``"failing"`` red (the same error again).
+    ``"searching"`` orange (looking, switching), ``"failing"`` red (the same error again),
+    ``"closed"`` grey (the bridge has stopped).
     """
     if not bridge.with_board:
         return "none"
+    if bridge.stopped.is_set():
+        # The bridge has closed the link (game over, window closed) : grey, not
+        # the orange of a search (Mac smoke, 28/10).
+        return "closed"
     if bridge.board_link == "connected":
         return "usb" if (bridge.link_kind or bridge.board_transport) == "usb" else "ble"
     return "failing" if bridge.board_link == "failing" else "searching"
