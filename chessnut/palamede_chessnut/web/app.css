@@ -59,6 +59,7 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 #relay { font-weight: 600; }
 #differing, #move-error { color: var(--warn); }
 #token-msg { color: var(--bad); font-weight: 600; }
+#token-msg.warn { color: var(--warn); }
 #promotion-row { display: block; margin-bottom: 8px; }
 #promotion-row[hidden], .light[hidden] { display: none; }
 #moves {

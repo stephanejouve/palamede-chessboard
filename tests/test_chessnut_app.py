@@ -75,6 +75,65 @@ def test_snapshot_shows_the_squares_to_fix_and_the_moves() -> None:
     assert state["lights"]["sync"] == "fixing"
 
 
+@pytest.mark.parametrize(
+    ("fen", "uci", "text"),
+    [
+        (chess.STARTING_FEN, "g1f3", "cavalier g1 → f3"),
+        (chess.STARTING_FEN, "e2e4", "pion e2 → e4"),
+        (
+            "r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1",
+            "e8g8",
+            "petit roque, roi e8 → g8 et tour h8 → f8",
+        ),
+        (
+            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+            "e1c1",
+            "grand roque, roi e1 → c1 et tour a1 → d1",
+        ),
+        ("8/4P3/8/8/8/8/k7/4K3 w - - 0 1", "e7e8q", "pion e7 → e8, promu en dame"),
+        ("8/4P3/8/8/8/8/k7/4K3 w - - 0 1", "e7e8n", "pion e7 → e8, promu en cavalier"),
+        (
+            "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 2",
+            "e5d6",
+            "pion e5 → d6, en passant : retirez le pion d5",
+        ),
+    ],
+    ids=["piece", "pawn", "short castling", "long castling", "queen", "knight", "en passant"],
+)
+def test_the_move_to_relay_is_said_plainly(fen: str, uci: str, text: str) -> None:
+    """Review of Stéphane (28/10) and Junior (#109) : a plain sentence, special moves whole."""
+    before = chess.Board(fen)
+    move = chess.Move.from_uci(uci)
+    san = before.san(move)
+    after = before.copy()
+    after.push(move)
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
+    bridge.relay_from, bridge.game, bridge.to_relay = before, after, f"{uci} ({san})"
+    assert snapshot(bridge)["relay_text"] == f"Jouez le coup de l'adversaire : {text}"
+
+
+def test_relay_without_its_position_shows_the_san() -> None:
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
+    bridge.to_relay = "Nf6"
+    assert snapshot(bridge)["relay_text"] == "Jouez le coup de l'adversaire : Nf6"
+
+
+def test_relay_keeps_the_position_it_was_played_from() -> None:
+    """Through the stream, as on the board : the bridge remembers the position before."""
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
+    bridge.apply_stream(stream(chess.Board()))
+    bridge.ready, bridge.observed = True, chess.BaseBoard()
+    game = chess.Board()
+    game.push_san("Nf3")
+    bridge.apply_stream(stream(game))
+    assert bridge.to_relay == "g1f3 (Nf3)"
+    assert snapshot(bridge)["relay_text"] == "Jouez le coup de l'adversaire : cavalier g1 → f3"
+
+
+def test_no_move_to_relay_no_text() -> None:
+    assert snapshot(Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN))["relay_text"] is None
+
+
 def test_sync_light() -> None:
     bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
     assert sync_light(bridge) == "waiting"
