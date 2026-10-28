@@ -57,41 +57,31 @@ PIECE_NAMES = {
 }
 
 
-COLOUR_NAMES = {chess.WHITE: ("blanc", "blanche"), chess.BLACK: ("noir", "noire")}
-#: Feminine piece names take the feminine colour : « dame blanche », « tour noire ».
-FEMININE = {chess.ROOK, chess.QUEEN}
-
-
-def piece_name(piece: chess.Piece) -> str:
-    """« cavalier noir », « dame blanche »."""
-    masculine, feminine = COLOUR_NAMES[piece.color]
-    return (
-        f"{PIECE_NAMES[piece.piece_type]} {feminine if piece.piece_type in FEMININE else masculine}"
-    )
+#: After a chess symbol : drawn as text, not as an emoji (♟ is one on macOS).
+TEXT_STYLE = "\ufe0e"
 
 
 def setup_text(game: chess.BaseBoard, observed: chess.BaseBoard) -> str | None:
-    """What to do on the board, by piece (review of Stéphane, 28/10) ; ``None`` if nothing.
+    """What to do on the board, by piece symbol (review of Stéphane, 28/10) ; ``None`` if nothing.
 
-    « À poser : roi noir en g8, fou noir en a5 — À retirer : b7, d6 ». A square
-    holding the wrong piece is under « à poser » : the piece there goes away.
+    « Poser : ♚g8 ♝a5 ♕c4 · Retirer : b7 d6 », top rank first. A square
+    holding the wrong piece is under « Poser » : the piece there goes away.
     """
     put, remove = [], []
-    for square in sorted(
-        differing_squares(game, observed), key=lambda s: (-chess.square_rank(s), s)
-    ):
+    squares = sorted(differing_squares(game, observed), key=lambda s: (-chess.square_rank(s), s))
+    for square in squares:
         wanted = game.piece_at(square)
         name = chess.square_name(square)
         if wanted is None:
             remove.append(name)
         else:
-            put.append(f"{piece_name(wanted)} en {name}")
+            put.append(wanted.unicode_symbol() + TEXT_STYLE + name)
     parts = []
     if put:
-        parts.append("À poser : " + ", ".join(put))
+        parts.append("Poser : " + " ".join(put))
     if remove:
-        parts.append("À retirer : " + ", ".join(remove))
-    return " — ".join(parts) or None
+        parts.append("Retirer : " + " ".join(remove))
+    return " · ".join(parts) or None
 
 
 def relay_text(bridge: Bridge) -> str | None:

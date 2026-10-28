@@ -72,7 +72,7 @@ def test_snapshot_shows_the_squares_to_fix_and_the_moves() -> None:
     assert state["fen"] == e4().fen()
     assert state["history"] == ["e4"]
     assert state["differing"] == ["e2", "e4"]
-    assert state["setup_text"] == "À poser : pion blanc en e4 — À retirer : e2"
+    assert state["setup_text"] == "Poser : ♙\ufe0ee4 · Retirer : e2"
     assert state["lights"]["sync"] == "fixing"
 
 
@@ -156,23 +156,24 @@ def test_link_lights_follow_the_bridge() -> None:
 
 
 def test_setup_says_which_piece_goes_where() -> None:
-    """Review of Stéphane (28/10) : piece names, grouped by gesture, top rank first."""
+    """Review of Stéphane (28/10) : piece symbols, grouped by gesture, top rank first."""
     game = chess.BaseBoard("6k1/5pp1/4p2p/b3P3/2Q5/2p1P1KP/5PP1/8")
     observed = chess.BaseBoard("6k1/1p3pp1/3p3p/4P3/1P2P3/4P1KP/5PPP/5B2")
     text = setup_text(game, observed)
-    assert text is not None
-    put, remove = text.split(" — ")
-    assert put.startswith("À poser : pion noir en e6, fou noir en a5, dame blanche en c4")
-    assert "pion noir en c3" in put
-    assert remove == "À retirer : b7, d6, b4, e4, h2, f1"
+    assert text is not None and "\ufe0e" in text
+    text = text.replace("\ufe0e", "")
+    put, remove = text.split(" · ")
+    assert put.startswith("Poser : ♟e6 ♝a5 ♕c4")
+    assert "♟c3" in put
+    assert remove == "Retirer : b7 d6 b4 e4 h2 f1"
 
 
 def test_setup_names_a_wrong_piece_by_what_belongs_there() -> None:
-    """A knight where a bishop belongs : « à poser : fou blanc », the knight goes away."""
+    """A knight where a bishop belongs : « Poser : ♗c1 », the knight goes away."""
     game = chess.BaseBoard()
     observed = chess.BaseBoard()
     observed.set_piece_at(chess.C1, chess.Piece(chess.KNIGHT, chess.WHITE))
-    assert setup_text(game, observed) == "À poser : fou blanc en c1"
+    assert setup_text(game, observed) == "Poser : ♗\ufe0ec1"
 
 
 def test_nothing_to_set_up() -> None:
