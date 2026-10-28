@@ -420,3 +420,12 @@ def test_the_new_bridge_keeps_the_board(monkeypatch, transport: str) -> None:
         assert (new.with_board, new.board_transport) == (True, transport)
     finally:
         board_session.stop()
+
+
+def test_the_window_is_told_outside_the_lock(session, monkeypatch) -> None:
+    """``on_change`` may wait for the main thread, which may be waiting in close() (Admin #123)."""
+    answer_seat(monkeypatch, 200, {"colors": ["white"]})
+    held: list[bool] = []
+    session.on_change = lambda _new: held.append(session.lock.locked())
+    assert session.open_game("009") == (200, "")
+    assert held == [False]
