@@ -71,7 +71,7 @@ class PageServer(http.server.ThreadingHTTPServer):
 
     def __init__(self, bridge: Bridge, recent: RecentLog | None = None) -> None:
         super().__init__(("127.0.0.1", 0), _Handler)
-        self.bridge = bridge
+        self._bridge = bridge
         self.recent = recent
         self.files = static_files()
         self.port = int(self.server_address[1])
@@ -82,6 +82,12 @@ class PageServer(http.server.ThreadingHTTPServer):
         self.session: Session | None = None
         #: Bumped by the menu « Fichier ▸ Ouvrir » : the page opens its list when it changes.
         self.open_requests = 0
+
+    @property
+    def bridge(self) -> Bridge:
+        """The session's bridge when there is one : read at each request, never a copy
+        that two crossing openings could leave behind (review Junior #123)."""
+        return self.session.bridge if self.session is not None else self._bridge
 
     def request_open(self) -> None:
         self.open_requests += 1

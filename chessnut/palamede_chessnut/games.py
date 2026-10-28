@@ -82,6 +82,8 @@ class Session:
         self.on_change = on_change
         self.worker: threading.Thread | None = None
         self.lock = threading.Lock()
+        #: The window is closed : no game may be opened any more.
+        self.closed = False
 
     def start(self) -> None:
         self.worker = threading.Thread(target=self.run, args=(self.bridge,), daemon=True)
@@ -97,6 +99,12 @@ class Session:
                 return False
         return True
 
+    def close(self) -> None:
+        """The window is closing : stop the bridge, after any opening under way (review Junior #121)."""
+        with self.lock:
+            self.closed = True
+            self.stop()
+
     def games(self) -> tuple[int, dict[str, Any]]:
         """``(HTTP status, body)`` for the page's list."""
         account = self.bridge.account
@@ -105,7 +113,9 @@ class Session:
         entries = player_games(self.bridge.viewer, account)
         if entries is None:
             return 502, {"error": NO_SERVER}
-        return 200, {"account": account, "current": self.bridge.game_id, "games": entries}
+        # A stopped game is not « open » : the page lets the player choose it again (Junior #123).
+        current = None if self.bridge.stopped.is_set() else self.bridge.game_id
+        return 200, {"account": account, "current": current, "games": entries}
 
     def open_game(self, game_id: str) -> tuple[int, str]:
         """``(HTTP status, message)`` : 200 once the new bridge runs."""
@@ -113,7 +123,10 @@ class Session:
             return 400, "nom de partie illisible"
         with self.lock:
             old = self.bridge
-            if game_id == old.game_id:
+            if self.closed:
+                return 503, "La fenêtre se ferme."
+            # A stopped bridge (503 above, game over) may be opened again (review Junior #121).
+            if game_id == old.game_id and not old.stopped.is_set():
                 return 200, ""
             new = Bridge(
                 old.viewer,
@@ -136,7 +149,10 @@ class Session:
                 # the old one, stopped, stays shown until a new try finds it gone.
                 return 503, BOARD_BUSY
             self.bridge = new
-            if self.on_change is not None:
-                self.on_change(new)
             self.start()
+        # Outside the lock, which close() waits for on the main thread : a backend that
+        # sets the title synchronously on that thread would wait for us (review Admin #123).
+        # Read after the lock : a close() that came in meanwhile has set it.
+        if self.on_change is not None and not self.closed:
+            self.on_change(new)
         return 200, ""

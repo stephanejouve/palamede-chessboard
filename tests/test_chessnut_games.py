@@ -107,6 +107,14 @@ def test_the_list_when_the_server_does_not_answer(session, monkeypatch) -> None:
     assert session.games() == (502, {"error": NO_SERVER})
 
 
+def test_a_stopped_game_is_not_named_open(session, monkeypatch) -> None:
+    """After a 503 or a finished game, the page must let the player choose it again (Junior #123)."""
+    monkeypatch.setattr(viewer, "get_json", lambda _url: LISTING)
+    session.bridge.stopped.set()
+    status, body = session.games()
+    assert status == 200 and body["current"] is None
+
+
 def test_the_list_names_the_open_game(session, monkeypatch) -> None:
     monkeypatch.setattr(viewer, "get_json", lambda _url: LISTING)
     status, body = session.games()
@@ -212,7 +220,6 @@ def test_opening_after_the_game_ended(session, monkeypatch) -> None:
 def page(session):
     server = PageServer(session.bridge, RecentLog())
     server.session = session
-    session.on_change = lambda new: setattr(server, "bridge", new)
     server.start()
     yield server
     server.shutdown()
@@ -357,6 +364,48 @@ def test_no_second_bridge_while_the_first_still_runs(session, monkeypatch) -> No
     assert session.bridge.game_id == "009"
 
 
+def test_the_stopped_game_can_be_opened_again(session, monkeypatch) -> None:
+    """After a 503, the game left on screen is stopped : choosing it restarts it (Junior #121)."""
+    old = session.bridge
+    old.stopped.set()
+    asked = answer_seat(monkeypatch, 200, {"colors": ["white"]})
+    assert session.open_game("008d") == (200, "")
+    assert session.bridge is not old and session.bridge.game_id == "008d"
+    assert not session.bridge.stopped.is_set()
+    assert asked == [f"008d {TOKEN}"]
+
+
+def test_no_game_opens_once_the_window_closes(session, monkeypatch) -> None:
+    asked = answer_seat(monkeypatch, 200, {"colors": ["white"]})
+    session.close()
+    assert session.bridge.stopped.is_set()
+    assert session.open_game("009")[0] == 503
+    assert asked == [] and session.changes == []
+
+
+def test_closing_waits_for_an_opening_under_way(session, monkeypatch) -> None:
+    """The window closes while /seat is asked : the bridge that opening starts is stopped too."""
+    asking = threading.Event()
+    answer = threading.Event()
+
+    def slow_seat(_self: Bridge):
+        asking.set()
+        answer.wait(5)
+        return 200, {"colors": ["white"]}
+
+    monkeypatch.setattr(Bridge, "seat", slow_seat)
+    opening = threading.Thread(target=session.open_game, args=("009",))
+    opening.start()
+    assert asking.wait(5)
+    closing = threading.Thread(target=session.close)
+    closing.start()
+    answer.set()
+    opening.join(5)
+    closing.join(5)
+    assert session.bridge.game_id == "009"
+    assert session.bridge.stopped.is_set()
+
+
 @pytest.mark.parametrize("transport", ["usb", "ble"])
 def test_the_new_bridge_keeps_the_board(monkeypatch, transport: str) -> None:
     """With a board, the opened game is played on it too (mutant of Junior, #121)."""
@@ -378,3 +427,52 @@ def test_the_new_bridge_keeps_the_board(monkeypatch, transport: str) -> None:
         assert (new.with_board, new.board_transport) == (True, transport)
     finally:
         board_session.stop()
+
+
+def test_the_window_is_told_outside_the_lock(session, monkeypatch) -> None:
+    """``on_change`` may wait for the main thread, which may be waiting in close() (Admin #123)."""
+    answer_seat(monkeypatch, 200, {"colors": ["white"]})
+    held: list[bool] = []
+    session.on_change = lambda _new: held.append(session.lock.locked())
+    assert session.open_game("009") == (200, "")
+    assert held == [False]
+
+
+def test_a_window_closed_during_the_opening_is_not_told(session, monkeypatch) -> None:
+    """close() wins the lock once the bridge is started : no title for a closed window."""
+    answer_seat(monkeypatch, 200, {"colors": ["white"]})
+    told: list[Bridge] = []
+    session.on_change = told.append
+    start = session.start
+
+    def start_then_close() -> None:
+        start()
+        threading.Thread(target=session.close).start()
+
+    monkeypatch.setattr(session, "start", start_then_close)
+    real_lock = session.lock
+
+    class ReleaseThenWait:
+        def __enter__(self):
+            return real_lock.__enter__()
+
+        def __exit__(self, *exc):
+            real_lock.__exit__(*exc)
+            for _ in range(100):
+                if session.closed:
+                    break
+                threading.Event().wait(0.01)
+
+    session.lock = ReleaseThenWait()
+    assert session.open_game("009") == (200, "")
+    assert session.closed and told == []
+
+
+def test_the_page_shows_the_sessions_bridge_whatever_it_was_told(page) -> None:
+    """Two crossing openings may call on_change out of order : the page never keeps a copy."""
+    other = running_bridge("009", chess.BLACK)
+    session = page.session
+    session.bridge = other
+    state = json.loads(request(page, "GET", "/state")[1])
+    assert (state["game_id"], state["color"]) == ("009", "black")
+    assert page.bridge is other
