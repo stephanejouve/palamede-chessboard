@@ -9,7 +9,11 @@ Rules (owner and Leader, #93, 28-29/10) :
   holds one of the two seats : a token never opens a game between two
   other players ;
 * the opponent is an existing account of the registry, other than the
-  creator ;
+  creator, and **not a human** : a human is never put in a game without
+  their consent ; games between humans stay created by hand until an
+  invitation exists (owner, 29/10) ;
+* at most :data:`MAX_OPEN_PER_CREATOR` games of this route in progress per
+  creator, 429 beyond (owner, 29/10) ;
 * **only unrated games** : ``rated`` is a strict JSON boolean, ``false``
   by default, and ``true`` is refused (400). A rated game keeps the
   arbiter-or-daemon contract of ``chess_create_game``, so this route
@@ -41,6 +45,7 @@ from palamede_chessboard.chessboard_state import (
     GameMetadata,
     GameState,
     TimeControl,
+    list_games,
 )
 from palamede_chessboard.players import registry
 from palamede_chessboard.players.observe import bearer_token
@@ -53,10 +58,14 @@ EVENT = "Tablier"
 #: second and the same 16 random bits : one retry is already paranoid).
 _ID_ATTEMPTS = 3
 #: ``M+S`` : minutes then increment seconds, digits only, no spaces.
-_CLOCK_FORMAT = re.compile(r"(\d{1,3})\+(\d{1,3})")
+_CLOCK_FORMAT = re.compile(r"([0-9]{1,3})\+([0-9]{1,3})")
 #: Bounds of a clock : 1 to 180 minutes, 0 to 180 seconds of increment.
 MAX_MINUTES = 180
 MAX_INCREMENT = 180
+#: Games opened by this route and still in progress, per creator (owner, 29/10).
+MAX_OPEN_PER_CREATOR = 5
+#: Prefix of the ids this route gives : how its games are counted.
+ID_PREFIX = "tablier-"
 
 
 class TimeControlPayload(BaseModel):
@@ -120,12 +129,30 @@ def _opponent(raw: str, creator: str, games_dir: Path) -> str:
         raise HTTPException(422, "Vous ne pouvez pas être votre propre adversaire")
     if opponent not in known:
         raise HTTPException(422, f"Adversaire inconnu : {opponent}")
+    if known[opponent].get("kind") == "human":
+        raise HTTPException(
+            422, "Pas encore de partie contre un humain par Tablier : elle se crée à la main"
+        )
     return opponent
+
+
+def _check_open_games(creator: str, games_dir: Path) -> None:
+    """429 when the creator already has :data:`MAX_OPEN_PER_CREATOR` games of this route."""
+    open_games = [
+        g
+        for g in list_games(games_dir, player=creator, active_only=True)
+        if g["game_id"].startswith(ID_PREFIX)
+    ]
+    if len(open_games) >= MAX_OPEN_PER_CREATOR:
+        raise HTTPException(
+            429,
+            f"Déjà {len(open_games)} parties Tablier en cours : terminez-en une d'abord",
+        )
 
 
 def _new_game_id() -> str:
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    return f"tablier-{stamp}-{secrets.token_hex(2)}"
+    return f"{ID_PREFIX}{stamp}-{secrets.token_hex(2)}"
 
 
 def create_from_viewer(payload: NewGamePayload, request: Request, games_dir: Path) -> dict:
@@ -139,6 +166,7 @@ def create_from_viewer(payload: NewGamePayload, request: Request, games_dir: Pat
         )
     tc = _time_control(payload.time_control)
     opponent = _opponent(payload.opponent, creator, games_dir)
+    _check_open_games(creator, games_dir)
 
     color = payload.color
     if color == "random":

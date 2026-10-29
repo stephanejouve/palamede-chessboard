@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from palamede_chessboard.chessboard_state import GameState
+from palamede_chessboard.chessboard_state import GameMetadata, GameState
 from palamede_chessboard.players import registry
 
 
@@ -20,7 +20,12 @@ from palamede_chessboard.players import registry
 def tokens(games_dir: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
     monkeypatch.delenv(registry.REGISTRY_ENV, raising=False)
     issued = {}
-    for pid, kind in (("stephane", "human"), ("leader", "agent"), ("bot-maia-1500", "agent")):
+    for pid, kind in (
+        ("stephane", "human"),
+        ("cilou", "human"),
+        ("leader", "agent"),
+        ("bot-maia-1500", "agent"),
+    ):
         registry.add_player(games_dir, pid, kind=kind)
         issued[pid] = registry.issue_token(games_dir, pid, label="tests")
     return issued
@@ -56,7 +61,7 @@ def test_creator_gets_the_chosen_side(
 def test_random_color_puts_the_creator_in_a_seat(
     client: TestClient, tokens: dict, games_dir: Path
 ) -> None:
-    for _ in range(6):
+    for _ in range(5):  # MAX_OPEN_PER_CREATOR
         body = _create(client, tokens["stephane"]).json()
         state = GameState.load(body["game_id"], games_dir=games_dir)
         assert getattr(state.metadata, body["color"]) == "stephane"
@@ -152,6 +157,7 @@ def test_new_game_can_be_played_by_its_creator(client: TestClient, tokens: dict)
 # Review Leader and Junior (#126) : the PGN writer does not escape header
 # values, so the time control is whitelisted before anything is written.
 FORGED = [
+    "٥+٣",
     '5+3"]\n[Rated "true',
     '5+3"]\n[Result "1-0',
     "5+3\n",
@@ -201,3 +207,40 @@ def test_unauthenticated_caller_learns_nothing_about_rated(
     """Review Leader : the token is checked first, before any other answer."""
     assert _create(client, None, rated=True).status_code == 401
     assert _create(client, None, time_control={"format": "x"}).status_code == 401
+
+
+def test_human_opponent_is_refused(client: TestClient, tokens: dict, games_dir: Path) -> None:
+    """Owner, 29/10 : never a human put in a game without their consent."""
+    r = _create(client, tokens["leader"], opponent="cilou")
+    assert r.status_code == 422
+    assert "humain" in r.json()["detail"]
+    assert _pgns(games_dir) == []
+
+
+def test_a_human_may_open_a_game_against_an_agent(client: TestClient, tokens: dict) -> None:
+    assert _create(client, tokens["cilou"], opponent="leader").status_code == 201
+
+
+def test_at_most_five_open_games_per_creator(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    for _ in range(5):
+        assert _create(client, tokens["stephane"]).status_code == 201
+    r = _create(client, tokens["stephane"], opponent="bot-maia-1500")
+    assert r.status_code == 429
+    assert len(_pgns(games_dir)) == 5
+    # Another creator has their own allowance.
+    assert _create(client, tokens["cilou"]).status_code == 201
+
+
+def test_finished_and_other_games_do_not_count(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    ids = [_create(client, tokens["stephane"]).json()["game_id"] for _ in range(5)]
+    state = GameState.load(ids[0], games_dir=games_dir)
+    state.metadata.result = "1-0"
+    state.save()
+    GameState.create(
+        GameMetadata(game_id="hors-tablier", white="stephane", black="leader"), games_dir=games_dir
+    )
+    assert _create(client, tokens["stephane"]).status_code == 201
