@@ -113,7 +113,8 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 #moves li { display: grid; grid-template-columns: 4ch 7ch 7ch; column-gap: 1ch; }
 #moves li span:first-child { color: var(--muted); text-align: right; }
 #fen-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
-#fen {
+/* The FEN, the game's name and its PGN (#134) : read-only, selectable, copied. */
+#fen, .copy-field {
   flex: 1 1 100%;
   min-width: 0;
   font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -125,7 +126,9 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
   -webkit-user-select: text;
   user-select: text;
 }
-#fen::selection, #log::selection { background: var(--blue); color: #fff; }
+#fen::selection, .copy-field::selection, #log::selection { background: var(--blue); color: #fff; }
+#pgn { resize: vertical; white-space: pre; overflow: auto; }
+#export-msg { flex: 1 1 100%; margin: 0; color: var(--muted); }
 button {
   font: inherit;
   padding: 4px 10px;

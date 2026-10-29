@@ -32,6 +32,8 @@ let sending = false;
 let lastGame = null;
 // The menu « Fichier ▸ Ouvrir » bumps a counter in /state (#90).
 let openRequests = null;
+// « Enregistrer… » only in the app, which has a native dialog (#134).
+let canSave = false;
 
 // Squares to fix : a red LED in the corner, as on the eBoard (review of
 // Stéphane, 28/10), rather than drawn circles. Set only when they change.
@@ -171,6 +173,7 @@ function forgetGame() {
   cg.set({ fen: '8/8/8/8/8/8/8/8', lastMove: undefined });
   el('moves').replaceChildren();
   showMoveError('');
+  hidePgn();
 }
 
 function pickerMessage(message) {
@@ -268,6 +271,8 @@ function render(state) {
   el('tray').hidden = !fixing;
   renderSetup(fixing ? state.setup : null);
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
+  if (el('game-name').value !== state.game_id) el('game-name').value = state.game_id || '';
+  canSave = Boolean(state.can_save);
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');
 }
 
@@ -291,23 +296,91 @@ el('flip-btn').addEventListener('click', () => {
 });
 
 // A read-only field, not text : the window disables text selection (pywebview),
-// and the clipboard API may be refused there (review of Stéphane, 28/10).
-el('fen-btn').addEventListener('click', async () => {
-  const fen = el('fen');
-  fen.hidden = !fen.hidden;
-  if (fen.hidden || !fen.value) return;
-  fen.focus();
-  fen.select();
+// and the clipboard API may be refused there (review of Stéphane, 28/10). The
+// FEN, the game's name and its PGN (#134) are copied the same way.
+async function copyField(button, field, copiedLabel) {
+  field.focus();
+  field.select();
   let copied = false;
   try {
-    await navigator.clipboard.writeText(fen.value);
+    await navigator.clipboard.writeText(field.value);
     copied = true;
   } catch (_err) {
     copied = document.execCommand('copy');
   }
   if (copied) {
-    el('fen-btn').textContent = 'FEN copiée';
-    setTimeout(() => { el('fen-btn').textContent = 'FEN'; }, 1500);
+    button.dataset.label ??= button.textContent;
+    button.textContent = copiedLabel;
+    setTimeout(() => { button.textContent = button.dataset.label; }, 1500);
+  }
+}
+
+function toggleCopy(button, field, copiedLabel) {
+  field.hidden = !field.hidden;
+  if (!field.hidden && field.value) copyField(button, field, copiedLabel);
+}
+
+el('fen-btn').addEventListener('click', () => toggleCopy(el('fen-btn'), el('fen'), 'FEN copiée'));
+el('name-btn').addEventListener('click', () => toggleCopy(el('name-btn'), el('game-name'), 'Nom copié'));
+
+function exportMessage(message) {
+  el('export-msg').hidden = !message;
+  el('export-msg').textContent = message || '';
+}
+
+function hidePgn() {
+  el('pgn').hidden = true;
+  el('pgn').value = '';
+  el('pgn-save').hidden = true;
+  exportMessage('');
+}
+
+// Read again at each opening : the PGN grows with the moves (#134). The bridge
+// reads the viewer's public /api/raw, never with the token.
+el('pgn-btn').addEventListener('click', async () => {
+  if (!el('pgn').hidden) {
+    hidePgn();
+    return;
+  }
+  exportMessage('Lecture du PGN…');
+  try {
+    const response = await fetch('/pgn', { cache: 'no-store' });
+    const answer = await response.json().catch(() => ({ error: `réponse illisible (HTTP ${response.status})` }));
+    if (!response.ok) {
+      exportMessage(answer.error);
+      return;
+    }
+    el('pgn').value = answer.pgn;
+  } catch (_err) {
+    exportMessage('Le pont ne répond plus.');
+    return;
+  }
+  exportMessage('');
+  el('pgn').hidden = false;
+  el('pgn-save').hidden = !canSave;
+  copyField(el('pgn-btn'), el('pgn'), 'PGN copié');
+});
+
+// The app's native dialog : the bridge writes the file, the page never sees the path.
+el('pgn-save').addEventListener('click', async () => {
+  // One dialog at a time : the bridge refuses a second one too (review Junior #137).
+  el('pgn-save').disabled = true;
+  try {
+    const response = await fetch('/save-pgn', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Palamede-Nonce': NONCE },
+      body: JSON.stringify({ game_id: lastGame }),
+    });
+    const answer = await response.json().catch(() => ({ error: `réponse illisible (HTTP ${response.status})` }));
+    if (!response.ok) {
+      exportMessage(answer.error);
+      return;
+    }
+    exportMessage(answer.saved ? `PGN enregistré : ${answer.saved}` : '');
+  } catch (_err) {
+    exportMessage('Le pont ne répond plus.');
+  } finally {
+    el('pgn-save').disabled = false;
   }
 });
 
