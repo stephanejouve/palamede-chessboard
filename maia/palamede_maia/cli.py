@@ -6,7 +6,9 @@
 The tokens directory holds one file per account, ``bot-maia-<elo>.token``,
 readable by its owner only ; the levels played are the files present. A
 token is never logged. ``--humans`` lists the accounts Maia may play
-against : nobody when it is empty.
+against : nobody when it is empty. Maia only plays games opened by that
+human through Tablier (``tablier.<human>.*``), plus those named in
+``--games`` (empty by default).
 """
 
 from __future__ import annotations
@@ -63,6 +65,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--lc0", default=os.environ.get("MAIA_LC0", "lc0"))
     parser.add_argument("--humans", default=os.environ.get("MAIA_HUMANS", ""))
+    parser.add_argument(
+        "--games",
+        default=os.environ.get("MAIA_GAMES", ""),
+        help="games other than tablier.<human>.* that Maia may play (empty by default)",
+    )
     parser.add_argument("--interval", type=float, default=2.0, help="seconds between rounds")
     parser.add_argument("--once", action="store_true", help="one round, then exit")
     args = parser.parse_args(argv)
@@ -80,7 +87,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     engines = Engines(args.lc0, args.weights_dir)
-    bot = Bot(args.viewer.rstrip("/"), tokens, humans, engines.move)
+    games = frozenset(g.strip() for g in args.games.split(",") if g.strip())
+    bot = Bot(args.viewer.rstrip("/"), tokens, humans, engines.move, games)
     try:
         while True:
             bot.play_round()

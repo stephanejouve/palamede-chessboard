@@ -359,3 +359,16 @@ def _mcp_response(result: dict[str, Any]) -> list[TextContent]:
         "response_timestamp": datetime.now().isoformat(),
     }
     return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
+
+
+#: Ids given by ``POST /api/games`` (#126) : the bots trust that only a
+#: human's token creates them, so the MCP tool never may (review Leader #131).
+RESERVED_GAME_ID_PREFIX = "tablier."
+
+
+def _refuse_reserved_game_id(game_id: object) -> None:
+    """:class:`ChessboardError` for a ``tablier.*`` id, whatever its case."""
+    if str(game_id or "").lower().startswith(RESERVED_GAME_ID_PREFIX):
+        raise ChessboardError(
+            f"game_id prefix {RESERVED_GAME_ID_PREFIX!r} is reserved for games opened from Tablier"
+        )

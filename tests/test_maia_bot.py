@@ -17,10 +17,17 @@ from palamede_maia.bot import Bot, level_of
 from palamede_maia.cli import main, parse_humans, read_tokens
 
 START = chess.STARTING_FEN
+TABLIER = "tablier.stephane.20261029-210000-abcd"
 TOKENS = {"bot-maia-1500": "tok-1500", "bot-maia-1900": "tok-1900"}
 
 
-def _game(game_id="g1", white="stephane", black="bot-maia-1500", turn="black", **extra):
+def _game(
+    game_id="tablier.stephane.20261029-210000-abcd",
+    white="stephane",
+    black="bot-maia-1500",
+    turn="black",
+    **extra,
+):
     return {
         "game_id": game_id,
         "white": white,
@@ -62,7 +69,7 @@ def test_plays_its_move_with_its_own_token(monkeypatch) -> None:
     bot, asked = _bot()
     assert bot.play_round() == 1
     assert asked == [(1500, START)]
-    assert fake.played == [("g1", "e7e5", "tok-1500")]
+    assert fake.played == [(TABLIER, "e7e5", "tok-1500")]
 
 
 def test_level_follows_the_account(monkeypatch) -> None:
@@ -119,10 +126,13 @@ def test_nobody_listed_means_nobody_played(monkeypatch) -> None:
 
 
 def test_white_side_too(monkeypatch) -> None:
-    fake = FakeViewer(monkeypatch, [_game(white="bot-maia-1500", black="cilou", turn="white")])
+    cilou = "tablier.cilou.20261029-210000-abcd"
+    fake = FakeViewer(
+        monkeypatch, [_game(game_id=cilou, white="bot-maia-1500", black="cilou", turn="white")]
+    )
     bot, _ = _bot(move="e2e4")
     bot.play_round()
-    assert fake.played == [("g1", "e2e4", "tok-1500")]
+    assert fake.played == [(cilou, "e2e4", "tok-1500")]
 
 
 @pytest.mark.parametrize("status", [403, 409, 422, None])
@@ -208,3 +218,38 @@ def test_bot_module_does_not_import_the_server() -> None:
     source = Path(bot_module.__file__).parent
     for path in source.rglob("*.py"):
         assert "palamede_chessboard" not in path.read_text(encoding="utf-8"), path
+
+
+@pytest.mark.parametrize(
+    "game_id",
+    [
+        "test-ubuntu-bt-002",
+        "tablier.cilou.20261029-210000-abcd",
+        "tablier.stephane",
+        "xtablier.stephane.1",
+    ],
+    ids=["partie MCP", "ouverte par un autre humain", "préfixe sans point", "préfixe décalé"],
+)
+def test_only_games_opened_by_that_human_through_tablier(monkeypatch, game_id) -> None:
+    """Leader #131 : an agent's MCP game « stephane against bot-maia » is never played."""
+    fake = FakeViewer(monkeypatch, [_game(game_id=game_id)])
+    bot, asked = _bot()
+    assert bot.play_round() == 0
+    assert fake.played == [] and asked == []
+
+
+def test_a_listed_game_is_played(monkeypatch) -> None:
+    """The owner hands a seat of an existing game to Maia (smoke, --games)."""
+    fake = FakeViewer(monkeypatch, [_game(game_id="test-ubuntu-bt-002")])
+    bot, _ = _bot()
+    bot.games = frozenset({"test-ubuntu-bt-002"})
+    assert bot.play_round() == 1
+    assert fake.played[0][0] == "test-ubuntu-bt-002"
+
+
+def test_a_listed_game_still_needs_a_human_opponent(monkeypatch) -> None:
+    fake = FakeViewer(monkeypatch, [_game(game_id="agents-001", white="leader")])
+    bot, _ = _bot()
+    bot.games = frozenset({"agents-001"})
+    assert bot.play_round() == 0
+    assert fake.played == []

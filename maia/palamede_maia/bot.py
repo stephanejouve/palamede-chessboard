@@ -9,7 +9,14 @@ a source of moves for the agents :
 * only against an opponent listed as **human** in the bot's configuration
   (``--humans``) : never an agent, never another bot, never an unknown
   account. Fail-closed : with no human listed, the bot plays nobody ;
-* a game is never played by two of its levels : bot against bot is skipped.
+* a game is never played by two of its levels : bot against bot is skipped ;
+* only a game **opened by that human through Tablier**, ``tablier.<human>.*`` :
+  only ``POST /api/games`` with the human's own token gives such an id, and
+  the MCP tool ``chess_create_game`` refuses the prefix. Otherwise an agent
+  could create « stephane against bot-maia » by MCP from the position of
+  its own game and get Maia's move (review Leader #131). A game named in
+  ``--games`` (empty by default) is the only exception : the owner hands a
+  seat of an existing game to Maia, for a smoke for instance.
 """
 
 from __future__ import annotations
@@ -42,6 +49,7 @@ class Bot:
     tokens: dict[str, str]
     humans: frozenset[str]
     move_of: Callable[[int, str], str | None]
+    games: frozenset[str] = frozenset()
     _skipped: set[str] = field(default_factory=set)
 
     def _skip_once(self, game_id: str, why: str) -> None:
@@ -68,6 +76,9 @@ class Bot:
             return None
         if opponent not in self.humans:
             self._skip_once(game_id, f"opponent {opponent!r} is not a listed human")
+            return None
+        if not game_id.startswith(f"tablier.{opponent}.") and game_id not in self.games:
+            self._skip_once(game_id, f"not opened by {opponent} through Tablier, nor listed")
             return None
         if level_of(mover) is None:
             self._skip_once(game_id, f"{mover!r} has no Maia level")
