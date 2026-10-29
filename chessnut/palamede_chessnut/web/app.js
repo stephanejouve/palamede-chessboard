@@ -429,6 +429,10 @@ el('pgn-save').addEventListener('click', savePgn);
 // copy runs outside any click, WebKit may refuse it ; the text is then shown
 // selected, for ⌘C.
 async function menuCopy(field, copiedText) {
+  if (!field.value) {
+    exportMessage('Rien à copier : la partie n’est pas encore lue.');
+    return;
+  }
   field.hidden = false;
   field.focus();
   field.select();

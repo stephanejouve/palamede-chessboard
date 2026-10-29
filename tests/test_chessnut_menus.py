@@ -41,12 +41,29 @@ def fake_action(title, function):
 
 
 def items(page: PageServer, copy=None) -> dict[str, object]:
-    """``{label: function}`` of every menu item."""
+    """``{label: function}`` of every menu item ; a copy runs at once (its ``run``)."""
     return {
-        label: function
+        label: getattr(function, "run", function)
         for _title, entries in app_module.menus(page, fake_menu, fake_action, copy)
         for label, function in entries
     }
+
+
+def test_a_copy_runs_off_the_menu_thread(page, monkeypatch) -> None:
+    """Review Junior #141 : a slow viewer must not freeze the window's menu."""
+    import threading
+
+    release = threading.Event()
+    copied = threading.Event()
+    monkeypatch.setattr(
+        export, "raw_pgn", lambda *_a: release.wait(5) and (200, {"pgn": "1. e4 *"}) or (502, {})
+    )
+    menus = app_module.menus(page, fake_menu, fake_action, lambda _t: copied.set() or True)
+    item = dict(menus[1][1])["Copier le PGN"]
+    item()  # returns at once, the viewer still not answering
+    assert not copied.is_set()
+    release.set()
+    assert copied.wait(5)
 
 
 # ---- the menus and their counters -------------------------------------------

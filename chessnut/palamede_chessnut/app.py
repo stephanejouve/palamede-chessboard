@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from typing import Any
 
 from palamede_chessnut.bridge import Bridge
@@ -79,7 +80,11 @@ COPIED = {"name": "Nom copié.", "fen": "FEN copiée.", "pgn": "PGN copié."}
 
 
 def copier(page: PageServer, kind: str, copy: Copy | None) -> Any:
-    """« Édition ▸ Copier … » : the system clipboard when there is one, else the page tries."""
+    """« Édition ▸ Copier … » : the system clipboard when there is one, else the page tries.
+
+    Off the menu's thread : reading the PGN waits for the viewer, and the
+    menu may run on the window's main thread (review Junior #141).
+    """
 
     def run() -> None:
         text = page.text_to_copy(kind) if copy is not None else None
@@ -88,7 +93,11 @@ def copier(page: PageServer, kind: str, copy: Copy | None) -> Any:
         else:
             page.request_menu(f"copy-{kind}")
 
-    return run
+    def start() -> None:
+        threading.Thread(target=run, name=f"copy-{kind}", daemon=True).start()
+
+    start.run = run  # type: ignore[attr-defined]  # the same, at once : for the tests
+    return start
 
 
 def menus(page: PageServer, menu: Any, action: Any, copy: Copy | None = None) -> list[Any]:
