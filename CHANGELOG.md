@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.13.0...v0.14.0) (2026-10-29)
+
+
+### Features
+
+* **chessnut:** the actions in the window's menus, the name selectable, ⇅ ([#141](https://github.com/stephanejouve/palamede-chessboard/issues/141)) ([c14a7ff](https://github.com/stephanejouve/palamede-chessboard/commit/c14a7ffd27c4a5c056d6b6fcf9a3d31e4f50e611))
+
 ## [0.13.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.12.0...v0.13.0) (2026-10-29)
 
 
