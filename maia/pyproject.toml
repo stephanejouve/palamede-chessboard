@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "palamede-maia"
+version = "0.1.0"
+description = "Maia bot for palamède : human-like moves from lc0 and the Maia weights, played through the viewer API"
+readme = "README.md"
+# The bot itself drives lc0 (GPL-3.0) and the Maia weights (GPL-3.0) as a
+# separate process ; its own code is shipped under the same terms.
+license = "GPL-3.0-or-later"
+authors = [{ name = "Stéphane Jouve" }]
+requires-python = ">=3.11"
+# Bot side only : no server stack, the viewer is reached over HTTP with the
+# standard library, lc0 over UCI with python-chess.
+dependencies = ["chess>=1.10"]
+
+[project.scripts]
+palamede-maia = "palamede_maia.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["palamede_maia"]

@@ -1,0 +1,89 @@
+name: maia-image
+
+# Image of the Maia bot (#93, PR 2), apart from palamède's.
+# - PR touching maia/ : build + smoke test (lc0 plays a Maia move), no push.
+# - Tag palamede-maia-vX.Y.Z (release-please component) or manual run :
+#   build, smoke test, then push to ghcr.io/stephanejouve/palamede-maia.
+# The NAS pulls it by digest, never by a floating tag.
+
+on:
+  pull_request:
+    paths:
+      - maia/**
+      - .github/workflows/maia-image.yml
+  push:
+    tags: ["palamede-maia-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: maia-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/stephanejouve/palamede-maia
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build (loaded locally for the smoke test)
+        uses: docker/build-push-action@v6
+        with:
+          context: maia
+          load: true
+          tags: palamede-maia:ci
+          cache-from: type=gha,scope=maia
+          cache-to: type=gha,scope=maia,mode=max
+
+      - name: Smoke test — lc0 plays a Maia move at every level, licences shipped
+        run: |
+          set -euo pipefail
+          docker run --rm palamede-maia:ci python - <<'EOF'
+          from pathlib import Path
+          import chess
+          from palamede_maia.engine import LEVELS, Engines
+          engines = Engines("/usr/local/bin/lc0", Path("/opt/maia/weights"))
+          board = chess.Board()
+          for elo in LEVELS:
+              move = engines.move(elo, board.fen())
+              assert move is not None and chess.Move.from_uci(move) in board.legal_moves, (elo, move)
+              print(f"maia-{elo} : {move}")
+          engines.close()
+          EOF
+          docker run --rm palamede-maia:ci sh -c 'ls /usr/share/doc/palamede-maia/LICENSE.lc0 /usr/share/doc/palamede-maia/LICENSE.maia'
+          docker run --rm palamede-maia:ci id -u | grep -qx 10002
+          # No token : the bot refuses to start (exit 2), and says why.
+          if docker run --rm palamede-maia:ci palamede-maia --once; then exit 1; fi
+
+      - name: Login GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push (tag + sha)
+        if: github.event_name != 'pull_request'
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: maia
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.ref_name }}
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          cache-from: type=gha,scope=maia
+
+      - name: Digest for the stack
+        if: github.event_name != 'pull_request'
+        run: echo "${{ env.IMAGE }}@${{ steps.push.outputs.digest }}" | tee -a "$GITHUB_STEP_SUMMARY"

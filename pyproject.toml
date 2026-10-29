@@ -27,6 +27,9 @@ httpx = "^0.28.0"
 # Chessnut Air+ bridge, its own package (chessnut/) so that the board
 # side installs without the server stack ; here for its tests and mypy.
 palamede-chessnut = { path = "chessnut", develop = true }
+# Maia bot (#93), its own package and image (maia/) : here for its tests
+# and mypy only. GPL-3.0 ; nothing of it is imported by palamede_chessboard.
+palamede-maia = { path = "maia", develop = true }
 
 # [tool.poetry.scripts] — entry points ajoutés en Phase 1 quand le code
 # métier sera migré. Nom à finaliser pour éviter la collision avec
