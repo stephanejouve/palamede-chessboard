@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.11.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.10.0...v0.11.0) (2026-10-29)
+
+
+### Features
+
+* **chessnut:** lancer Tablier sans --game ni --color, via GET /api/me ([#90](https://github.com/stephanejouve/palamede-chessboard/issues/90)) ([b79e98f](https://github.com/stephanejouve/palamede-chessboard/commit/b79e98f429e8bc3a0f9c8fafb8e0f1f063e719ec))
+* **chessnut:** launch Tablier without --game nor --color, through GET /api/me ([#90](https://github.com/stephanejouve/palamede-chessboard/issues/90)) ([b41191a](https://github.com/stephanejouve/palamede-chessboard/commit/b41191a420477c7848ba2cce65c26fc757e614c4))
+* **viewer:** POST /api/games, an unrated game opened by a player's token ([#126](https://github.com/stephanejouve/palamede-chessboard/issues/126)) ([6810e62](https://github.com/stephanejouve/palamede-chessboard/commit/6810e62366c25f0935a0bae5fb74fe35063b5a84))
+
 ## [0.10.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.9.0...v0.10.0) (2026-10-28)
 
 
