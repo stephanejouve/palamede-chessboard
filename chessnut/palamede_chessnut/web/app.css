@@ -79,6 +79,21 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
   padding: 12px;
 }
 #side p { margin: 0 0 8px; }
+/* The clocks (#135) : the side whose time runs is framed, a fallen flag in red. */
+#clocks { display: grid; gap: 4px; margin-bottom: 10px; }
+#clocks[hidden] { display: none; }
+#side .clock {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.clock .time { font-size: 22px; font-variant-numeric: tabular-nums; }
+.clock.active { border-color: var(--on); box-shadow: inset 3px 0 0 var(--on); }
+.clock.flag { border-color: var(--bad); color: var(--bad); }
 #relay { font-weight: 600; }
 #move-error { color: var(--warn); }
 .chip {

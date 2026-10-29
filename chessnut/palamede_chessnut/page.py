@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from palamede_chessnut import export
+from palamede_chessnut.clock import ClockCache
 from palamede_chessnut.mouse import play_from_page
 from palamede_chessnut.status import RecentLog, snapshot
 
@@ -89,6 +90,8 @@ class PageServer(http.server.ThreadingHTTPServer):
         #: One save at a time : the server is threaded, a double click would
         #: open two dialogs (review Junior #137).
         self.saving = threading.Lock()
+        #: The game's clock, read from the viewer once a second at most (#135).
+        self.clocks = ClockCache()
 
     @property
     def bridge(self) -> Bridge:
@@ -104,6 +107,10 @@ class PageServer(http.server.ThreadingHTTPServer):
 
     def allowed_origins(self) -> set[str]:
         return {f"http://{host}" for host in self.allowed_hosts()}
+
+    def server_close(self) -> None:
+        self.clocks.close()
+        super().server_close()
 
     def start(self) -> threading.Thread:
         thread = threading.Thread(target=self.serve_forever, daemon=True)
@@ -123,6 +130,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             state = snapshot(self.server.bridge, self.server.recent)
             state["open_requests"] = self.server.open_requests
             state["can_save"] = self.server.ask_path is not None
+            bridge = self.server.bridge
+            state["clock"] = self.server.clocks.view(bridge.viewer, bridge.game_id)
             self._send(200, "application/json", json.dumps(state).encode("utf-8"))
             return
         if path == "/pgn":
