@@ -13,9 +13,11 @@ Rules (owner and Leader, #93, 28-29/10) :
   their consent ; games between humans stay created by hand until an
   invitation exists (owner, 29/10) ;
 * at most :data:`MAX_OPEN_PER_CREATOR` games of this route in progress per
-  creator, 429 beyond (owner, 29/10). Counted on every ``tablier-`` game the
-  creator plays, whoever opened it : stricter, never looser. The count and
-  the creation share one file lock, parallel requests included ;
+  creator, 429 beyond (owner, 29/10). The id names its creator,
+  ``tablier.<creator>.<UTC stamp>-<hex>`` (a dot never appears in a player
+  id), so an agent is never blocked by games others opened against it
+  (review Junior #126). The count and the creation share one file lock,
+  parallel requests included ;
 * **only unrated games** : ``rated`` is a strict JSON boolean, ``false``
   by default, and ``true`` is refused (400). A rated game keeps the
   arbiter-or-daemon contract of ``chess_create_game``, so this route
@@ -67,8 +69,8 @@ MAX_MINUTES = 180
 MAX_INCREMENT = 180
 #: Games opened by this route and still in progress, per creator (owner, 29/10).
 MAX_OPEN_PER_CREATOR = 5
-#: Prefix of the ids this route gives : how its games are counted.
-ID_PREFIX = "tablier-"
+#: First part of the ids this route gives, before the creator's name.
+ID_PREFIX = "tablier"
 #: Lock taken around the count and the creation (``<games dir>/.tablier-create.lock``).
 LOCK_NAME = ".tablier-create"
 
@@ -144,10 +146,9 @@ def _opponent(raw: str, creator: str, games_dir: Path) -> str:
 
 def _check_open_games(creator: str, games_dir: Path) -> None:
     """429 when the creator already has :data:`MAX_OPEN_PER_CREATOR` games of this route."""
+    mine = f"{ID_PREFIX}.{creator}."
     open_games = [
-        g
-        for g in list_games(games_dir, player=creator, active_only=True)
-        if g["game_id"].startswith(ID_PREFIX)
+        g for g in list_games(games_dir, active_only=True) if g["game_id"].startswith(mine)
     ]
     if len(open_games) >= MAX_OPEN_PER_CREATOR:
         raise HTTPException(
@@ -156,16 +157,19 @@ def _check_open_games(creator: str, games_dir: Path) -> None:
         )
 
 
-def _new_game_id() -> str:
+def _new_game_id(creator: str) -> str:
+    """``tablier.<creator>.<stamp>-<hex>`` : 61 characters at most, under the 64 allowed."""
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    return f"{ID_PREFIX}{stamp}-{secrets.token_hex(2)}"
+    return f"{ID_PREFIX}.{creator}.{stamp}-{secrets.token_hex(2)}"
 
 
-def _create_game(white: str, black: str, tc: TimeControl, games_dir: Path) -> GameState:
+def _create_game(
+    creator: str, white: str, black: str, tc: TimeControl, games_dir: Path
+) -> GameState:
     """A new unrated game under a fresh id ; 503 if none is free."""
     for _ in range(_ID_ATTEMPTS):
         metadata = GameMetadata(
-            game_id=_new_game_id(),
+            game_id=_new_game_id(creator),
             event=EVENT,
             white=white,
             black=black,
@@ -201,7 +205,7 @@ def create_from_viewer(payload: NewGamePayload, request: Request, games_dir: Pat
     # (review Leader #126). A file lock, so it holds across workers too.
     with _atomic.locked(games_dir / LOCK_NAME):
         _check_open_games(creator, games_dir)
-        state = _create_game(white, black, tc, games_dir)
+        state = _create_game(creator, white, black, tc, games_dir)
 
     clock = init_and_save_clock(state.metadata.game_id, tc, games_dir=games_dir)
     log.info("viewer : %s created %s (%s vs %s)", creator, state.metadata.game_id, white, black)

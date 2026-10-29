@@ -71,7 +71,7 @@ def test_random_color_puts_the_creator_in_a_seat(
 
 def test_game_id_is_chosen_by_the_server(client: TestClient, tokens: dict) -> None:
     r = _create(client, tokens["stephane"], game_id="../../etc/passwd")
-    assert re.fullmatch(r"tablier-\d{8}-\d{6}-[0-9a-f]{4}", r.json()["game_id"])
+    assert re.fullmatch(r"tablier\.stephane\.\d{8}-\d{6}-[0-9a-f]{4}", r.json()["game_id"])
 
 
 def test_rated_game_is_refused(client: TestClient, tokens: dict, games_dir: Path) -> None:
@@ -267,3 +267,21 @@ def test_opponent_of_an_unknown_kind_is_refused(
     raw["players"]["leader"]["kind"] = "robot"
     registry.registry_path(games_dir).write_text(json.dumps(raw))
     assert _create(client, tokens["stephane"]).status_code == 422
+
+
+def test_limit_counts_only_the_games_one_created(client: TestClient, tokens: dict) -> None:
+    """Review Junior #126 : leader is not blocked by five games opened against it."""
+    for _ in range(5):
+        assert _create(client, tokens["stephane"], opponent="leader").status_code == 201
+    assert _create(client, tokens["leader"], opponent="bot-maia-1500").status_code == 201
+
+
+def test_longest_creator_fits_in_a_game_id(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    long_id = "a" * 32
+    registry.add_player(games_dir, long_id, kind="agent")
+    token = registry.issue_token(games_dir, long_id, label="tests")
+    r = _create(client, token, opponent="leader")
+    assert r.status_code == 201
+    assert len(r.json()["game_id"]) <= 64
