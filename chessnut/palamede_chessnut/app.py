@@ -1,9 +1,10 @@
 """The « Échiquier » app (#78) : the bridge with a window.
 
-    palamede-chessnut-app --viewer <viewer URL> --game <game_id> --color white [--no-board]
+    palamede-chessnut-app [--viewer <viewer URL>] [--game <game_id>] [--color white] [--no-board]
 
 Same options as ``palamede-chessnut``, plus ``--no-board`` : no Chessnut,
-the player's moves are made with the mouse in the window (#92).
+the player's moves are made with the mouse in the window (#92). Without
+``--game``, the token's newest game in progress (:mod:`palamede_chessnut.launch`).
 
 The window (pywebview : WebKit on macOS, Qt on Linux, Edge WebView2 on
 Windows) shows the local page of :mod:`palamede_chessnut.page`. pywebview needs the main thread for its
