@@ -13,16 +13,19 @@ Closing the window stops the bridge, LEDs off.
 
 The menu « Fichier ▸ Ouvrir une partie… » lists the player's games in
 progress and moves the window to the chosen one (#90), see
-:mod:`palamede_chessnut.games`.
+:mod:`palamede_chessnut.games`. The page's « Enregistrer… » saves the
+game's PGN through the window's native dialog (#134).
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 from palamede_chessnut.bridge import Bridge
 from palamede_chessnut.cli import bridge_from_args
+from palamede_chessnut.export import AskPath
 from palamede_chessnut.games import Session
 from palamede_chessnut.page import PageServer
 from palamede_chessnut.status import RecentLog
@@ -45,6 +48,27 @@ def run_bridge(bridge: Bridge) -> None:
 
 def title(bridge: Bridge) -> str:
     return f"Échiquier — {bridge.game_id}"
+
+
+def save_dialog(webview: Any, window: Any) -> AskPath:
+    """The window's native save dialog (#134) : the chosen path, ``None`` if cancelled."""
+
+    def ask(name: str) -> str | None:
+        # pywebview 5.1 moved the constant to ``FileDialog.SAVE`` ; 5.0 has only
+        # ``SAVE_DIALOG``. Read at each save : a window never fails to open for it.
+        kind = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or getattr(
+            webview, "SAVE_DIALOG", None
+        )
+        if kind is None:
+            log.warning("this pywebview has no save dialog : PGN not saved")
+            return None
+        chosen = window.create_file_dialog(kind, save_filename=name, file_types=("PGN (*.pgn)",))
+        # A string, or a tuple of one path, depending on the platform.
+        if isinstance(chosen, list | tuple):
+            chosen = chosen[0] if chosen else None
+        return str(chosen) if chosen else None
+
+    return ask
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -70,6 +94,7 @@ def main(argv: list[str] | None = None) -> None:
         window = webview.create_window(
             title(bridge), page.url, width=900, height=640, text_select=True
         )
+        page.ask_path = save_dialog(webview, window)
 
         # The title of the session's bridge, not of the one told : two crossing
         # openings may tell them out of order (review Junior #123).

@@ -6,8 +6,9 @@ never receives the player token, which stays in the bridge. Requests whose
 reaching the port through a rebound DNS name reads nothing.
 
 Its writes are ``POST /move``, for mouse play without a board (#92,
-frame of Admin on #78), and ``POST /open``, another game of the player
-(#90) : the ``Origin`` must be this page, and the
+frame of Admin on #78), ``POST /open``, another game of the player
+(#90), and ``POST /save-pgn``, the game's PGN to a file chosen in a native
+dialog (#134, the app only) : the ``Origin`` must be this page, and the
 ``X-Palamede-Nonce`` header must carry the nonce drawn at launch and
 written into the page. Another site open in a browser of the machine
 knows neither, and a plain form cannot set the header.
@@ -23,6 +24,7 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from palamede_chessnut import export
 from palamede_chessnut.mouse import play_from_page
 from palamede_chessnut.status import RecentLog, snapshot
 
@@ -82,6 +84,8 @@ class PageServer(http.server.ThreadingHTTPServer):
         self.session: Session | None = None
         #: Bumped by the menu « Fichier ▸ Ouvrir » : the page opens its list when it changes.
         self.open_requests = 0
+        #: The app's save dialog (#134) : without it, no ``/save-pgn``.
+        self.ask_path: export.AskPath | None = None
 
     @property
     def bridge(self) -> Bridge:
@@ -115,7 +119,12 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if path == "/state":
             state = snapshot(self.server.bridge, self.server.recent)
             state["open_requests"] = self.server.open_requests
+            state["can_save"] = self.server.ask_path is not None
             self._send(200, "application/json", json.dumps(state).encode("utf-8"))
+            return
+        if path == "/pgn":
+            bridge = self.server.bridge
+            self._send_json(*export.raw_pgn(bridge.viewer, bridge.game_id))
             return
         if path == "/games" and self.server.session is not None:
             status, body = self.server.session.games()
@@ -134,12 +143,20 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         """``POST /move`` ``{"uci": ...}`` : the move goes through the bridge's checks.
 
         ``POST /open`` ``{"game_id": ...}`` : see :meth:`.games.Session.open_game`.
+
+        ``POST /save-pgn`` ``{"game_id": ...}`` : the game on screen, see
+        :func:`.export.save_pgn`.
         """
         if self.headers.get("Host") not in self.server.allowed_hosts():
             self._send(421, "text/plain", b"wrong host")
             return
         session = self.server.session
-        if self.path not in ("/move", "/open") or (self.path == "/open" and session is None):
+        allowed = {"/move"}
+        if session is not None:
+            allowed.add("/open")
+        if self.server.ask_path is not None:
+            allowed.add("/save-pgn")
+        if self.path not in allowed:
             self._send(404, "text/plain", b"not found")
             return
         if self.headers.get("Origin") not in self.server.allowed_origins():
@@ -153,11 +170,23 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         value = self._read_field(field)
         if value is None:
             return
+        if self.path == "/save-pgn":
+            self._save_pgn(value)
+            return
         if session is not None and self.path == "/open":
             status, message = session.open_game(value)
         else:
             status, message = play_from_page(self.server.bridge, value)
         self._answer(status, message)
+
+    def _save_pgn(self, game_id: str) -> None:
+        bridge = self.server.bridge
+        ask_path = self.server.ask_path
+        if game_id != bridge.game_id or ask_path is None:
+            # Another game opened meanwhile : never save the wrong one.
+            self._send_json(409, {"error": "La partie a changé : rouvrez le PGN."})
+            return
+        self._send_json(*export.save_pgn(bridge.viewer, game_id, ask_path))
 
     def _read_field(self, field: str) -> str | None:
         """The body's string ``field``, or ``None`` once the error is answered."""
@@ -183,6 +212,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
     def _answer(self, status: int, message: str) -> None:
         body = {"ok": True} if status == 200 else {"error": message}
+        self._send(status, "application/json", json.dumps(body).encode("utf-8"))
+
+    def _send_json(self, status: int, body: dict[str, Any]) -> None:
         self._send(status, "application/json", json.dumps(body).encode("utf-8"))
 
     def _send(self, status: int, content_type: str, body: bytes) -> None:
