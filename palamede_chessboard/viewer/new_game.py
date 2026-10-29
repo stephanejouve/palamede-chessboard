@@ -13,7 +13,9 @@ Rules (owner and Leader, #93, 28-29/10) :
   their consent ; games between humans stay created by hand until an
   invitation exists (owner, 29/10) ;
 * at most :data:`MAX_OPEN_PER_CREATOR` games of this route in progress per
-  creator, 429 beyond (owner, 29/10) ;
+  creator, 429 beyond (owner, 29/10). Counted on every ``tablier-`` game the
+  creator plays, whoever opened it : stricter, never looser. The count and
+  the creation share one file lock, parallel requests included ;
 * **only unrated games** : ``rated`` is a strict JSON boolean, ``false``
   by default, and ``true`` is refused (400). A rated game keeps the
   arbiter-or-daemon contract of ``chess_create_game``, so this route
@@ -39,6 +41,7 @@ from typing import Literal
 from fastapi import HTTPException, Request
 from pydantic import BaseModel, ConfigDict
 
+from palamede_chessboard import _atomic
 from palamede_chessboard.chessboard_clock import init_and_save_clock
 from palamede_chessboard.chessboard_state import (
     GameAlreadyExistsError,
@@ -66,6 +69,8 @@ MAX_INCREMENT = 180
 MAX_OPEN_PER_CREATOR = 5
 #: Prefix of the ids this route gives : how its games are counted.
 ID_PREFIX = "tablier-"
+#: Lock taken around the count and the creation (``<games dir>/.tablier-create.lock``).
+LOCK_NAME = ".tablier-create"
 
 
 class TimeControlPayload(BaseModel):
@@ -129,7 +134,8 @@ def _opponent(raw: str, creator: str, games_dir: Path) -> str:
         raise HTTPException(422, "Vous ne pouvez pas être votre propre adversaire")
     if opponent not in known:
         raise HTTPException(422, f"Adversaire inconnu : {opponent}")
-    if known[opponent].get("kind") == "human":
+    # Fail-closed (review Leader #126) : only an agent account, bots included.
+    if known[opponent].get("kind") != "agent":
         raise HTTPException(
             422, "Pas encore de partie contre un humain par Tablier : elle se crée à la main"
         )
@@ -155,6 +161,24 @@ def _new_game_id() -> str:
     return f"{ID_PREFIX}{stamp}-{secrets.token_hex(2)}"
 
 
+def _create_game(white: str, black: str, tc: TimeControl, games_dir: Path) -> GameState:
+    """A new unrated game under a fresh id ; 503 if none is free."""
+    for _ in range(_ID_ATTEMPTS):
+        metadata = GameMetadata(
+            game_id=_new_game_id(),
+            event=EVENT,
+            white=white,
+            black=black,
+            time_control=tc,
+            rated=False,
+        )
+        try:
+            return GameState.create(metadata, games_dir=games_dir)
+        except GameAlreadyExistsError:
+            continue
+    raise HTTPException(503, "Aucun identifiant de partie libre, réessayez")
+
+
 def create_from_viewer(payload: NewGamePayload, request: Request, games_dir: Path) -> dict:
     """Create an unrated game between the token's player and ``payload.opponent``."""
     creator = _creator(request, games_dir)
@@ -166,32 +190,21 @@ def create_from_viewer(payload: NewGamePayload, request: Request, games_dir: Pat
         )
     tc = _time_control(payload.time_control)
     opponent = _opponent(payload.opponent, creator, games_dir)
-    _check_open_games(creator, games_dir)
 
     color = payload.color
     if color == "random":
         color = secrets.choice(("white", "black"))
     white, black = (creator, opponent) if color == "white" else (opponent, creator)
 
-    for _ in range(_ID_ATTEMPTS):
-        metadata = GameMetadata(
-            game_id=_new_game_id(),
-            event=EVENT,
-            white=white,
-            black=black,
-            time_control=tc,
-            rated=False,
-        )
-        try:
-            state = GameState.create(metadata, games_dir=games_dir)
-            break
-        except GameAlreadyExistsError:
-            continue
-    else:
-        raise HTTPException(503, "Aucun identifiant de partie libre, réessayez")
+    # Count then create under one lock : FastAPI runs ``def`` routes in a
+    # thread pool, and 12 parallel POSTs made up to 12 games without it
+    # (review Leader #126). A file lock, so it holds across workers too.
+    with _atomic.locked(games_dir / LOCK_NAME):
+        _check_open_games(creator, games_dir)
+        state = _create_game(white, black, tc, games_dir)
 
     clock = init_and_save_clock(state.metadata.game_id, tc, games_dir=games_dir)
-    log.info("viewer : %s created %s (%s vs %s)", creator, metadata.game_id, white, black)
+    log.info("viewer : %s created %s (%s vs %s)", creator, state.metadata.game_id, white, black)
     return {
         "status": "ok",
         "game_id": state.metadata.game_id,

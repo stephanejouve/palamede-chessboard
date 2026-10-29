@@ -6,6 +6,7 @@ opponent, a server-chosen id, and no arbiter (Leader, #93, 29/10).
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -244,3 +245,25 @@ def test_finished_and_other_games_do_not_count(
         GameMetadata(game_id="hors-tablier", white="stephane", black="leader"), games_dir=games_dir
     )
     assert _create(client, tokens["stephane"]).status_code == 201
+
+
+def test_parallel_requests_never_exceed_the_limit(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    """Review Leader #126 : 12 parallel POSTs for one creator leave exactly 5 games."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        codes = list(pool.map(lambda _: _create(client, tokens["stephane"]).status_code, range(12)))
+    assert sorted(codes) == [201] * 5 + [429] * 7
+    assert len(_pgns(games_dir)) == 5
+
+
+def test_opponent_of_an_unknown_kind_is_refused(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    """Fail-closed : only an agent account may be put in a game by someone else."""
+    raw = registry.load(games_dir)
+    raw["players"]["leader"]["kind"] = "robot"
+    registry.registry_path(games_dir).write_text(json.dumps(raw))
+    assert _create(client, tokens["stephane"]).status_code == 422
