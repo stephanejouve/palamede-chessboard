@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.12.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.11.0...v0.12.0) (2026-10-29)
+
+
+### Features
+
+* **chessnut:** the setup in a tray under the board, by colour then type of piece ([#125](https://github.com/stephanejouve/palamede-chessboard/issues/125)) ([b899ca3](https://github.com/stephanejouve/palamede-chessboard/commit/b899ca3230a8d8373669f522067f20812baa92df))
+* **maia:** the Maia bot, lc0 and the Maia 1 weights in an image of its own ([#131](https://github.com/stephanejouve/palamede-chessboard/issues/131)) ([eadc348](https://github.com/stephanejouve/palamede-chessboard/commit/eadc3484a50f760bbf9898cd4e9ee3f35bff694c))
+
 ## [0.11.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.10.0...v0.11.0) (2026-10-29)
 
 
