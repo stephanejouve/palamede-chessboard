@@ -5,15 +5,45 @@
   "bump-minor-pre-major": true,
   "bump-patch-for-minor-pre-major": false,
   "changelog-sections": [
-    {"type": "feat", "section": "Features"},
-    {"type": "fix", "section": "Bug Fixes"},
-    {"type": "perf", "section": "Performance"},
-    {"type": "revert", "section": "Reverts"},
-    {"type": "refactor", "section": "Refactor"},
-    {"type": "docs", "section": "Documentation", "hidden": true},
-    {"type": "test", "section": "Tests"},
-    {"type": "ci", "section": "CI", "hidden": true},
-    {"type": "chore", "section": "Chores", "hidden": true}
+    {
+      "type": "feat",
+      "section": "Features"
+    },
+    {
+      "type": "fix",
+      "section": "Bug Fixes"
+    },
+    {
+      "type": "perf",
+      "section": "Performance"
+    },
+    {
+      "type": "revert",
+      "section": "Reverts"
+    },
+    {
+      "type": "refactor",
+      "section": "Refactor"
+    },
+    {
+      "type": "docs",
+      "section": "Documentation",
+      "hidden": true
+    },
+    {
+      "type": "test",
+      "section": "Tests"
+    },
+    {
+      "type": "ci",
+      "section": "CI",
+      "hidden": true
+    },
+    {
+      "type": "chore",
+      "section": "Chores",
+      "hidden": true
+    }
   ],
   "packages": {
     ".": {
@@ -21,6 +51,18 @@
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         "palamede_chessboard/__init__.py"
+      ],
+      "exclude-paths": [
+        "maia"
+      ]
+    },
+    "maia": {
+      "package-name": "palamede-maia",
+      "component": "palamede-maia",
+      "include-component-in-tag": true,
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        "palamede_maia/__init__.py"
       ]
     }
   }

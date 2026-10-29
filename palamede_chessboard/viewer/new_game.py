@@ -12,6 +12,8 @@ Rules (owner and Leader, #93, 28-29/10) :
   creator, and **not a human** : a human is never put in a game without
   their consent ; games between humans stay created by hand until an
   invitation exists (owner, 29/10) ;
+* a ``bot-*`` opponent (Maia) only for a human creator : the bots play
+  against humans, never for nor against an agent (Leader, #93) ;
 * at most :data:`MAX_OPEN_PER_CREATOR` games of this route in progress per
   creator, 429 beyond (owner, 29/10). The id names its creator,
   ``tablier.<creator>.<UTC stamp>-<hex>`` (a dot never appears in a player
@@ -71,6 +73,8 @@ MAX_INCREMENT = 180
 MAX_OPEN_PER_CREATOR = 5
 #: First part of the ids this route gives, before the creator's name.
 ID_PREFIX = "tablier"
+#: Accounts of the automatic opponents (Maia, #93) : opened by a human only.
+BOT_PREFIX = "bot-"
 #: Lock taken around the count and the creation (``<games dir>/.tablier-create.lock``).
 LOCK_NAME = ".tablier-create"
 
@@ -141,6 +145,9 @@ def _opponent(raw: str, creator: str, games_dir: Path) -> str:
         raise HTTPException(
             422, "Pas encore de partie contre un humain par Tablier : elle se crée à la main"
         )
+    # Maia plays against humans, never for nor against an agent (Leader, #93).
+    if opponent.startswith(BOT_PREFIX) and known.get(creator, {}).get("kind") != "human":
+        raise HTTPException(422, "Les bots ne jouent que contre un humain")
     return opponent
 
 

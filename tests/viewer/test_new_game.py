@@ -25,6 +25,7 @@ def tokens(games_dir: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
         ("stephane", "human"),
         ("cilou", "human"),
         ("leader", "agent"),
+        ("junior", "agent"),
         ("bot-maia-1500", "agent"),
     ):
         registry.add_player(games_dir, pid, kind=kind)
@@ -273,7 +274,7 @@ def test_limit_counts_only_the_games_one_created(client: TestClient, tokens: dic
     """Review Junior #126 : leader is not blocked by five games opened against it."""
     for _ in range(5):
         assert _create(client, tokens["stephane"], opponent="leader").status_code == 201
-    assert _create(client, tokens["leader"], opponent="bot-maia-1500").status_code == 201
+    assert _create(client, tokens["leader"], opponent="junior").status_code == 201
 
 
 def test_longest_creator_fits_in_a_game_id(
@@ -285,3 +286,27 @@ def test_longest_creator_fits_in_a_game_id(
     r = _create(client, token, opponent="leader")
     assert r.status_code == 201
     assert len(r.json()["game_id"]) <= 64
+
+
+def test_bot_opponent_needs_a_human_creator(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    """Leader #93 : Maia plays against humans, never for nor against an agent."""
+    r = _create(client, tokens["leader"], opponent="bot-maia-1500")
+    assert r.status_code == 422
+    assert "humain" in r.json()["detail"]
+    assert _pgns(games_dir) == []
+    assert _create(client, tokens["cilou"], opponent="bot-maia-1500").status_code == 201
+
+
+def test_bot_token_cannot_play_for_another_player(client: TestClient, tokens: dict) -> None:
+    """Leader #93 : a bot-maia token never moves in a game where it has no seat."""
+    game_id = _create(client, tokens["stephane"], opponent="leader", color="white").json()[
+        "game_id"
+    ]
+    r = client.post(
+        f"/api/games/{game_id}/move",
+        json={"san": "e4"},
+        headers={"Authorization": f"Bearer {tokens['bot-maia-1500']}"},
+    )
+    assert r.status_code == 403

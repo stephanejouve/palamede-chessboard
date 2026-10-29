@@ -1225,7 +1225,7 @@ files = [
 [[package]]
 name = "palamede-chessnut"
 version = "0.1.0"
-description = "Play palamède games on a Chessnut Air+ electronic board, over Bluetooth LE"
+description = "Play palamède games on a Chessnut Air+ electronic board, over Bluetooth LE or USB"
 optional = false
 python-versions = ">=3.11"
 groups = ["dev"]
@@ -1236,9 +1236,30 @@ develop = true
 bleak = ">=1.0"
 chess = ">=1.10"
 
+[package.extras]
+app = ["pywebview (>=5) ; sys_platform != \"linux\"", "pywebview[qt] (>=5) ; sys_platform == \"linux\""]
+usb = ["hidapi (>=0.14) ; sys_platform != \"linux\""]
+
 [package.source]
 type = "directory"
 url = "chessnut"
+
+[[package]]
+name = "palamede-maia"
+version = "0.1.0"
+description = "Maia bot for palamède : human-like moves from lc0 and the Maia weights, played through the viewer API"
+optional = false
+python-versions = ">=3.11"
+groups = ["dev"]
+files = []
+develop = true
+
+[package.dependencies]
+chess = ">=1.10"
+
+[package.source]
+type = "directory"
+url = "maia"
 
 [[package]]
 name = "pathspec"
@@ -2435,4 +2456,4 @@ all = ["winrt-Windows.Foundation.Collections[all] (>=3.2.1.0,<3.2.2.0)", "winrt-
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "d174c9cf04df79704f79f212992197d88a7dd1b3b5a312f54ce92c28f3c53d23"
+content-hash = "92403e08af19145a070b986ccb36f622143310e057cd2ca001b1e21a5cdd83bb"
