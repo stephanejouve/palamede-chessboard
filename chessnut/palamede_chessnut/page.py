@@ -86,6 +86,9 @@ class PageServer(http.server.ThreadingHTTPServer):
         self.open_requests = 0
         #: The app's save dialog (#134) : without it, no ``/save-pgn``.
         self.ask_path: export.AskPath | None = None
+        #: One save at a time : the server is threaded, a double click would
+        #: open two dialogs (review Junior #137).
+        self.saving = threading.Lock()
 
     @property
     def bridge(self) -> Bridge:
@@ -186,7 +189,13 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             # Another game opened meanwhile : never save the wrong one.
             self._send_json(409, {"error": "La partie a changé : rouvrez le PGN."})
             return
-        self._send_json(*export.save_pgn(bridge.viewer, game_id, ask_path))
+        if not self.server.saving.acquire(blocking=False):
+            self._send_json(409, {"error": "Un enregistrement est déjà en cours."})
+            return
+        try:
+            self._send_json(*export.save_pgn(bridge.viewer, game_id, ask_path))
+        finally:
+            self.server.saving.release()
 
     def _read_field(self, field: str) -> str | None:
         """The body's string ``field``, or ``None`` once the error is answered."""

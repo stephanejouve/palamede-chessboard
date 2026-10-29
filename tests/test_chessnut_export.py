@@ -179,6 +179,38 @@ def test_save_needs_the_nonce_and_the_origin(page, fake, tmp_path, change) -> No
     assert asked == []
 
 
+def test_a_second_save_while_the_dialog_is_open_is_refused(page, fake, tmp_path) -> None:
+    """Review Junior #137 : a double click must not open two dialogs."""
+    import threading
+
+    opened = threading.Event()
+    release = threading.Event()
+    asked = []
+
+    def slow_dialog(name: str) -> str:
+        asked.append(name)
+        opened.set()
+        release.wait(5)
+        return str(tmp_path / "x.pgn")
+
+    page.ask_path = slow_dialog
+    first: list = []
+    worker = threading.Thread(
+        target=lambda: first.append(request(page, "POST", "/save-pgn", SAVE, **good_headers(page)))
+    )
+    worker.start()
+    assert opened.wait(5)
+    status, body = request(page, "POST", "/save-pgn", SAVE, **good_headers(page))
+    release.set()
+    worker.join(5)
+    assert status == 409 and "déjà en cours" in json.loads(body)["error"]
+    assert first[0][0] == 200
+    assert len(asked) == 1
+    # Once the first dialog is closed, saving works again.
+    page.ask_path = lambda _name: str(tmp_path / "y.pgn")
+    assert request(page, "POST", "/save-pgn", SAVE, **good_headers(page))[0] == 200
+
+
 # ---- the app's native dialog -----------------------------------------------
 
 

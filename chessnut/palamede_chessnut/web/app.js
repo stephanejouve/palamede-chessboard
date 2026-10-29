@@ -363,6 +363,8 @@ el('pgn-btn').addEventListener('click', async () => {
 
 // The app's native dialog : the bridge writes the file, the page never sees the path.
 el('pgn-save').addEventListener('click', async () => {
+  // One dialog at a time : the bridge refuses a second one too (review Junior #137).
+  el('pgn-save').disabled = true;
   try {
     const response = await fetch('/save-pgn', {
       method: 'POST',
@@ -377,6 +379,8 @@ el('pgn-save').addEventListener('click', async () => {
     exportMessage(answer.saved ? `PGN enregistré : ${answer.saved}` : '');
   } catch (_err) {
     exportMessage('Le pont ne répond plus.');
+  } finally {
+    el('pgn-save').disabled = false;
   }
 });
 
