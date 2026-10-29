@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.10.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.9.0...v0.10.0) (2026-10-28)
+
+
+### Features
+
+* **chessnut:** « Fichier ▸ Ouvrir », another game of the player in the same window ([#121](https://github.com/stephanejouve/palamede-chessboard/issues/121)) ([6e5fd0a](https://github.com/stephanejouve/palamede-chessboard/commit/6e5fd0a990efdec513f518a9cbd0a7f635a4933a))
+* **chessnut:** a per-user settings file for the viewer, the token file and the transport ([#124](https://github.com/stephanejouve/palamede-chessboard/issues/124)) ([72e16e6](https://github.com/stephanejouve/palamede-chessboard/commit/72e16e6b47bf3cc54490fc6be54445fb3eadd129))
+* **chessnut:** red LED dots for squares to fix, FEN copy, text selection ([#118](https://github.com/stephanejouve/palamede-chessboard/issues/118)) ([00af6f4](https://github.com/stephanejouve/palamede-chessboard/commit/00af6f4891a4d8913323f38393930120690a6b49))
+* **chessnut:** the board setup in piece symbols on colour chips ([#115](https://github.com/stephanejouve/palamede-chessboard/issues/115)) ([e89f276](https://github.com/stephanejouve/palamede-chessboard/commit/e89f276f002fefba636cdf555e2fba5ca6b3d430))
+* **chessnut:** the move list in aligned columns, number, White, Black ([#120](https://github.com/stephanejouve/palamede-chessboard/issues/120)) ([db28b05](https://github.com/stephanejouve/palamede-chessboard/commit/db28b054bd8011fc1b73974100b1a274f83a4b2e))
+
+
+### Bug Fixes
+
+* **chessnut:** « Retirer » before « Poser », a black piece in the setup test ([#116](https://github.com/stephanejouve/palamede-chessboard/issues/116)) ([6b24938](https://github.com/stephanejouve/palamede-chessboard/commit/6b249381f04f0c2f8d35fb17f55bd195c7435cb3))
+* **chessnut:** reopen a stopped game, and close the window after any opening ([#123](https://github.com/stephanejouve/palamede-chessboard/issues/123)) ([d082432](https://github.com/stephanejouve/palamede-chessboard/commit/d08243286b357f63b86f3e327cc39baebe0942c0))
+* **chessnut:** the board light is grey once a finished game's bridge stops ([#113](https://github.com/stephanejouve/palamede-chessboard/issues/113)) ([e47d881](https://github.com/stephanejouve/palamede-chessboard/commit/e47d88176fb7754b8b1bc9b8ac27e5eb7762148a))
+* **chessnut:** the move list numbered from the game, not from « 1. » ([#119](https://github.com/stephanejouve/palamede-chessboard/issues/119)) ([229992d](https://github.com/stephanejouve/palamede-chessboard/commit/229992d6278e67a2e9e8c376b22b9cff190acc58))
+
+
+### Tests
+
+* **chessnut:** opening a game keeps the board and its transport ([#122](https://github.com/stephanejouve/palamede-chessboard/issues/122)) ([f508088](https://github.com/stephanejouve/palamede-chessboard/commit/f50808890a45d60fdeb494c8e1f244f276477906))
+
 ## [0.9.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.8.0...v0.9.0) (2026-10-28)
 
 
