@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.13.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.12.0...v0.13.0) (2026-10-29)
+
+
+### Features
+
+* **chessnut:** copy the game's name, and its PGN to copy or save ([#137](https://github.com/stephanejouve/palamede-chessboard/issues/137)) ([5c00cc6](https://github.com/stephanejouve/palamede-chessboard/commit/5c00cc6bce43108d732b4a1f6d8fb6f9a5c01a51))
+* **chessnut:** the two clocks in the window, read from the viewer ([#139](https://github.com/stephanejouve/palamede-chessboard/issues/139)) ([6a258b7](https://github.com/stephanejouve/palamede-chessboard/commit/6a258b7668181fcfd5434f598191eb37482b0093))
+* **clock:** the clock runs on every move path, Tablier games start on the first move ([#136](https://github.com/stephanejouve/palamede-chessboard/issues/136)) ([171e1c3](https://github.com/stephanejouve/palamede-chessboard/commit/171e1c345c425d27870c049341b118bf51ac80ff))
+
 ## [0.12.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.11.0...v0.12.0) (2026-10-29)
 
 
