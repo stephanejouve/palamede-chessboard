@@ -332,7 +332,7 @@ def test_the_window_has_a_fichier_menu_and_follows_the_game(monkeypatch) -> None
 
     def start(**kwargs) -> None:
         seen.update(kwargs)
-        (title, [(label, action)]) = kwargs["menu"][0]
+        (title, [(label, action), *_more]) = kwargs["menu"][0]
         assert (title, label) == ("Fichier", "Ouvrir une partie…")
         action()
         assert pages[0].open_requests == 1

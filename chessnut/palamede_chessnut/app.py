@@ -13,7 +13,9 @@ Closing the window stops the bridge, LEDs off.
 
 The menu « Fichier ▸ Ouvrir une partie… » lists the player's games in
 progress and moves the window to the chosen one (#90), see
-:mod:`palamede_chessnut.games`. The page's « Enregistrer… » saves the
+:mod:`palamede_chessnut.games`. « Enregistrer le PGN… », « Édition ▸
+Copier … » and « Présentation ▸ Retourner l'échiquier » run what the page's
+buttons do (#140). The page's « Enregistrer… » saves the
 game's PGN through the window's native dialog (#134).
 """
 
@@ -25,6 +27,7 @@ from typing import Any
 
 from palamede_chessnut.bridge import Bridge
 from palamede_chessnut.cli import bridge_from_args
+from palamede_chessnut.clipboard import Copy, system_copy
 from palamede_chessnut.export import AskPath
 from palamede_chessnut.games import Session
 from palamede_chessnut.page import PageServer
@@ -71,6 +74,49 @@ def save_dialog(webview: Any, window: Any) -> AskPath:
     return ask
 
 
+#: What a menu copy says once done (#140).
+COPIED = {"name": "Nom copié.", "fen": "FEN copiée.", "pgn": "PGN copié."}
+
+
+def copier(page: PageServer, kind: str, copy: Copy | None) -> Any:
+    """« Édition ▸ Copier … » : the system clipboard when there is one, else the page tries."""
+
+    def run() -> None:
+        text = page.text_to_copy(kind) if copy is not None else None
+        if text is not None and copy is not None and copy(text):
+            page.notify(COPIED[kind])
+        else:
+            page.request_menu(f"copy-{kind}")
+
+    return run
+
+
+def menus(page: PageServer, menu: Any, action: Any, copy: Copy | None = None) -> list[Any]:
+    """The window's menus (#90, #140) : each item does what the page's button does."""
+
+    def ask(name: str) -> Any:
+        return lambda: page.request_menu(name)
+
+    return [
+        menu(
+            "Fichier",
+            [
+                action("Ouvrir une partie…", page.request_open),
+                action("Enregistrer le PGN…", ask("save-pgn")),
+            ],
+        ),
+        menu(
+            "Édition",
+            [
+                action("Copier le nom de la partie", copier(page, "name", copy)),
+                action("Copier la FEN", copier(page, "fen", copy)),
+                action("Copier le PGN", copier(page, "pgn", copy)),
+            ],
+        ),
+        menu("Présentation", [action("Retourner l'échiquier", ask("flip"))]),
+    ]
+
+
 def main(argv: list[str] | None = None) -> None:
     bridge = bridge_from_args(
         argv, "Play a viewer game on a Chessnut Air+ board, in a window.", app=True
@@ -99,7 +145,7 @@ def main(argv: list[str] | None = None) -> None:
         # The title of the session's bridge, not of the one told : two crossing
         # openings may tell them out of order (review Junior #123).
         session.on_change = lambda _new: window.set_title(title(session.bridge))
-        webview.start(menu=[Menu("Fichier", [MenuAction("Ouvrir une partie…", page.request_open)])])
+        webview.start(menu=menus(page, Menu, MenuAction, system_copy()))
     finally:
         # Also when the window cannot open (no graphical session, review
         # Junior #87) : the bridge switches the LEDs off before the exit.
