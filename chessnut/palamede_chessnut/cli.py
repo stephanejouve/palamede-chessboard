@@ -1,9 +1,11 @@
 """Command line of the bridge.
 
-    palamede-chessnut --viewer <viewer URL> --game <game_id> --color white
+    palamede-chessnut --viewer <viewer URL> [--game <game_id>] [--color white]
 
 ``--viewer``, ``--token-file`` and ``--transport`` may come from the
-per-user file of :mod:`palamede_chessnut.config` instead (#90). The player token (the one behind the viewer's 🔑 button) is read from
+per-user file of :mod:`palamede_chessnut.config` instead (#90). Without
+``--game``, the token's newest game in progress ; without ``--color``, the
+side its account plays there (:mod:`palamede_chessnut.launch`). The player token (the one behind the viewer's 🔑 button) is read from
 ``--token-file`` (readable by its owner only, under the user profile on
 Windows) or ``PALAMEDE_PLAYER_TOKEN`` ;
 it is never logged. The bridge exits by itself once the game is over and
@@ -22,7 +24,7 @@ from urllib.parse import urlsplit
 
 import chess
 
-from palamede_chessnut import config
+from palamede_chessnut import config, launch
 from palamede_chessnut.bridge import Bridge
 
 
@@ -77,8 +79,12 @@ def bridge_from_args(argv: list[str] | None, description: str, *, app: bool = Fa
         default=settings.get("viewer"),
         help="viewer base URL",
     )
-    parser.add_argument("--game", required=True, help="game_id")
-    parser.add_argument("--color", required=True, choices=["white", "black"])
+    parser.add_argument("--game", help="game_id ; default : your newest game in progress")
+    parser.add_argument(
+        "--color",
+        choices=["white", "black"],
+        help="your side ; default : the one your account plays in the game",
+    )
     parser.add_argument(
         "--token-file",
         type=Path,
@@ -100,13 +106,19 @@ def bridge_from_args(argv: list[str] | None, description: str, *, app: bool = Fa
         )
     args = parser.parse_args(argv)
     check_viewer_url(args.viewer)
-    player = chess.WHITE if args.color == "white" else chess.BLACK
+    token = read_token(args.token_file)
+    # Only what the command line does not say is asked of the viewer (#90).
+    game = args.game or launch.newest_game(args.viewer, launch.account_of_token(args.viewer, token))
+    if args.color:
+        player = chess.WHITE if args.color == "white" else chess.BLACK
+    else:
+        player = launch.seat_color(args.viewer, game, token)
     with_board = not getattr(args, "no_board", False)
     return Bridge(
         args.viewer,
-        args.game,
+        game,
         player,
-        read_token(args.token_file),
+        token,
         with_board=with_board,
         board_transport=args.transport,
     )
