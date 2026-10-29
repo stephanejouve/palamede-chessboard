@@ -71,9 +71,10 @@ def setup_steps(
 
     The page shows ``remove`` first, then ``put`` : the order of the gestures.
 
-    ``put`` : the piece each square needs (symbol, colour, square), by type
-    from the king to the pawn, White before Black, then top rank first : the
-    page groups the squares of one piece behind a single chip (#117).
+    ``put`` : the piece each square needs (symbol, colour, square), White
+    first then Black, each from the king to the pawn, then top rank first :
+    the page groups the squares of one piece behind a single chip (#117,
+    order chosen by Stéphane, 29/10).
     ``remove`` : the squares to clear, top rank first, including those holding
     a wrong piece, which must go before the right one is put there.
     """
@@ -87,7 +88,7 @@ def setup_steps(
         if wanted is not None:
             put.append((wanted, name))
     # Stable : within one piece, the squares keep the top-rank-first order.
-    put.sort(key=lambda step: (PUT_ORDER.index(step[0].piece_type), not step[0].color))
+    put.sort(key=lambda step: (not step[0].color, PUT_ORDER.index(step[0].piece_type)))
     return {
         "put": [
             {

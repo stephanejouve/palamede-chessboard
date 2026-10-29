@@ -105,9 +105,9 @@ function group(className, ...nodes) {
 
 // In the tray under the board, in the order of the gestures (review of
 // Stéphane, Admin, Junior, 28/10) : the squares to clear as a group of their
-// own, then one chip per piece with its squares, by type from the king to the
-// pawn (#117) : « Retirer b7 c1 · ♕ c4 · ♝ a5 · ♟ e6 c3 ». The bridge sends
-// `put` already in that order.
+// own, then one chip per piece followed by its squares, White then Black, each
+// from the king to the pawn (#117). The bridge sends `put` already in that
+// order ; the groups are spaced by the CSS gap, with no separator text.
 function renderSetup(setup) {
   const nodes = [];
   if (setup && setup.remove.length) {
