@@ -12,7 +12,8 @@
   --tray: #e9e2d6;
   /* The squares to clear, on the tray : orange text, 4.9:1 on it. */
   --remove: #8f4f10;
-  --chip-edge: #b5aa9c;
+  /* Chip edges, 3.2:1 or more on the tray in both themes (review Junior #125). */
+  --chip-edge: #857b70;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -24,7 +25,6 @@
     --off: #6c645c;
     --tray: #312d29;
     --remove: #e0a04a;
-    --chip-edge: #857b70;
   }
 }
 * { box-sizing: border-box; }
@@ -91,7 +91,7 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
   line-height: 1.15;
   vertical-align: middle;
 }
-.chip.white { background: #f4efe6; color: #1d1b19; border: 1px solid #b5aa9c; }
+.chip.white { background: #f4efe6; color: #1d1b19; border: 1px solid var(--chip-edge); }
 .chip.black { background: #3a3530; color: #f4efe6; border: 1px solid var(--chip-edge); }
 #token-msg { color: var(--bad); font-weight: 600; }
 #token-msg.warn { color: var(--warn); }

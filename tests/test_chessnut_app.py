@@ -209,12 +209,13 @@ def test_setup_names_a_wrong_piece_by_what_belongs_there() -> None:
 
 def test_setup_puts_by_type_then_colour_then_rank() -> None:
     """#117 : king to pawn, White before Black, top rank first within one piece."""
-    game = chess.BaseBoard("r3k3/pp6/8/8/8/8/PP6/R3K2N")
+    game = chess.BaseBoard("r2qk3/pp6/8/8/8/8/PP6/R3K2N")
     steps = setup_steps(game, chess.BaseBoard("8/8/8/8/8/8/8/8"))
     put = [(p["symbol"].rstrip("\ufe0e"), p["square"]) for p in steps["put"]]
     assert put == [
         ("♔", "e1"),
         ("♚", "e8"),
+        ("♛", "d8"),
         ("♖", "a1"),
         ("♜", "a8"),
         ("♘", "h1"),
