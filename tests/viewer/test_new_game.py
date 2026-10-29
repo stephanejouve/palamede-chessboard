@@ -147,3 +147,57 @@ def test_new_game_can_be_played_by_its_creator(client: TestClient, tokens: dict)
         headers={"Authorization": f"Bearer {tokens['stephane']}"},
     )
     assert r.status_code == 200, r.text
+
+
+# Review Leader and Junior (#126) : the PGN writer does not escape header
+# values, so the time control is whitelisted before anything is written.
+FORGED = [
+    '5+3"]\n[Rated "true',
+    '5+3"]\n[Result "1-0',
+    "5+3\n",
+    "5 + 3",
+    "blitz",
+    "",
+    "0+5",
+    "181+0",
+    "5+181",
+    "-1+0",
+    "1234+0",
+]
+
+
+@pytest.mark.parametrize("fmt", FORGED)
+def test_time_control_outside_the_whitelist_is_422(
+    client: TestClient, tokens: dict, games_dir: Path, fmt: str
+) -> None:
+    r = _create(client, tokens["stephane"], time_control={"format": fmt})
+    assert r.status_code == 422
+    assert _pgns(games_dir) == []
+
+
+@pytest.mark.parametrize("extra", [{"start_seconds": -60}, {"increment_seconds": 5}])
+def test_time_control_takes_no_other_field(
+    client: TestClient, tokens: dict, games_dir: Path, extra: dict
+) -> None:
+    r = _create(client, tokens["stephane"], time_control={"format": "5+3", **extra})
+    assert r.status_code == 422
+    assert _pgns(games_dir) == []
+
+
+@pytest.mark.parametrize(("fmt", "seconds"), [("1+0", 60), ("15+10", 900), ("180+180", 10800)])
+def test_bounded_time_control_is_kept(
+    client: TestClient, tokens: dict, games_dir: Path, fmt: str, seconds: int
+) -> None:
+    body = _create(client, tokens["stephane"], time_control={"format": fmt}).json()
+    assert body["clock"]["white_seconds"] == seconds
+    state = GameState.load(body["game_id"], games_dir=games_dir)
+    assert state.metadata.time_control.format == fmt
+    assert state.metadata.rated is False
+
+
+def test_unauthenticated_caller_learns_nothing_about_rated(
+    client: TestClient, tokens: dict
+) -> None:
+    """Review Leader : the token is checked first, before any other answer."""
+    assert _create(client, None, rated=True).status_code == 401
+    assert _create(client, None, time_control={"format": "x"}).status_code == 401

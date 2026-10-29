@@ -16,19 +16,24 @@ Rules (owner and Leader, #93, 28-29/10) :
   opens no path around it, and a game against a bot never counts for
   the agents' Elo nor makes anyone busy for matchmaking (#33) ;
 * no arbiter : the creator's token is enough for an unrated game ;
-* the game id is chosen by the server, never by the client.
+* the game id is chosen by the server, never by the client ;
+* the time control is ``unrated`` or ``M+S`` with bounded numbers, nothing
+  else : the PGN writer does not escape header values, so a free-form
+  format could forge headers (``Rated``, ``Result``…) and get round the
+  unrated rule (review Leader and Junior, #126). No other field.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 import secrets
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
 from fastapi import HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from palamede_chessboard.chessboard_clock import init_and_save_clock
 from palamede_chessboard.chessboard_state import (
@@ -47,12 +52,35 @@ EVENT = "Tablier"
 #: Attempts at a free game id before giving up (a clash needs the same
 #: second and the same 16 random bits : one retry is already paranoid).
 _ID_ATTEMPTS = 3
+#: ``M+S`` : minutes then increment seconds, digits only, no spaces.
+_CLOCK_FORMAT = re.compile(r"(\d{1,3})\+(\d{1,3})")
+#: Bounds of a clock : 1 to 180 minutes, 0 to 180 seconds of increment.
+MAX_MINUTES = 180
+MAX_INCREMENT = 180
 
 
 class TimeControlPayload(BaseModel):
+    """Only ``format`` : ``start_seconds`` and the like are refused (422)."""
+
+    model_config = ConfigDict(extra="forbid")
+
     format: str = "unrated"
-    start_seconds: int | None = None
-    increment_seconds: int | None = None
+
+
+def _time_control(raw: TimeControlPayload | None) -> TimeControl:
+    """``unrated`` or a bounded ``M+S`` ; 422 for anything else."""
+    fmt = raw.format if raw is not None else "unrated"
+    if fmt == "unrated":
+        return TimeControl(format=fmt)
+    match = _CLOCK_FORMAT.fullmatch(fmt)
+    if match is None:
+        raise HTTPException(422, "Cadence invalide : « unrated » ou « M+S » (ex. 15+10)")
+    minutes, increment = (int(g) for g in match.groups())
+    if not 1 <= minutes <= MAX_MINUTES or increment > MAX_INCREMENT:
+        raise HTTPException(
+            422, f"Cadence hors bornes : 1 à {MAX_MINUTES} min, 0 à {MAX_INCREMENT} s d'incrément"
+        )
+    return TimeControl(format=f"{minutes}+{increment}")
 
 
 class NewGamePayload(BaseModel):
@@ -102,13 +130,14 @@ def _new_game_id() -> str:
 
 def create_from_viewer(payload: NewGamePayload, request: Request, games_dir: Path) -> dict:
     """Create an unrated game between the token's player and ``payload.opponent``."""
+    creator = _creator(request, games_dir)
     if not isinstance(payload.rated, bool):
         raise HTTPException(400, f"rated doit être un booléen JSON, reçu {payload.rated!r}")
     if payload.rated:
         raise HTTPException(
             400, "Une partie classée exige un arbitre : elle se crée par chess_create_game"
         )
-    creator = _creator(request, games_dir)
+    tc = _time_control(payload.time_control)
     opponent = _opponent(payload.opponent, creator, games_dir)
 
     color = payload.color
@@ -116,12 +145,6 @@ def create_from_viewer(payload: NewGamePayload, request: Request, games_dir: Pat
         color = secrets.choice(("white", "black"))
     white, black = (creator, opponent) if color == "white" else (opponent, creator)
 
-    tc_raw = payload.time_control or TimeControlPayload()
-    tc = TimeControl(
-        format=tc_raw.format,
-        start_seconds=tc_raw.start_seconds,
-        increment_seconds=tc_raw.increment_seconds,
-    )
     for _ in range(_ID_ATTEMPTS):
         metadata = GameMetadata(
             game_id=_new_game_id(),
