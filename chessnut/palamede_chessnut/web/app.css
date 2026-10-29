@@ -10,6 +10,11 @@
   --bad: #c8342c;
   --blue: #2a78d6;
   --tray: #e9e2d6;
+  /* The lit clock face, the same in both themes : 15:1. */
+  --clock-lit: #f4efe6;
+  --clock-lit-fg: #1d1b19;
+  /* Low time on a dimmed face : the theme's red, readable on its panel. */
+  --clock-red: #c8342c;
   /* The squares to clear, on the tray : orange text, 4.9:1 on it. */
   --remove: #8f4f10;
   /* Chip edges, 3.2:1 or more on the tray in both themes (review Junior #125). */
@@ -23,6 +28,7 @@
     --panel: #272421;
     --border: #3b3631;
     --off: #6c645c;
+    --clock-red: #ff7a6e;
     --tray: #312d29;
     --remove: #e0a04a;
   }
@@ -54,17 +60,36 @@ h1 { font-size: 18px; margin: 0; }
 .light.warn::before { background: var(--warn); }
 .light.bad::before { background: var(--bad); }
 .light.blue::before { background: var(--blue); }
-main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+/* The board on the left, the clocks level with its top and bottom, the panel
+   between them (#135) ; stacked on a narrow window. */
+main {
+  display: grid;
+  grid-template-columns: minmax(0, 520px) minmax(240px, 1fr);
+  grid-template-rows: auto 1fr auto auto;
+  grid-template-areas:
+    "board ctop"
+    "board side"
+    "board cbot"
+    "tray  .";
+  gap: 10px 16px;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  main {
+    grid-template-columns: minmax(0, 520px);
+    grid-template-rows: none;
+    grid-template-areas: "ctop" "board" "cbot" "tray" "side";
+  }
+}
 /* Square by padding, not aspect-ratio : with aspect-ratio, the app's window on macOS
    Big Sur (Safari 16.6.1 installed) drew a board of zero height, cause not found
    (Mac smoke #97). A percentage padding follows the container's width, as the width
    does ; chessground's absolute cg-container fills the padding box. */
-#board-col { width: min(520px, 100%); }
-#board { width: 100%; height: 0; padding-bottom: 100%; }
+#board { grid-area: board; width: 100%; height: 0; padding-bottom: 100%; }
 /* The tray under the board (#117) : the setup now, the captured pieces later.
    A background of its own, so the chips read apart from the side panel. */
 #tray {
-  margin-top: 10px;
+  grid-area: tray;
   padding: 8px 10px;
   background: var(--tray);
   border: 1px solid var(--border);
@@ -75,7 +100,7 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
 #differing .put { white-space: nowrap; }
 #differing .remove { color: var(--remove); font-weight: 600; }
 #side {
-  flex: 1 1 240px;
+  grid-area: side;
   min-width: 0;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -83,21 +108,36 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
   padding: 12px;
 }
 #side p { margin: 0 0 8px; }
-/* The clocks (#135) : the side whose time runs is framed, a fallen flag in red. */
-#clocks { display: grid; gap: 4px; margin-bottom: 10px; }
-#clocks[hidden] { display: none; }
-#side .clock {
+/* The clocks (#135) : compact faces, big digits. The side to move is lit (a
+   light face, dark digits, in both themes), the other dimmed ; red under
+   30 s and on a fallen flag. */
+.clock {
+  justify-self: start;
   display: flex;
-  justify-content: space-between;
   align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  min-width: 13rem;
   margin: 0;
-  padding: 4px 10px;
+  padding: 6px 14px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
 }
-.clock .time { font-size: 22px; font-variant-numeric: tabular-nums; }
-.clock.active { border-color: var(--on); box-shadow: inset 3px 0 0 var(--on); }
-.clock.flag { border-color: var(--bad); color: var(--bad); }
+.clock[hidden] { display: none; }
+#clock-top { grid-area: ctop; }
+#clock-bottom { grid-area: cbot; align-self: end; }
+.clock .who { font-size: 14px; }
+.clock .time {
+  font: 600 32px/1.15 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.clock.active { background: var(--clock-lit); border-color: var(--clock-lit); color: var(--clock-lit-fg); }
+.clock.low .time, .clock.flag .time { color: var(--clock-red); }
+/* On the lit face the darker red : 4.6:1 on it. */
+.clock.active.low .time { color: #c8342c; }
+.clock.flag { border-color: var(--bad); }
 #relay { font-weight: 600; }
 #move-error { color: var(--warn); }
 .chip {

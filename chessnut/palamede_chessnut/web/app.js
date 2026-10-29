@@ -141,23 +141,27 @@ function clockText(seconds) {
 }
 
 const SIDE_NAME = { white: 'Blancs', black: 'Noirs' };
+const SIDE_PIECE = { white: '\u2654\ufe0e', black: '\u265a\ufe0e' };
+// Under this many seconds, the clock turns red (#135).
+const LOW_SECONDS = 30;
 
-// The opponent's clock above, the player's below, as on the board. The
-// bridge gives what is left to each side, read from the viewer (#135).
+// Two faces level with the board, the opponent's above, the player's below
+// (#135, Stéphane's choice) : the side to move lit up, the other dimmed.
 function renderClocks(clock, color) {
-  el('clocks').hidden = !clock;
-  if (!clock) return;
   const sides = color === 'black' ? ['white', 'black'] : ['black', 'white'];
   for (const [id, side] of [['clock-top', sides[0]], ['clock-bottom', sides[1]]]) {
     const node = el(id);
+    node.hidden = !clock;
+    if (!clock) continue;
     node.classList.toggle('active', clock.active === side);
     node.classList.toggle('flag', clock.flag === side);
-    node.querySelector('.side').textContent = clock.flag === side
-      ? `${SIDE_NAME[side]} : drapeau tombé`
-      : SIDE_NAME[side];
+    node.classList.toggle('low', clock.flag !== side && clock[side] < LOW_SECONDS);
+    node.querySelector('.who').textContent = clock.flag === side
+      ? `${SIDE_PIECE[side]} ${SIDE_NAME[side]} : drapeau`
+      : `${SIDE_PIECE[side]} ${SIDE_NAME[side]}`;
     node.querySelector('.time').textContent = clockText(clock[side]);
+    node.title = clock.started ? '' : 'La pendule démarre au premier coup des Blancs.';
   }
-  el('clocks').title = clock.started ? '' : 'La pendule démarre au premier coup des Blancs.';
 }
 
 function statusText(state) {
