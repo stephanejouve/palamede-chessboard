@@ -108,6 +108,10 @@ class PageServer(http.server.ThreadingHTTPServer):
     def allowed_origins(self) -> set[str]:
         return {f"http://{host}" for host in self.allowed_hosts()}
 
+    def server_close(self) -> None:
+        self.clocks.close()
+        super().server_close()
+
     def start(self) -> threading.Thread:
         thread = threading.Thread(target=self.serve_forever, daemon=True)
         thread.start()

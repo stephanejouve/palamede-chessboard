@@ -60,44 +60,62 @@ def seconds_left(clock: Any, age: float = 0.0) -> dict[str, Any] | None:
 
 
 class ClockCache:
-    """The last clock read for the game on screen ; read again when stale."""
+    """The last clock read for the game on screen.
 
-    def __init__(self, monotonic: Any = time.monotonic) -> None:
+    A daemon thread reads the viewer, one read at a time, every
+    :data:`REFRESH` ; :meth:`view` never touches the network. A slow or
+    unreachable viewer therefore never holds the page's ``/state`` (review
+    Junior #139) : the board, the LEDs and the relay keep their pace.
+    """
+
+    def __init__(self, monotonic: Any = time.monotonic, *, thread: bool = True) -> None:
         self._monotonic = monotonic
         self._lock = threading.Lock()
+        self._wake = threading.Event()
+        self._closed = False
+        self._use_thread = thread
+        self._thread: threading.Thread | None = None
+        #: ``(viewer, game)`` the page shows : what the thread reads.
+        self._wanted: tuple[str, str] | None = None
         self._game_id: str | None = None
         self._clock: Any = None
-        #: When the clock shown was read, and when a read was last tried : a
-        #: viewer that does not answer is tried once per REFRESH, not per poll.
+        #: When the clock shown was read : the side to move keeps running from it.
         self._fetched = 0.0
-        self._tried = float("-inf")
-        self._reading = False
 
     def view(self, viewer_url: str, game_id: str) -> dict[str, Any] | None:
-        """:func:`seconds_left` for ``game_id`` : one viewer read per :data:`REFRESH`.
-
-        The read happens outside the lock, by one request at a time : the
-        others answer at once with the last clock, so a slow viewer never
-        holds the page's ``/state`` (review Admin #139).
-        """
+        """:func:`seconds_left` for ``game_id`` ; ``None`` until its first read."""
         with self._lock:
-            now = self._monotonic()
-            due = not self._reading and (game_id != self._game_id or now - self._tried >= REFRESH)
-            if due:
-                self._tried = now
-                self._reading = True
-        if due:
-            try:
-                self._read(viewer_url, game_id, now)
-            finally:
-                with self._lock:
-                    self._reading = False
-        with self._lock:
+            if self._wanted != (viewer_url, game_id):
+                self._wanted = (viewer_url, game_id)
+                self._wake.set()  # another game : read at once
+            self._start()
             if game_id != self._game_id:
-                return None  # another game, not read yet
+                return None
             return seconds_left(self._clock, self._monotonic() - self._fetched)
 
-    def _read(self, viewer_url: str, game_id: str, now: float) -> None:
+    def refresh(self) -> None:
+        """One read of the game on screen (the thread's step ; tests call it directly)."""
+        with self._lock:
+            wanted = self._wanted
+        if wanted is not None:
+            self._read(*wanted)
+
+    def close(self) -> None:
+        self._closed = True
+        self._wake.set()
+
+    def _start(self) -> None:
+        if self._use_thread and self._thread is None and not self._closed:
+            self._thread = threading.Thread(target=self._run, name="clock", daemon=True)
+            self._thread.start()
+
+    def _run(self) -> None:
+        while not self._closed:
+            self._wake.clear()
+            self.refresh()
+            self._wake.wait(REFRESH)
+
+    def _read(self, viewer_url: str, game_id: str) -> None:
         url = f"{viewer_url}/api/clock?game_id={quote(game_id)}"
         try:
             body = viewer.get_json(url, timeout=TIMEOUT)
@@ -107,8 +125,9 @@ class ClockCache:
             with self._lock:
                 if game_id != self._game_id:
                     # Another game : nothing of the previous clock may stay on screen.
-                    self._game_id, self._clock, self._fetched = game_id, None, now
+                    self._game_id, self._clock, self._fetched = game_id, None, self._monotonic()
             # Same game : the last clock stays, and keeps running from its read.
             return
         with self._lock:
-            self._game_id, self._clock, self._fetched = game_id, clock, now
+            if self._wanted is None or self._wanted[1] == game_id:
+                self._game_id, self._clock, self._fetched = game_id, clock, self._monotonic()

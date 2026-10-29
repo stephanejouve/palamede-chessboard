@@ -115,100 +115,109 @@ class Monotonic:
         return self.t
 
 
-def test_read_once_per_refresh_and_counted_down_in_between(fake) -> None:
+def cache_without_thread(now: Monotonic) -> ClockCache:
+    """The thread's step is :meth:`ClockCache.refresh`, called by hand here."""
+    return ClockCache(now, thread=False)
+
+
+def test_nothing_before_the_first_read_then_counted_down(fake) -> None:
     now = Monotonic()
-    cache = ClockCache(now)
+    cache = cache_without_thread(now)
+    assert cache.view(VIEWER, GAME) is None  # view() never reads
+    assert fake.asked == []
+    cache.refresh()
     assert cache.view(VIEWER, GAME)["white"] == 290.0
     now.t += 0.4
     assert cache.view(VIEWER, GAME)["white"] == pytest.approx(289.6)
-    assert len(fake.asked) == 1
-    now.t += clock_module.REFRESH
-    cache.view(VIEWER, GAME)
-    assert len(fake.asked) == 2
-    assert fake.asked[0] == (f"{VIEWER}/api/clock?game_id={GAME}", clock_module.TIMEOUT)
+    assert fake.asked == [(f"{VIEWER}/api/clock?game_id={GAME}", clock_module.TIMEOUT)]
 
 
-def test_another_game_is_read_at_once(fake) -> None:
+def test_another_game_shows_nothing_until_read(fake) -> None:
     now = Monotonic()
-    cache = ClockCache(now)
+    cache = cache_without_thread(now)
     cache.view(VIEWER, GAME)
-    cache.view(VIEWER, "008d")
-    assert [url for url, _ in fake.asked][-1] == f"{VIEWER}/api/clock?game_id=008d"
+    cache.refresh()
+    assert cache.view(VIEWER, "008d") is None
+    cache.refresh()
+    assert fake.asked[-1][0] == f"{VIEWER}/api/clock?game_id=008d"
 
 
 def test_an_unreachable_viewer_keeps_the_last_clock_running(fake) -> None:
     now = Monotonic()
-    cache = ClockCache(now)
+    cache = cache_without_thread(now)
     cache.view(VIEWER, GAME)
+    cache.refresh()
     fake.answer = OSError("down")
-    now.t += clock_module.REFRESH
-    view = cache.view(VIEWER, GAME)
+    now.t += 1.5
+    cache.refresh()
     # The last clock, counted down from its own read.
-    assert view["white"] == pytest.approx(290.0 - clock_module.REFRESH)
-
-
-def test_an_unreachable_viewer_is_tried_once_per_refresh(fake) -> None:
-    """Not at every poll of the page : a down viewer must not hold /state."""
-    now = Monotonic()
-    cache = ClockCache(now)
-    fake.answer = OSError("down")
-    for _ in range(5):
-        cache.view(VIEWER, GAME)
-        now.t += 0.1
-    assert len(fake.asked) == 1
+    assert cache.view(VIEWER, GAME)["white"] == pytest.approx(288.5)
 
 
 def test_no_clock_of_the_previous_game_on_another_game(fake) -> None:
     now = Monotonic()
-    cache = ClockCache(now)
+    cache = cache_without_thread(now)
     cache.view(VIEWER, GAME)
+    cache.refresh()
     fake.answer = OSError("down")
+    cache.view(VIEWER, "008d")
+    cache.refresh()
     assert cache.view(VIEWER, "008d") is None
 
 
-def test_a_slow_read_never_holds_the_other_requests(fake) -> None:
-    """Review Admin #139 : while one request reads, the others get the last clock at once."""
-    import threading
-
+def test_a_late_answer_for_a_game_left_is_dropped(fake, monkeypatch) -> None:
+    """A read of the old game that ends after « Ouvrir » must not show its clock."""
     now = Monotonic()
-    cache = ClockCache(now)
-    cache.view(VIEWER, GAME)  # a first clock
-    reading, release = threading.Event(), threading.Event()
+    cache = cache_without_thread(now)
+    cache.view(VIEWER, GAME)
 
-    def slow(url: str, timeout: float = 10):
-        fake.asked.append((url, timeout))
-        reading.set()
-        release.wait(5)
-        return {"game_id": GAME, "clock": clock(white_seconds=100.0)}
+    def answer_then_switch(url: str, timeout: float = 10):
+        cache.view(VIEWER, "008d")  # the page moved to another game meanwhile
+        return {"game_id": GAME, "clock": clock()}
 
-    fake.get_json = slow  # type: ignore[method-assign]
-    viewer.get_json = slow  # type: ignore[assignment]
-    now.t += clock_module.REFRESH
-    first = threading.Thread(target=cache.view, args=(VIEWER, GAME))
-    first.start()
-    assert reading.wait(5)
-    # A second request during the read : no second read, no wait, the last clock.
-    view = cache.view(VIEWER, GAME)
-    assert view is not None and view["white"] == pytest.approx(290.0 - clock_module.REFRESH)
-    release.set()
-    first.join(5)
-    assert len(fake.asked) == 2
-    assert cache.view(VIEWER, GAME)["white"] == pytest.approx(90.0)
+    monkeypatch.setattr(viewer, "get_json", answer_then_switch)
+    cache._read(VIEWER, GAME)
+    assert cache.view(VIEWER, "008d") is None
 
 
 def test_any_error_of_the_read_never_breaks_the_state(fake) -> None:
     fake.answer = RuntimeError("anything")
-    assert ClockCache(Monotonic()).view(VIEWER, GAME) is None
+    cache = cache_without_thread(Monotonic())
+    cache.view(VIEWER, GAME)
+    cache.refresh()
+    assert cache.view(VIEWER, GAME) is None
 
 
 def test_a_game_without_clock(fake) -> None:
     fake.answer = {"game_id": GAME, "clock": None}
-    assert ClockCache(Monotonic()).view(VIEWER, GAME) is None
+    cache = cache_without_thread(Monotonic())
+    cache.view(VIEWER, GAME)
+    cache.refresh()
+    assert cache.view(VIEWER, GAME) is None
 
 
 def test_the_game_id_is_quoted(fake) -> None:
-    ClockCache(Monotonic()).view(VIEWER, "a b&c")
+    cache = cache_without_thread(Monotonic())
+    cache.view(VIEWER, "a b&c")
+    cache.refresh()
     assert fake.asked[0][0] == f"{VIEWER}/api/clock?game_id=a%20b%26c"
+
+
+def test_the_thread_reads_once_per_refresh_and_stops(fake) -> None:
+    import time
+
+    cache = ClockCache()
+    cache.view(VIEWER, GAME)
+    deadline = time.monotonic() + 5
+    while cache.view(VIEWER, GAME) is None and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert cache.view(VIEWER, GAME) is not None
+    reads = len(fake.asked)
+    time.sleep(0.3)
+    assert len(fake.asked) == reads  # not before REFRESH
+    cache.close()
+    cache._thread.join(5)
+    assert not cache._thread.is_alive()
 
 
 # ---- in the page's state ------------------------------------------------------
@@ -224,13 +233,43 @@ def page():
 
 
 def test_the_state_carries_the_clock(page, fake) -> None:
+    """The first /state has no clock yet (the thread reads it), the next ones do."""
     import http.client
+    import time
 
-    connection = http.client.HTTPConnection("127.0.0.1", page.port, timeout=5)
-    connection.request("GET", "/state")
-    response = connection.getresponse()
-    body = response.read()
-    state = json.loads(body)
+    state: dict = {}
+    deadline = time.monotonic() + 5
+    while state.get("clock") is None and time.monotonic() < deadline:
+        connection = http.client.HTTPConnection("127.0.0.1", page.port, timeout=5)
+        connection.request("GET", "/state")
+        body = connection.getresponse().read()
+        assert TOKEN.encode() not in body
+        state = json.loads(body)
+        time.sleep(0.02)
     assert state["clock"]["active"] == "white"
     assert state["clock"]["black"] == 290.0
-    assert TOKEN.encode() not in body
+
+
+def test_a_slow_viewer_never_holds_the_state(page, monkeypatch) -> None:
+    """Review Junior #139 : a viewer at 2 s, /state still answers at once."""
+    import http.client
+    import threading
+    import time
+
+    release = threading.Event()
+
+    def slow(url: str, timeout: float = 10):
+        release.wait(2)
+        return {"game_id": GAME, "clock": clock()}
+
+    monkeypatch.setattr(viewer, "get_json", slow)
+    monkeypatch.setattr(viewer, "get_with_token", lambda *_a, **_k: (None, None))
+    try:
+        for _ in range(4):
+            start = time.monotonic()
+            connection = http.client.HTTPConnection("127.0.0.1", page.port, timeout=5)
+            connection.request("GET", "/state")
+            assert connection.getresponse().status == 200
+            assert time.monotonic() - start < 0.5
+    finally:
+        release.set()
