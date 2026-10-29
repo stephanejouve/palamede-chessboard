@@ -69,9 +69,9 @@ def get_with_token(url: str, token: str) -> tuple[int | None, Any]:
         return None, None
 
 
-def get_json(url: str) -> Any:
+def get_json(url: str, timeout: float = 10) -> Any:
     """GET a JSON document (no token) ; raises ``OSError`` / ``ValueError``."""
-    with urllib.request.urlopen(url, timeout=10) as response:
+    with urllib.request.urlopen(url, timeout=timeout) as response:
         return json.load(response)
 
 

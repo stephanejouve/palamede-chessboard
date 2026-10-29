@@ -129,6 +129,37 @@ function renderSetup(setup) {
   el('differing').replaceChildren(...nodes);
 }
 
+// m:ss, h:mm:ss beyond an hour, tenths under ten seconds (#135).
+function clockText(seconds) {
+  const s = Math.max(seconds, 0);
+  if (s < 10) return s.toFixed(1);
+  const whole = Math.floor(s);
+  const h = Math.floor(whole / 3600);
+  const m = Math.floor((whole % 3600) / 60);
+  const ss = String(whole % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+
+const SIDE_NAME = { white: 'Blancs', black: 'Noirs' };
+
+// The opponent's clock above, the player's below, as on the board. The
+// bridge gives what is left to each side, read from the viewer (#135).
+function renderClocks(clock, color) {
+  el('clocks').hidden = !clock;
+  if (!clock) return;
+  const sides = color === 'black' ? ['white', 'black'] : ['black', 'white'];
+  for (const [id, side] of [['clock-top', sides[0]], ['clock-bottom', sides[1]]]) {
+    const node = el(id);
+    node.classList.toggle('active', clock.active === side);
+    node.classList.toggle('flag', clock.flag === side);
+    node.querySelector('.side').textContent = clock.flag === side
+      ? `${SIDE_NAME[side]} : drapeau tombé`
+      : SIDE_NAME[side];
+    node.querySelector('.time').textContent = clockText(clock[side]);
+  }
+  el('clocks').title = clock.started ? '' : 'La pendule démarre au premier coup des Blancs.';
+}
+
 function statusText(state) {
   if (!state.fen) return 'En attente de la partie…';
   if (state.finished || (state.mouse && !state.live)) return 'Partie terminée.';
@@ -264,6 +295,7 @@ function render(state) {
   // Orange while unchecked, red when refused : the colour of the light.
   el('token-msg').classList.toggle('warn', state.lights.token !== 'refused');
   el('token-msg').textContent = state.token_message || '';
+  renderClocks(state.clock, state.color);
   el('status').textContent = statusText(state);
   el('relay').hidden = !state.to_relay;
   el('relay').textContent = state.relay_text || '';
