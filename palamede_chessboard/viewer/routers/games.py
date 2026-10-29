@@ -7,6 +7,7 @@ Endpoints covered :
 * ``GET /api/raw`` — raw PGN text for a game.
 * ``POST /api/games/{game_id}/move`` — drag&drop move from the viewer UI.
 * ``GET /api/games/{game_id}/seat`` — whose token, which side (Tablier, #78).
+* ``POST /api/games`` — unrated game opened by a player's token (Tablier, #93).
 
 Routes are mounted at the root of the FastAPI app (no prefix) to
 preserve the exact URL contract of the pre-split monolith.
@@ -35,6 +36,7 @@ from palamede_chessboard.viewer.games_query import (
     select_games,
 )
 from palamede_chessboard.viewer.models import MovePayload, _games_dir, _not_found_detail
+from palamede_chessboard.viewer.new_game import NewGamePayload, create_from_viewer
 
 log = logging.getLogger(__name__)
 
@@ -84,6 +86,11 @@ def build_games_router() -> APIRouter:
         except GameNotFoundError as exc:
             raise HTTPException(404, _not_found_detail(game_id)) from exc
         return {"game_id": game_id, "pgn": state.raw_pgn()}
+
+    @router.post("/api/games", status_code=201)
+    def game_create(payload: NewGamePayload, request: Request) -> dict:
+        """Unrated game opened by the token's player ; see :func:`create_from_viewer`."""
+        return create_from_viewer(payload, request, _games_dir())
 
     @router.post("/api/games/{game_id}/move")
     def game_move(game_id: str, payload: MovePayload, request: Request) -> dict:
