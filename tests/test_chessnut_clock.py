@@ -166,6 +166,36 @@ def test_no_clock_of_the_previous_game_on_another_game(fake) -> None:
     assert cache.view(VIEWER, "008d") is None
 
 
+def test_a_slow_read_never_holds_the_other_requests(fake) -> None:
+    """Review Admin #139 : while one request reads, the others get the last clock at once."""
+    import threading
+
+    now = Monotonic()
+    cache = ClockCache(now)
+    cache.view(VIEWER, GAME)  # a first clock
+    reading, release = threading.Event(), threading.Event()
+
+    def slow(url: str, timeout: float = 10):
+        fake.asked.append((url, timeout))
+        reading.set()
+        release.wait(5)
+        return {"game_id": GAME, "clock": clock(white_seconds=100.0)}
+
+    fake.get_json = slow  # type: ignore[method-assign]
+    viewer.get_json = slow  # type: ignore[assignment]
+    now.t += clock_module.REFRESH
+    first = threading.Thread(target=cache.view, args=(VIEWER, GAME))
+    first.start()
+    assert reading.wait(5)
+    # A second request during the read : no second read, no wait, the last clock.
+    view = cache.view(VIEWER, GAME)
+    assert view is not None and view["white"] == pytest.approx(290.0 - clock_module.REFRESH)
+    release.set()
+    first.join(5)
+    assert len(fake.asked) == 2
+    assert cache.view(VIEWER, GAME)["white"] == pytest.approx(90.0)
+
+
 def test_any_error_of_the_read_never_breaks_the_state(fake) -> None:
     fake.answer = RuntimeError("anything")
     assert ClockCache(Monotonic()).view(VIEWER, GAME) is None
