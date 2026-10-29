@@ -96,22 +96,33 @@ function renderMouse(state) {
   });
 }
 
-// By piece symbol, on a light or dark chip for its colour, in the order of the
-// gestures (review of Stéphane, Admin, Junior, 28/10) : « Retirer : b7 c1 ·
-// Poser : ♚g8 ♝a5 ».
+function group(className, ...nodes) {
+  const span = document.createElement('span');
+  span.className = `group ${className}`;
+  span.append(...nodes);
+  return span;
+}
+
+// In the tray under the board, in the order of the gestures (review of
+// Stéphane, Admin, Junior, 28/10) : the squares to clear as a group of their
+// own, then one chip per piece followed by its squares, White then Black, each
+// from the king to the pawn (#117). The bridge sends `put` already in that
+// order ; the groups are spaced by the CSS gap, with no separator text.
 function renderSetup(setup) {
   const nodes = [];
   if (setup && setup.remove.length) {
-    nodes.push(`Retirer : ${setup.remove.map((r) => r.square).join(' ')}`);
+    nodes.push(group('remove', `Retirer ${setup.remove.map((r) => r.square).join(' ')}`));
   }
-  if (setup && setup.put.length) {
-    nodes.push(nodes.length ? ' · Poser : ' : 'Poser : ');
-    for (const step of setup.put) {
+  let last = null;
+  for (const step of (setup ? setup.put : [])) {
+    if (!last || last.colour !== step.colour || last.symbol !== step.symbol) {
       const chip = document.createElement('span');
       chip.className = `chip ${step.colour}`;
       chip.textContent = step.symbol;
-      nodes.push(chip, `${step.square} `);
+      nodes.push(group('put', chip));
     }
+    nodes[nodes.length - 1].append(` ${step.square}`);
+    last = step;
   }
   el('differing').replaceChildren(...nodes);
 }
@@ -254,7 +265,7 @@ function render(state) {
   el('relay').hidden = !state.to_relay;
   el('relay').textContent = state.relay_text || '';
   const fixing = state.lights.sync === 'fixing' && state.differing.length > 0;
-  el('differing').hidden = !fixing;
+  el('tray').hidden = !fixing;
   renderSetup(fixing ? state.setup : null);
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');

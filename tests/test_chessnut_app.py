@@ -181,15 +181,15 @@ def test_first_ply_of_an_ordinary_game_is_zero() -> None:
 
 
 def test_setup_says_which_piece_goes_where() -> None:
-    """Review of Stéphane (28/10) : piece symbols and colours, top rank first."""
+    """Review of Stéphane (28/10) : piece symbols and colours, by colour then type (#117)."""
     game = chess.BaseBoard("6k1/5pp1/4p2p/b3P3/2Q5/2p1P1KP/5PP1/8")
     observed = chess.BaseBoard("6k1/1p3pp1/3p3p/4P3/1P2P3/4P1KP/5PPP/5B2")
     steps = setup_steps(game, observed)
     put = [(p["symbol"].rstrip("\ufe0e"), p["colour"], p["square"]) for p in steps["put"]]
     assert put == [
-        ("♟", "black", "e6"),
-        ("♝", "black", "a5"),
         ("♕", "white", "c4"),
+        ("♝", "black", "a5"),
+        ("♟", "black", "e6"),
         ("♟", "black", "c3"),
     ]
     assert all(p["symbol"].endswith("\ufe0e") for p in steps["put"])
@@ -205,6 +205,26 @@ def test_setup_names_a_wrong_piece_by_what_belongs_there() -> None:
         "put": [{"symbol": "♗\ufe0e", "colour": "white", "square": "c1"}],
         "remove": [{"square": "c1"}],
     }
+
+
+def test_setup_puts_by_colour_then_type_then_rank() -> None:
+    """#117 (Stéphane, 29/10) : White then Black, each king to pawn, top rank first."""
+    game = chess.BaseBoard("r2qk3/pp6/8/8/8/8/PP6/R3K2N")
+    steps = setup_steps(game, chess.BaseBoard("8/8/8/8/8/8/8/8"))
+    put = [(p["symbol"].rstrip("\ufe0e"), p["square"]) for p in steps["put"]]
+    assert put == [
+        ("♔", "e1"),
+        ("♖", "a1"),
+        ("♘", "h1"),
+        ("♙", "a2"),
+        ("♙", "b2"),
+        ("♚", "e8"),
+        ("♛", "d8"),
+        ("♜", "a8"),
+        ("♟", "a7"),
+        ("♟", "b7"),
+    ]
+    assert steps["remove"] == []
 
 
 def test_nothing_to_set_up() -> None:

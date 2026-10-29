@@ -60,17 +60,23 @@ PIECE_NAMES = {
 #: After a chess symbol : drawn as text, not as an emoji (♟ is one on macOS).
 TEXT_STYLE = "\ufe0e"
 
+#: The pieces to put, by type from the king to the pawn (#117).
+PUT_ORDER = (chess.KING, chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT, chess.PAWN)
+
 
 def setup_steps(
     game: chess.BaseBoard, observed: chess.BaseBoard
 ) -> dict[str, list[dict[str, str]]]:
-    """What to do on the board (review of Stéphane and Admin, 28/10), top rank first.
+    """What to do on the board (review of Stéphane and Admin, 28/10).
 
     The page shows ``remove`` first, then ``put`` : the order of the gestures.
 
-    ``put`` : the piece each square needs (symbol, colour, square). ``remove`` :
-    the squares to clear, including those holding a wrong piece, which must
-    go before the right one is put there.
+    ``put`` : the piece each square needs (symbol, colour, square), White
+    first then Black, each from the king to the pawn, then top rank first :
+    the page groups the squares of one piece behind a single chip (#117,
+    order chosen by Stéphane, 29/10).
+    ``remove`` : the squares to clear, top rank first, including those holding
+    a wrong piece, which must go before the right one is put there.
     """
     put, remove = [], []
     squares = sorted(differing_squares(game, observed), key=lambda s: (-chess.square_rank(s), s))
@@ -80,11 +86,20 @@ def setup_steps(
             remove.append({"square": name})
         wanted = game.piece_at(square)
         if wanted is not None:
-            colour = "white" if wanted.color == chess.WHITE else "black"
-            put.append(
-                {"symbol": wanted.unicode_symbol() + TEXT_STYLE, "colour": colour, "square": name}
-            )
-    return {"put": put, "remove": remove}
+            put.append((wanted, name))
+    # Stable : within one piece, the squares keep the top-rank-first order.
+    put.sort(key=lambda step: (not step[0].color, PUT_ORDER.index(step[0].piece_type)))
+    return {
+        "put": [
+            {
+                "symbol": piece.unicode_symbol() + TEXT_STYLE,
+                "colour": "white" if piece.color == chess.WHITE else "black",
+                "square": name,
+            }
+            for piece, name in put
+        ],
+        "remove": remove,
+    }
 
 
 def relay_text(bridge: Bridge) -> str | None:

@@ -21,7 +21,12 @@
   </ul>
 </header>
 <main>
-  <div id="board"></div>
+  <div id="board-col">
+    <div id="board"></div>
+    <section id="tray" aria-label="Mise en place" hidden>
+      <p id="differing"></p>
+    </section>
+  </div>
   <section id="side">
     <section id="picker" aria-labelledby="picker-title" hidden>
       <h2 id="picker-title">Ouvrir une partie</h2>
@@ -32,7 +37,6 @@
     <p id="status">En attente du pont…</p>
     <p id="token-msg" role="alert" hidden></p>
     <p id="relay" hidden></p>
-    <p id="differing" hidden></p>
     <p id="move-error" role="alert" hidden></p>
     <label id="promotion-row" hidden>Promotion en
       <select id="promotion">
