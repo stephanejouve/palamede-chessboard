@@ -27,7 +27,7 @@ from palamede_chessboard.chessboard_state import (
     InvalidGameStateError,
     list_games,
 )
-from palamede_chessboard.clock_moves import clock_after_move
+from palamede_chessboard.clock_moves import clock_after_move, game_lock
 from palamede_chessboard.players.observe import authorize_move, roles_of
 from palamede_chessboard.viewer.games_query import (
     DEFAULT_LIMIT,
@@ -174,22 +174,24 @@ def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> di
     if not payload.san and not payload.uci:
         raise HTTPException(400, "One of {san, uci} is required")
     gdir = _games_dir()
-    try:
-        state = GameState.load(game_id, games_dir=gdir)
-    except GameNotFoundError as exc:
-        raise HTTPException(404, _not_found_detail(game_id)) from exc
+    # One lock per game, shared with chess_play_move and the clock reads (#135).
+    with game_lock(game_id, gdir):
+        try:
+            state = GameState.load(game_id, games_dir=gdir)
+        except GameNotFoundError as exc:
+            raise HTTPException(404, _not_found_detail(game_id)) from exc
 
-    who = _authorized_mover(request, state, gdir)
-    san_to_play = _resolve_san(state, payload)
-    mover = "white" if state.board.turn else "black"
+        who = _authorized_mover(request, state, gdir)
+        san_to_play = _resolve_san(state, payload)
+        mover = "white" if state.board.turn else "black"
 
-    try:
-        move_result = state.play_move(san_to_play, by=who)
-    except IllegalMoveError as exc:
-        raise HTTPException(422, str(exc)) from exc
-    # Same clock as chess_play_move (#135) : the board, the mouse and Maia
-    # play through here.
-    clock = clock_after_move(state, mover, gdir)
+        try:
+            move_result = state.play_move(san_to_play, by=who)
+        except IllegalMoveError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        # Same clock as chess_play_move (#135) : the board, the mouse and Maia
+        # play through here.
+        clock = clock_after_move(state, mover, gdir)
 
     return {
         "status": "ok",

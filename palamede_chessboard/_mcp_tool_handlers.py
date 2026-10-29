@@ -54,7 +54,7 @@ from palamede_chessboard.chessboard_state import (
     list_games,
     post_commentary,
 )
-from palamede_chessboard.clock_moves import clock_after_move, settle_flag
+from palamede_chessboard.clock_moves import clock_after_move, game_lock, settle_flag
 from palamede_chessboard.player_prefs import (
     DEFAULT_MAX_CONCURRENT,
     PlayerPrefsError,
@@ -166,16 +166,17 @@ async def _handle_chess_get_elo(arguments: dict, games_dir: Path) -> dict:
 
 
 async def _handle_chess_play_move(arguments: dict, games_dir: Path) -> dict:
-    state = GameState.load(arguments["game_id"], games_dir=games_dir)
-    # The mover is whoever was *to move* before play_move pushed
-    # the SAN — capture it before the board flips.
-    mover = "white" if state.board.turn else "black"
-    move_result = state.play_move(
-        arguments["move_san"],
-        by=arguments.get("by"),
-        expected_ply=arguments.get("expected_ply"),
-    )
-    clock = clock_after_move(state, mover, games_dir)
+    with game_lock(arguments["game_id"], games_dir):
+        state = GameState.load(arguments["game_id"], games_dir=games_dir)
+        # The mover is whoever was *to move* before play_move pushed
+        # the SAN — capture it before the board flips.
+        mover = "white" if state.board.turn else "black"
+        move_result = state.play_move(
+            arguments["move_san"],
+            by=arguments.get("by"),
+            expected_ply=arguments.get("expected_ply"),
+        )
+        clock = clock_after_move(state, mover, games_dir)
     return {
         "status": "ok",
         "move": move_result,

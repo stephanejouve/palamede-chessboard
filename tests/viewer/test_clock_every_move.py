@@ -173,45 +173,76 @@ def test_game_without_time_control_has_no_clock(client: TestClient, tokens: dict
     assert client.get(f"/api/clock?game_id={game_id}").json()["clock"] is None
 
 
-@pytest.mark.asyncio
-async def test_mcp_path_uses_the_same_rules(games_dir: Path, wall: Clock) -> None:
-    """chess_play_move : start on the first move, then Fischer, as the viewer."""
-    GameState.create(
-        GameMetadata(
-            game_id="mcp-clk", white="w", black="b", time_control=TimeControl(format="5+3")
-        ),
-        games_dir=games_dir,
-    )
+def _agents_game(games_dir: Path, game_id: str, fmt: str) -> None:
     from palamede_chessboard.chessboard_clock import init_and_save_clock
 
-    init_and_save_clock("mcp-clk", TimeControl(format="5+3"), games_dir=games_dir)
+    GameState.create(
+        GameMetadata(game_id=game_id, white="w", black="b", time_control=TimeControl(format=fmt)),
+        games_dir=games_dir,
+    )
+    init_and_save_clock(game_id, TimeControl(format=fmt), games_dir=games_dir)
+
+
+@pytest.mark.asyncio
+async def test_agents_game_waits_for_the_arbiter(games_dir: Path, wall: Clock) -> None:
+    """Owner 29/10, review Leader #136 : the start on the first move is for Tablier only."""
+    _agents_game(games_dir, "mcp-clk", "5+3")
     wall.advance(42)
-    assert (
-        _decode(
-            await call_tool("chess_play_move", {"game_id": "mcp-clk", "move_san": "e4", "by": "w"})
-        )["status"]
-        == "ok"
-    )
-    clock = load_clock("mcp-clk", games_dir=games_dir)
-    assert clock.started and clock.active == "black" and clock.white_seconds == 300
-    wall.advance(10)
-    await call_tool("chess_play_move", {"game_id": "mcp-clk", "move_san": "e5", "by": "b"})
-    assert load_clock("mcp-clk", games_dir=games_dir).black_seconds == 300 - 10 + 3
+    await call_tool("chess_play_move", {"game_id": "mcp-clk", "move_san": "e4", "by": "w"})
+    assert load_clock("mcp-clk", games_dir=games_dir).started is False
 
 
 @pytest.mark.asyncio
-async def test_mcp_clock_state_settles_the_flag(games_dir: Path, wall: Clock) -> None:
-    GameState.create(
-        GameMetadata(
-            game_id="mcp-flag", white="w", black="b", time_control=TimeControl(format="1+0")
-        ),
-        games_dir=games_dir,
-    )
-    from palamede_chessboard.chessboard_clock import init_and_save_clock
+async def test_mcp_path_uses_the_same_helper_once_started(games_dir: Path, wall: Clock) -> None:
+    _agents_game(games_dir, "mcp-run", "5+3")
+    assert _decode(await call_tool("chess_clock_start", {"game_id": "mcp-run"}))["status"] == "ok"
+    wall.advance(10)
+    await call_tool("chess_play_move", {"game_id": "mcp-run", "move_san": "e4", "by": "w"})
+    wall.advance(20)
+    await call_tool("chess_play_move", {"game_id": "mcp-run", "move_san": "e5", "by": "b"})
+    clock = load_clock("mcp-run", games_dir=games_dir)
+    assert clock.white_seconds == 300 - 10 + 3
+    assert clock.black_seconds == 300 - 20 + 3
 
-    init_and_save_clock("mcp-flag", TimeControl(format="1+0"), games_dir=games_dir)
-    await call_tool("chess_play_move", {"game_id": "mcp-flag", "move_san": "e4", "by": "w"})
+
+@pytest.mark.asyncio
+async def test_reading_never_ends_an_agents_game_on_time(games_dir: Path, wall: Clock) -> None:
+    """A spectator's read of /api/clock or chess_clock_state never decides a rated game."""
+    _agents_game(games_dir, "mcp-flag", "1+0")
+    await call_tool("chess_clock_start", {"game_id": "mcp-flag"})
     wall.advance(61)
     body = _decode(await call_tool("chess_clock_state", {"game_id": "mcp-flag"}))
+    assert body["clock"]["flag_fall"] is None
+    assert GameState.load("mcp-flag", games_dir=games_dir).metadata.result == "*"
+
+
+@pytest.mark.asyncio
+async def test_mcp_clock_state_settles_a_tablier_flag(
+    client: TestClient, tokens: dict, games_dir: Path, wall: Clock
+) -> None:
+    game_id = _game(client, tokens, fmt="1+0")
+    _move(client, game_id, tokens["stephane"], "e2e4")
+    wall.advance(61)
+    body = _decode(await call_tool("chess_clock_state", {"game_id": game_id}))
     assert body["clock"]["flag_fall"] == "black"
-    assert GameState.load("mcp-flag", games_dir=games_dir).metadata.result == "1-0"
+    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "1-0"
+
+
+def test_a_move_and_a_read_take_the_same_lock(
+    client: TestClient, tokens: dict, games_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review Leader #136 : the move and settle_flag hold one lock per game."""
+    from palamede_chessboard import clock_moves
+
+    taken = []
+    real = clock_moves._atomic.locked
+
+    def spy(path):
+        taken.append(path.name)
+        return real(path)
+
+    game_id = _game(client, tokens)
+    monkeypatch.setattr(clock_moves._atomic, "locked", spy)
+    _move(client, game_id, tokens["stephane"], "e2e4")
+    client.get(f"/api/clock?game_id={game_id}")
+    assert taken == [f"{game_id}.pgn", f"{game_id}.pgn"]
