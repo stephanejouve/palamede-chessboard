@@ -22,7 +22,6 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
-from palamede_chessboard.chessboard_clock import load_clock
 from palamede_chessboard.chessboard_engine import (
     DEFAULT_DEPTH,
     EngineUnavailableError,
@@ -35,6 +34,7 @@ from palamede_chessboard.chessboard_state import (
     get_commentary,
     post_commentary,
 )
+from palamede_chessboard.clock_moves import settle_flag
 from palamede_chessboard.viewer.models import (
     ACCEPTED_VIEWERS,
     PLAYER_VIEWERS,
@@ -53,7 +53,11 @@ def build_realtime_router() -> APIRouter:
 
     @router.get("/api/clock")
     def clock(game_id: str, viewer: str = "spectator") -> dict:
-        clock_state = load_clock(game_id, games_dir=_games_dir())
+        # A fallen flag ends the game on time even without a move (#135).
+        try:
+            clock_state = settle_flag(game_id, _games_dir())
+        except ChessboardError as exc:  # malformed id : 400, not 500
+            raise HTTPException(400, str(exc)) from exc
         return {
             "game_id": game_id,
             "viewer": viewer,
