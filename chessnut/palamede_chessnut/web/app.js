@@ -269,9 +269,12 @@ function render(state) {
     if (lastGame !== null) forgetGame();
     lastGame = state.game_id;
   }
+  runMenus(state);
   if (openRequests !== null && state.open_requests !== openRequests) showPicker();
   openRequests = state.open_requests;
-  el('game').textContent = `Échiquier : ${state.game_id}`;
+  // Plain text, selected in one click (#140) : the name is copied from the title.
+  el('game-id-row').hidden = !state.game_id;
+  if (el('game-id').textContent !== state.game_id) el('game-id').textContent = state.game_id || '';
   if (state.color !== lastColor) {
     cg.set({ orientation: state.color });
     lastColor = state.color;
@@ -303,7 +306,6 @@ function render(state) {
   el('tray').hidden = !fixing;
   renderSetup(fixing ? state.setup : null);
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
-  if (el('game-name').value !== state.game_id) el('game-name').value = state.game_id || '';
   canSave = Boolean(state.can_save);
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');
 }
@@ -322,10 +324,12 @@ el('open-btn').addEventListener('click', showPicker);
 el('picker-close').addEventListener('click', () => { el('picker').hidden = true; });
 
 // Display only (#91) : the bridge, the moves allowed and /state are unchanged.
-el('flip-btn').addEventListener('click', () => {
+function flipBoard() {
   cg.toggleOrientation();
   el('flip-btn').setAttribute('aria-pressed', String(cg.state.orientation !== lastColor));
-});
+}
+
+el('flip-btn').addEventListener('click', flipBoard);
 
 // A read-only field, not text : the window disables text selection (pywebview),
 // and the clipboard API may be refused there (review of Stéphane, 28/10). The
@@ -353,7 +357,6 @@ function toggleCopy(button, field, copiedLabel) {
 }
 
 el('fen-btn').addEventListener('click', () => toggleCopy(el('fen-btn'), el('fen'), 'FEN copiée'));
-el('name-btn').addEventListener('click', () => toggleCopy(el('name-btn'), el('game-name'), 'Nom copié'));
 
 function exportMessage(message) {
   el('export-msg').hidden = !message;
@@ -369,32 +372,36 @@ function hidePgn() {
 
 // Read again at each opening : the PGN grows with the moves (#134). The bridge
 // reads the viewer's public /api/raw, never with the token.
-el('pgn-btn').addEventListener('click', async () => {
-  if (!el('pgn').hidden) {
-    hidePgn();
-    return;
-  }
+async function readPgn() {
   exportMessage('Lecture du PGN…');
   try {
     const response = await fetch('/pgn', { cache: 'no-store' });
     const answer = await response.json().catch(() => ({ error: `réponse illisible (HTTP ${response.status})` }));
     if (!response.ok) {
       exportMessage(answer.error);
-      return;
+      return false;
     }
     el('pgn').value = answer.pgn;
   } catch (_err) {
     exportMessage('Le pont ne répond plus.');
-    return;
+    return false;
   }
   exportMessage('');
   el('pgn').hidden = false;
   el('pgn-save').hidden = !canSave;
-  copyField(el('pgn-btn'), el('pgn'), 'PGN copié');
+  return true;
+}
+
+el('pgn-btn').addEventListener('click', async () => {
+  if (!el('pgn').hidden) {
+    hidePgn();
+    return;
+  }
+  if (await readPgn()) copyField(el('pgn-btn'), el('pgn'), 'PGN copié');
 });
 
 // The app's native dialog : the bridge writes the file, the page never sees the path.
-el('pgn-save').addEventListener('click', async () => {
+async function savePgn() {
   // One dialog at a time : the bridge refuses a second one too (review Junior #137).
   el('pgn-save').disabled = true;
   try {
@@ -414,7 +421,73 @@ el('pgn-save').addEventListener('click', async () => {
   } finally {
     el('pgn-save').disabled = false;
   }
-});
+}
+
+el('pgn-save').addEventListener('click', savePgn);
+
+// « Édition ▸ Copier … » when the bridge has no system clipboard (#140) : the
+// copy runs outside any click, WebKit may refuse it ; the text is then shown
+// selected, for ⌘C.
+async function menuCopy(field, copiedText) {
+  if (!field.value) {
+    exportMessage('Rien à copier : la partie n’est pas encore lue.');
+    return;
+  }
+  field.hidden = false;
+  field.focus();
+  field.select();
+  let copied = false;
+  try {
+    await navigator.clipboard.writeText(field.value);
+    copied = true;
+  } catch (_err) {
+    copied = document.execCommand('copy');
+  }
+  exportMessage(copied ? copiedText : 'Copie refusée par la fenêtre : le texte est sélectionné, ⌘C pour le copier.');
+}
+
+function selectGameName() {
+  const range = document.createRange();
+  range.selectNodeContents(el('game-id'));
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } catch (_err) {
+    copied = false;
+  }
+  exportMessage(copied ? 'Nom copié.' : 'Le nom est sélectionné dans le titre : ⌘C pour le copier.');
+}
+
+// The window's menus (#90, #140) : a counter per item in /state, the action
+// run once when it changes, as a click on the button would.
+const MENU_ACTIONS = {
+  'save-pgn': savePgn,
+  'copy-name': selectGameName,
+  'copy-fen': () => menuCopy(el('fen'), 'FEN copiée.'),
+  'copy-pgn': async () => { if (await readPgn()) menuCopy(el('pgn'), 'PGN copié.'); },
+  flip: flipBoard,
+};
+let lastMenu = null;
+let lastNotice = null;
+
+function runMenus(state) {
+  if (state.menu) {
+    if (lastMenu !== null) {
+      for (const [action, count] of Object.entries(state.menu)) {
+        if (count !== lastMenu[action] && MENU_ACTIONS[action]) MENU_ACTIONS[action]();
+      }
+    }
+    lastMenu = state.menu;
+  }
+  // A copy done by the bridge itself (system clipboard) : just say so.
+  if (state.notice) {
+    if (lastNotice !== null && state.notice.n !== lastNotice) exportMessage(state.notice.text);
+    lastNotice = state.notice.n;
+  }
+}
 
 el('log-btn').addEventListener('click', () => {
   const log = el('log');

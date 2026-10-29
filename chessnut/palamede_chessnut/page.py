@@ -41,6 +41,8 @@ PAGE = HERE / "web"
 TYPES = {".html": "text/html", ".js": "text/javascript", ".css": "text/css"}
 #: Replaced in ``index.html`` by the nonce of this launch.
 NONCE_PLACEHOLDER = b"__PALAMEDE_NONCE__"
+#: What the window's menus can ask of the page (#90, #140).
+MENU_ACTIONS = ("open", "save-pgn", "copy-name", "copy-fen", "copy-pgn", "flip")
 #: ``{"uci": "e7e8q"}`` or ``{"game_id": ...}`` and a little room : anything bigger is refused.
 MAX_BODY_BYTES = 256
 #: chessground's pieces are SVG data URIs in its CSS ; everything else is local.
@@ -83,8 +85,11 @@ class PageServer(http.server.ThreadingHTTPServer):
         self.nonce = secrets.token_urlsafe(32)
         #: The app's session (#90) : without it, no game list and no ``/open``.
         self.session: Session | None = None
-        #: Bumped by the menu « Fichier ▸ Ouvrir » : the page opens its list when it changes.
-        self.open_requests = 0
+        #: Bumped by the window's menus (#90, #140) : the page runs the action when
+        #: a counter changes, as a click on its button would.
+        self.menu_requests = dict.fromkeys(MENU_ACTIONS, 0)
+        #: A short message for the page, numbered : « Nom copié. » after a menu copy.
+        self.notice: dict[str, Any] = {"n": 0, "text": ""}
         #: The app's save dialog (#134) : without it, no ``/save-pgn``.
         self.ask_path: export.AskPath | None = None
         #: One save at a time : the server is threaded, a double click would
@@ -99,8 +104,32 @@ class PageServer(http.server.ThreadingHTTPServer):
         that two crossing openings could leave behind (review Junior #123)."""
         return self.session.bridge if self.session is not None else self._bridge
 
+    def request_menu(self, action: str) -> None:
+        if action not in self.menu_requests:
+            raise ValueError(f"unknown menu action {action!r}")
+        self.menu_requests[action] += 1
+
+    def notify(self, text: str) -> None:
+        self.notice = {"n": self.notice["n"] + 1, "text": text}
+
+    def text_to_copy(self, kind: str) -> str | None:
+        """The game's ``name``, ``fen`` or ``pgn`` for a menu copy ; ``None`` if unknown."""
+        bridge = self.bridge
+        if kind == "name":
+            return bridge.game_id
+        if kind == "fen":
+            return bridge.game.fen() if bridge.game is not None else None
+        if kind == "pgn":
+            status, body = export.raw_pgn(bridge.viewer, bridge.game_id)
+            return body["pgn"] if status == 200 else None
+        raise ValueError(f"unknown copy {kind!r}")
+
     def request_open(self) -> None:
-        self.open_requests += 1
+        self.request_menu("open")
+
+    @property
+    def open_requests(self) -> int:
+        return self.menu_requests["open"]
 
     def allowed_hosts(self) -> set[str]:
         return {f"127.0.0.1:{self.port}", f"localhost:{self.port}"}
@@ -129,6 +158,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if path == "/state":
             state = snapshot(self.server.bridge, self.server.recent)
             state["open_requests"] = self.server.open_requests
+            state["menu"] = dict(self.server.menu_requests)
+            state["notice"] = self.server.notice
             state["can_save"] = self.server.ask_path is not None
             bridge = self.server.bridge
             state["clock"] = self.server.clocks.view(bridge.viewer, bridge.game_id)

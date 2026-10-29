@@ -12,7 +12,7 @@
 </head>
 <body>
 <header>
-  <h1 id="game">Échiquier</h1>
+  <h1 id="game">Échiquier<span id="game-id-row" hidden> : <span id="game-id" title="Un clic sélectionne le nom de la partie (Édition ▸ Copier le nom de la partie)"></span></span></h1>
   <ul id="lights">
     <li id="light-bluetooth" class="light waiting" title="Liaison Bluetooth avec l'échiquier">Bluetooth</li>
     <li id="light-server" class="light waiting" title="Flux de la partie depuis le serveur">Serveur</li>
@@ -53,12 +53,10 @@
     <ol id="moves"></ol>
     <div id="fen-row">
       <button type="button" id="open-btn" title="Une autre de vos parties en cours (menu Fichier ▸ Ouvrir)">Ouvrir…</button>
-      <button type="button" id="flip-btn" aria-pressed="false" title="Voir l'échiquier depuis l'autre camp">Retourner</button>
+      <button type="button" id="flip-btn" aria-pressed="false" aria-label="Retourner l'échiquier" title="Retourner l'échiquier">⇅</button>
       <button type="button" id="fen-btn">FEN</button>
-      <button type="button" id="name-btn" title="Le nom de la partie, pour en demander l'analyse par exemple">Nom</button>
       <button type="button" id="pgn-btn" title="La partie entière, coups compris">PGN</button>
       <input id="fen" type="text" readonly spellcheck="false" aria-label="FEN de la position" hidden>
-      <input id="game-name" class="copy-field" type="text" readonly spellcheck="false" aria-label="Nom de la partie" hidden>
       <textarea id="pgn" class="copy-field" readonly spellcheck="false" rows="8" aria-label="PGN de la partie" hidden></textarea>
       <button type="button" id="pgn-save" hidden>Enregistrer…</button>
       <p id="export-msg" role="status" hidden></p>
