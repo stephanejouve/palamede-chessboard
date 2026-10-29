@@ -36,6 +36,8 @@ transport = "auto"
 palamede-chessnut --game <game_id> --color white
 ```
 
+`--game` and `--color` may go too : see the window below (#90).
+
 `--config <file>` or `PALAMEDE_CONFIG` name another file. Options given on
 the command line win over it. The file names the token *file*, never the
 token : a `token` key is refused. The viewer URL and the token file are
@@ -91,12 +93,28 @@ Bluetooth until the cable is unplugged and plugged again.
 The same bridge, with a window that shows the game, the moves, three
 lights (Bluetooth, server, synchronisation) and the squares still to fix :
 
+Install it once, with [uv](https://docs.astral.sh/uv/) (on Ubuntu Desktop,
+`sudo apt install curl git` first) :
+
 ```
-uv run --with 'palamede-chessnut[app] @ git+https://github.com/stephanejouve/palamede-chessboard#subdirectory=chessnut' \
-  palamede-chessnut-app --viewer https://<viewer> --game <game_id> --color white --token-file <file>
+uv tool install 'palamede-chessnut[app] @ git+https://github.com/stephanejouve/palamede-chessboard#subdirectory=chessnut'
 ```
 
-Same options as `palamede-chessnut`. The `app` extra brings pywebview :
+Then, with the viewer and the token file in the settings file (above) :
+
+```
+palamede-chessnut-app
+```
+
+Without `--game`, the window opens on your newest game in progress ; another
+one is chosen with « Fichier ▸ Ouvrir une partie… ». Without `--color`, your
+side is the one your account plays in the game. Both come from the viewer,
+asked with the token : `GET /api/me` says whose token it is, the list of
+games in progress gives the newest, and `/seat` gives the side (#90). No
+game in progress, a refused token or an older viewer without `/api/me` :
+the app says so and exits, give `--game` then. Same options as
+`palamede-chessnut`, which follows the same rules. `uv tool upgrade
+palamede-chessnut` takes the latest version. The `app` extra brings pywebview :
 WebKit on macOS, Edge WebView2 on Windows, Qt on Linux. The window reads
 a page served by the bridge on `127.0.0.1` only ; the player token stays
 in the bridge and never reaches the page. Closing the window stops the
