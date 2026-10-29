@@ -27,6 +27,7 @@ from palamede_chessboard.chessboard_state import (
     InvalidGameStateError,
     list_games,
 )
+from palamede_chessboard.clock_moves import clock_after_move
 from palamede_chessboard.players.observe import authorize_move, roles_of
 from palamede_chessboard.viewer.games_query import (
     DEFAULT_LIMIT,
@@ -180,16 +181,21 @@ def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> di
 
     who = _authorized_mover(request, state, gdir)
     san_to_play = _resolve_san(state, payload)
+    mover = "white" if state.board.turn else "black"
 
     try:
         move_result = state.play_move(san_to_play, by=who)
     except IllegalMoveError as exc:
         raise HTTPException(422, str(exc)) from exc
+    # Same clock as chess_play_move (#135) : the board, the mouse and Maia
+    # play through here.
+    clock = clock_after_move(state, mover, gdir)
 
     return {
         "status": "ok",
         "move": move_result,
         "state": state.to_state_dict(),
+        "clock": clock.to_dict() if clock is not None else None,
     }
 
 

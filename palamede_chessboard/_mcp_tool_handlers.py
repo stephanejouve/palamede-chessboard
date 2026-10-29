@@ -37,7 +37,6 @@ from palamede_chessboard.chess_engine_guard import (
 from palamede_chessboard.chessboard_clock import (
     init_and_save_clock,
     load_clock,
-    result_from_flag_fall,
     save_clock,
 )
 from palamede_chessboard.chessboard_engine import (
@@ -55,6 +54,7 @@ from palamede_chessboard.chessboard_state import (
     list_games,
     post_commentary,
 )
+from palamede_chessboard.clock_moves import clock_after_move, settle_flag
 from palamede_chessboard.player_prefs import (
     DEFAULT_MAX_CONCURRENT,
     PlayerPrefsError,
@@ -175,13 +175,7 @@ async def _handle_chess_play_move(arguments: dict, games_dir: Path) -> dict:
         by=arguments.get("by"),
         expected_ply=arguments.get("expected_ply"),
     )
-    clock = load_clock(arguments["game_id"], games_dir=games_dir)
-    if clock is not None and clock.started:
-        clock.on_move_played(mover=mover)
-        if clock.flag_fall is not None:
-            state.metadata.result = result_from_flag_fall(clock.flag_fall)
-            state.save()
-        save_clock(clock, games_dir=games_dir)
+    clock = clock_after_move(state, mover, games_dir)
     return {
         "status": "ok",
         "move": move_result,
@@ -240,7 +234,7 @@ async def _handle_chess_get_commentary(arguments: dict, games_dir: Path) -> dict
 
 
 async def _handle_chess_clock_state(arguments: dict, games_dir: Path) -> dict:
-    clock = load_clock(arguments["game_id"], games_dir=games_dir)
+    clock = settle_flag(arguments["game_id"], games_dir)
     return {"status": "ok", "clock": clock.to_dict() if clock is not None else None}
 
 
