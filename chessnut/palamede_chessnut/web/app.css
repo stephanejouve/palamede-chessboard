@@ -90,9 +90,13 @@ main { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
   font-size: 1.6em;
   line-height: 1.15;
   vertical-align: middle;
+  /* One light chip for both sides, the piece dark, as on the board : ♔ hollow
+     for White, ♚ filled for Black (smoke of Stéphane, #125). A dark chip with a
+     light ♚ read as a white piece, and vanished on the dark tray. */
+  background: #f4efe6;
+  color: #1d1b19;
+  border: 1px solid var(--chip-edge);
 }
-.chip.white { background: #f4efe6; color: #1d1b19; border: 1px solid var(--chip-edge); }
-.chip.black { background: #3a3530; color: #f4efe6; border: 1px solid var(--chip-edge); }
 #token-msg { color: var(--bad); font-weight: 600; }
 #token-msg.warn { color: var(--warn); }
 #promotion-row { display: block; margin-bottom: 8px; }
