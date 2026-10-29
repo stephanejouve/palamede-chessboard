@@ -246,3 +246,44 @@ def test_a_move_and_a_read_take_the_same_lock(
     _move(client, game_id, tokens["stephane"], "e2e4")
     client.get(f"/api/clock?game_id={game_id}")
     assert taken == [f"{game_id}.pgn", f"{game_id}.pgn"]
+
+
+# Review Leader #136 : the lock is never taken for a made-up or malformed id.
+
+
+def _locks(games_dir: Path) -> list[str]:
+    return sorted(p.name for p in games_dir.rglob("*.lock"))
+
+
+@pytest.mark.parametrize("game_id", ["tablier.stephane.20991231-000000-dead", "tablier.x", "ghost"])
+def test_reading_a_missing_game_creates_nothing(
+    client: TestClient, tokens: dict, games_dir: Path, game_id: str
+) -> None:
+    before = _locks(games_dir)
+    r = client.get(f"/api/clock?game_id={game_id}")
+    assert r.status_code == 200 and r.json()["clock"] is None
+    assert _locks(games_dir) == before
+
+
+@pytest.mark.parametrize("token", [None, "stephane"], ids=["sans jeton", "avec jeton"])
+def test_moving_in_a_missing_game_is_404_and_creates_nothing(
+    client: TestClient, tokens: dict, games_dir: Path, token
+) -> None:
+    before = _locks(games_dir)
+    headers = {"Authorization": f"Bearer {tokens[token]}"} if token else {}
+    r = client.post(
+        "/api/games/tablier.stephane.20991231-000000-dead/move",
+        json={"uci": "e2e4"},
+        headers=headers,
+    )
+    assert r.status_code == 404
+    assert _locks(games_dir) == before
+
+
+@pytest.mark.parametrize("game_id", ["tablier./../x", "../x", "a b"])
+def test_malformed_id_is_400_not_500(
+    client: TestClient, tokens: dict, games_dir: Path, game_id: str
+) -> None:
+    before = _locks(games_dir)
+    assert client.get("/api/clock", params={"game_id": game_id}).status_code == 400
+    assert _locks(games_dir) == before

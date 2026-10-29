@@ -36,15 +36,32 @@ from palamede_chessboard.chessboard_clock import (
     save_clock,
 )
 from palamede_chessboard.chessboard_state import GameNotFoundError, GameState
+from palamede_chessboard.paths import _pgn_path, _validate_game_id
 
 #: Ids of the games opened from Tablier (#126), reserved since #131.
 TABLIER = "tablier."
 
 
+def check_game(game_id: str, games_dir: Path) -> Path:
+    """The game's PGN path ; :class:`ChessboardError` if the id is malformed,
+    :class:`GameNotFoundError` if the game does not exist. Creates nothing."""
+    _validate_game_id(game_id)
+    path = _pgn_path(games_dir, game_id)
+    if not path.exists():
+        raise GameNotFoundError(str(path))
+    return path
+
+
 @contextlib.contextmanager
 def game_lock(game_id: str, games_dir: Path) -> Iterator[None]:
-    """Exclusive ``flock`` on ``<games dir>/<game_id>.pgn.lock``."""
-    with _atomic.locked(games_dir / f"{game_id}.pgn"):
+    """Exclusive ``flock`` on ``<games dir>/<game_id>.pgn.lock``.
+
+    The id is checked and the game must exist **before** anything is
+    created : an anonymous request on a made-up or malformed id leaves no
+    ``.lock`` file behind (review Leader #136). :class:`ChessboardError`
+    for a malformed id, :class:`GameNotFoundError` for a missing game.
+    """
+    with _atomic.locked(check_game(game_id, games_dir)):
         yield
 
 
@@ -86,8 +103,11 @@ def settle_flag(game_id: str, games_dir: Path) -> ClockState | None:
     """
     if not game_id.startswith(TABLIER):
         return load_clock(game_id, games_dir=games_dir)
-    with game_lock(game_id, games_dir):
-        return _settle_flag_locked(game_id, games_dir)
+    try:
+        with game_lock(game_id, games_dir):
+            return _settle_flag_locked(game_id, games_dir)
+    except GameNotFoundError:
+        return None
 
 
 def _settle_flag_locked(game_id: str, games_dir: Path) -> ClockState | None:
