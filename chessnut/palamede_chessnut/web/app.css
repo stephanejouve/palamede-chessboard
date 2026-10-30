@@ -10,9 +10,13 @@
   --bad: #c8342c;
   --blue: #2a78d6;
   --tray: #e9e2d6;
-  /* The lit clock face, the same in both themes : 15:1. */
-  --clock-lit: #f4efe6;
+  /* The lit clock face : amber, as a backlit face, so that it stands out from
+     the light page (review Admin #144) ; digits 12.4:1, edge 3.2:1 on the page. */
+  --clock-lit: #f5d98a;
+  --clock-lit-edge: #a88428;
   --clock-lit-fg: #1d1b19;
+  /* Low time on the lit face : 5.4:1 on the amber, 6.5:1 on the dark theme's. */
+  --clock-lit-red: #a3221b;
   /* Low time on a dimmed face : the theme's red, readable on its panel. */
   --clock-red: #c8342c;
   /* The squares to clear, on the tray : orange text, 4.9:1 on it. */
@@ -29,6 +33,9 @@
     --border: #3b3631;
     --off: #6c645c;
     --clock-red: #ff7a6e;
+    /* On the dark page a light face is enough : 15:1. */
+    --clock-lit: #f4efe6;
+    --clock-lit-edge: #f4efe6;
     --tray: #312d29;
     --remove: #e0a04a;
   }
@@ -109,7 +116,7 @@ main {
 }
 #side p { margin: 0 0 8px; }
 /* The clocks (#135) : compact faces, big digits. The side to move is lit (a
-   light face, dark digits, in both themes), the other dimmed ; red under
+   light face, dark digits ; amber in the light theme), the other dimmed ; red under
    30 s and on a fallen flag. */
 .clock {
   justify-self: start;
@@ -133,10 +140,10 @@ main {
   font: 600 32px/1.15 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-variant-numeric: tabular-nums;
 }
-.clock.active { background: var(--clock-lit); border-color: var(--clock-lit); color: var(--clock-lit-fg); }
+.clock.active { background: var(--clock-lit); border-color: var(--clock-lit-edge); color: var(--clock-lit-fg); }
 .clock.low .time, .clock.flag .time { color: var(--clock-red); }
-/* On the lit face the darker red : 4.6:1 on it. */
-.clock.active.low .time { color: #c8342c; }
+/* On the lit face the darker red. */
+.clock.active.low .time, .clock.active.flag .time { color: var(--clock-lit-red); }
 .clock.flag { border-color: var(--bad); }
 #relay { font-weight: 600; }
 #move-error { color: var(--warn); }
