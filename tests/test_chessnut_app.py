@@ -17,7 +17,7 @@ from palamede_chessnut import bridge as bridge_module
 from palamede_chessnut.bridge import Bridge, cancel_on_sigterm
 from palamede_chessnut.cli import bridge_from_args
 from palamede_chessnut.page import CHESSGROUND, CONTENT_SECURITY_POLICY, PageServer
-from palamede_chessnut.status import RecentLog, setup_steps, snapshot, sync_light
+from palamede_chessnut.status import RecentLog, captured, setup_steps, snapshot, sync_light
 
 import palamede_chessboard
 
@@ -229,6 +229,53 @@ def test_setup_puts_by_colour_then_type_then_rank() -> None:
 
 def test_nothing_to_set_up() -> None:
     assert setup_steps(chess.BaseBoard(), chess.BaseBoard()) == {"put": [], "remove": []}
+
+
+def _plain(symbols: list[str]) -> str:
+    return "".join(symbol.rstrip("\ufe0e") for symbol in symbols)
+
+
+def test_nothing_captured_at_the_start() -> None:
+    assert captured(chess.BaseBoard()) == {"by_white": [], "by_black": [], "balance": 0}
+
+
+def test_captured_strongest_first_with_the_balance() -> None:
+    """#117 : what each side has taken, queen to pawn, and the material balance."""
+    board = chess.Board()
+    for san in ["e4", "d5", "exd5", "Nf6", "Bb5+", "c6", "dxc6", "Qb6", "cxb7+", "Nbd7", "bxa8=Q"]:
+        board.push_san(san)
+    # Black lost the a8 rook and three pawns (d5, c6, b7) ; the a8 queen was the e-pawn.
+    taken = captured(chess.BaseBoard(board.board_fen()))
+    assert _plain(taken["by_white"]) == "♜♟♟♟"
+    assert taken["by_black"] == []
+    assert taken["balance"] == 5 + 3 + 9 - 1
+    assert all(symbol.endswith("\ufe0e") for symbol in taken["by_white"])
+
+
+def test_a_promoted_piece_is_the_pawn_not_taken() -> None:
+    """A second white queen and no a-pawn : the pawn was promoted, not taken."""
+    board = chess.BaseBoard()
+    board.remove_piece_at(chess.A2)
+    board.set_piece_at(chess.A6, chess.Piece(chess.QUEEN, chess.WHITE))
+    board.remove_piece_at(chess.A7)
+    taken = captured(board)
+    assert taken["by_black"] == []
+    assert _plain(taken["by_white"]) == "♟"
+    assert taken["balance"] == 9 + 1 - 1
+
+
+def test_black_ahead_gives_a_negative_balance() -> None:
+    board = chess.BaseBoard()
+    board.remove_piece_at(chess.D1)
+    board.remove_piece_at(chess.B8)
+    taken = captured(board)
+    assert _plain(taken["by_black"]) == "♕"
+    assert _plain(taken["by_white"]) == "♞"
+    assert taken["balance"] == 3 - 9
+
+
+def test_snapshot_gives_the_captured_pieces() -> None:
+    assert snapshot(bridge_on(e4()))["captured"] == {"by_white": [], "by_black": [], "balance": 0}
 
 
 def test_board_light_is_grey_once_the_bridge_stops() -> None:

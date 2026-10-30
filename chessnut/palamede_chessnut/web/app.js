@@ -129,6 +129,36 @@ function renderSetup(setup) {
   el('differing').replaceChildren(...nodes);
 }
 
+// Out of the setup, the tray shows what each side has taken (#117) : the
+// player's side first, the pieces strongest first, and « +N » beside the side
+// ahead on material. A side that has taken nothing is left out, unless it is
+// ahead : a promotion alone, say (review Admin #146).
+function renderCaptures(taken, color) {
+  const nodes = [];
+  const order = color === 'black' ? ['black', 'white'] : ['white', 'black'];
+  for (const side of order) {
+    const pieces = taken ? taken[side === 'white' ? 'by_white' : 'by_black'] : [];
+    const ahead = !taken ? 0 : side === 'white' ? taken.balance : -taken.balance;
+    if (!pieces.length && ahead <= 0) continue;
+    const chips = pieces.map((symbol) => {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = symbol;
+      return chip;
+    });
+    const span = group('taken', `${SIDE_NAME[side]} `, ...chips);
+    if (ahead > 0) {
+      const lead = document.createElement('span');
+      lead.className = 'lead';
+      lead.textContent = `+${ahead}`;
+      span.append(lead);
+    }
+    nodes.push(span);
+  }
+  el('captures').replaceChildren(...nodes);
+  return nodes.length > 0;
+}
+
 // m:ss, h:mm:ss beyond an hour, tenths under ten seconds (#135).
 function clockText(seconds) {
   const s = Math.max(seconds, 0);
@@ -307,8 +337,12 @@ function render(state) {
   el('relay').hidden = !state.to_relay;
   el('relay').textContent = state.relay_text || '';
   const fixing = state.lights.sync === 'fixing' && state.differing.length > 0;
-  el('tray').hidden = !fixing;
   renderSetup(fixing ? state.setup : null);
+  const anyTaken = renderCaptures(fixing ? null : state.captured, state.color);
+  el('differing').hidden = !fixing;
+  el('captures').hidden = !anyTaken;
+  el('tray').hidden = !fixing && !anyTaken;
+  el('tray').setAttribute('aria-label', fixing ? 'Mise en place' : 'Pièces prises');
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
   canSave = Boolean(state.can_save);
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');
