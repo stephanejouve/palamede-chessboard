@@ -25,6 +25,8 @@
        level with the top of the board, the player's with its bottom. -->
   <p class="clock" id="clock-top" hidden><span class="who"></span><span class="time"></span></p>
   <div id="board"></div>
+  <!-- The promotion, as on lichess (#150) : four pieces on the square reached. -->
+  <div id="promo" class="cg-wrap" role="dialog" aria-label="Promotion" hidden></div>
   <p class="clock" id="clock-bottom" hidden><span class="who"></span><span class="time"></span></p>
   <section id="tray" aria-label="Mise en place" hidden>
     <p id="differing"></p>
@@ -41,14 +43,6 @@
     <p id="token-msg" role="alert" hidden></p>
     <p id="relay" hidden></p>
     <p id="move-error" role="alert" hidden></p>
-    <label id="promotion-row" hidden>Promotion en
-      <select id="promotion">
-        <option value="q">dame</option>
-        <option value="r">tour</option>
-        <option value="b">fou</option>
-        <option value="n">cavalier</option>
-      </select>
-    </label>
     <ol id="moves"></ol>
     <div id="fen-row">
       <button type="button" id="open-btn" title="Une autre de vos parties en cours (menu Fichier ▸ Ouvrir)">Ouvrir…</button>
