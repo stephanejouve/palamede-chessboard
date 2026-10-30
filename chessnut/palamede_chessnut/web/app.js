@@ -131,14 +131,15 @@ function renderSetup(setup) {
 
 // Out of the setup, the tray shows what each side has taken (#117) : the
 // player's side first, the pieces strongest first, and « +N » beside the side
-// ahead on material. A side that has taken nothing is left out.
+// ahead on material. A side that has taken nothing is left out, unless it is
+// ahead : a promotion alone, say (review Admin #146).
 function renderCaptures(taken, color) {
   const nodes = [];
   const order = color === 'black' ? ['black', 'white'] : ['white', 'black'];
   for (const side of order) {
     const pieces = taken ? taken[side === 'white' ? 'by_white' : 'by_black'] : [];
-    if (!pieces.length) continue;
-    const ahead = side === 'white' ? taken.balance : -taken.balance;
+    const ahead = !taken ? 0 : side === 'white' ? taken.balance : -taken.balance;
+    if (!pieces.length && ahead <= 0) continue;
     const chips = pieces.map((symbol) => {
       const chip = document.createElement('span');
       chip.className = 'chip';
