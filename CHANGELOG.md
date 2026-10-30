@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.14.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.13.0...v0.14.0) (2026-10-30)
+
+
+### Features
+
+* **chessnut:** the actions in the window's menus, the name selectable, ⇅ ([#141](https://github.com/stephanejouve/palamede-chessboard/issues/141)) ([c14a7ff](https://github.com/stephanejouve/palamede-chessboard/commit/c14a7ffd27c4a5c056d6b6fcf9a3d31e4f50e611))
+* **chessnut:** the clocks as compact faces level with the board ([#135](https://github.com/stephanejouve/palamede-chessboard/issues/135)) ([#144](https://github.com/stephanejouve/palamede-chessboard/issues/144)) ([fdfc404](https://github.com/stephanejouve/palamede-chessboard/commit/fdfc4048a6f45e170f597756b190019f5e3cbcfe))
+
+
+### Bug Fixes
+
+* **chessnut:** the lit clock face amber in the light theme, the lit red a token ([#145](https://github.com/stephanejouve/palamede-chessboard/issues/145)) ([2f96399](https://github.com/stephanejouve/palamede-chessboard/commit/2f96399136434fd8590fc95dacc9f58003e66f12))
+
 ## [0.13.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.12.0...v0.13.0) (2026-10-29)
 
 
