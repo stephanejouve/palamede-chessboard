@@ -252,6 +252,16 @@ def test_captured_strongest_first_with_the_balance() -> None:
     assert all(symbol.endswith("\ufe0e") for symbol in taken["by_white"])
 
 
+def test_the_queen_before_the_rook() -> None:
+    """Queen and rook both taken : the queen first (mutant of Junior, #146)."""
+    board = chess.BaseBoard()
+    board.remove_piece_at(chess.A8)
+    board.remove_piece_at(chess.D8)
+    taken = captured(board)
+    assert _plain(taken["by_white"]) == "♛♜"
+    assert taken["balance"] == 9 + 5
+
+
 def test_a_promoted_piece_is_the_pawn_not_taken() -> None:
     """A second white queen and no a-pawn : the pawn was promoted, not taken."""
     board = chess.BaseBoard()

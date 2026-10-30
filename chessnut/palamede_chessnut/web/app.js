@@ -56,8 +56,7 @@ function showMoveError(message) {
   el('move-error').textContent = message || '';
 }
 
-async function sendMove(orig, dest, promotions) {
-  const uci = orig + dest + (promotions.includes(orig + dest) ? el('promotion').value : '');
+async function sendMove(uci) {
   sending = true;
   cg.set({ movable: { color: undefined, dests: new Map() } });
   try {
@@ -78,10 +77,64 @@ async function sendMove(orig, dest, promotions) {
   lastDests = '';
 }
 
+// The promotion as on lichess (#150) : the pawn is on the last rank, four
+// pieces stand in a column from that square towards the centre, the queen on
+// it. A click picks ; Échap or a click beside them takes the move back.
+const PROMOTION_PIECES = [['q', 'queen', 'dame'], ['r', 'rook', 'tour'], ['b', 'bishop', 'fou'], ['n', 'knight', 'cavalier']];
+let promoting = false;
+
+function openPromotion(orig, dest, color) {
+  promoting = true;
+  cg.set({ movable: { color: undefined, dests: new Map() } });
+  const white = cg.state.orientation === 'white';
+  const file = dest.charCodeAt(0) - 97;
+  const rank = Number(dest[1]) - 1;
+  const left = white ? file : 7 - file;
+  const top = white ? 7 - rank : rank;
+  const step = top === 0 ? 1 : -1;
+  const buttons = PROMOTION_PIECES.map(([letter, role, name], index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.style.left = `${left * 12.5}%`;
+    button.style.top = `${(top + step * index) * 12.5}%`;
+    button.setAttribute('aria-label', `Promouvoir en ${name}`);
+    const piece = document.createElement('piece');
+    piece.className = `${role} ${color}`;
+    button.append(piece);
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      closePromotion();
+      sendMove(orig + dest + letter);
+    });
+    return button;
+  });
+  el('promo').replaceChildren(...buttons);
+  el('promo').hidden = false;
+  buttons[0].focus();
+}
+
+function closePromotion() {
+  promoting = false;
+  el('promo').hidden = true;
+  el('promo').replaceChildren();
+}
+
+function cancelPromotion() {
+  if (!promoting) return;
+  closePromotion();
+  cg.set({ fen: lastFen });
+  lastDests = '';
+}
+
+el('promo').addEventListener('click', cancelPromotion);
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') cancelPromotion();
+});
+
 // Only the player's colour, only on their turn : the bridge sends the dests.
 function renderMouse(state) {
-  el('promotion-row').hidden = !state.mouse;
-  if (!state.mouse || sending) return;
+  if (!state.mouse) cancelPromotion();
+  if (!state.mouse || sending || promoting) return;
   const key = JSON.stringify([state.fen, state.dests]);
   if (key === lastDests) return;
   lastDests = key;
@@ -93,7 +146,11 @@ function renderMouse(state) {
       color: dests.size ? state.color : undefined,
       dests,
       showDests: true,
-      events: { after: (orig, dest) => sendMove(orig, dest, state.promotions) },
+      events: {
+        after: (orig, dest) => (state.promotions.includes(orig + dest)
+          ? openPromotion(orig, dest, state.color)
+          : sendMove(orig + dest)),
+      },
     },
   });
 }
@@ -231,6 +288,7 @@ function renderMoves(history, firstPly) {
 
 // Another game opened (#90) : nothing of the previous one may stay on screen.
 function forgetGame() {
+  cancelPromotion();
   lastFen = null;
   lastColor = null;
   lastDests = '';
@@ -315,6 +373,8 @@ function render(state) {
     el('flip-btn').setAttribute('aria-pressed', 'false');
   }
   if (state.fen && state.fen !== lastFen) {
+    // The position moved on under the choice (a move from the board, say).
+    cancelPromotion();
     cg.set({ fen: state.fen });
     lastFen = state.fen;
     renderMoves(state.history, state.first_ply);
@@ -363,6 +423,7 @@ el('picker-close').addEventListener('click', () => { el('picker').hidden = true;
 
 // Display only (#91) : the bridge, the moves allowed and /state are unchanged.
 function flipBoard() {
+  cancelPromotion();
   cg.toggleOrientation();
   el('flip-btn').setAttribute('aria-pressed', String(cg.state.orientation !== lastColor));
 }
