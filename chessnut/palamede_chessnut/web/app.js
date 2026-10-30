@@ -210,12 +210,15 @@ function renderCaptures(taken, color) {
       times.textContent = `×${count}`;
       return group('kind', piece, times);
     });
-    // « Prises des Blancs » : the black pieces they took, not their own (review
-    // Junior, 30/10).
+    nodes.push(group('taken', ...images));
+  }
+  // One « Pièces prises » for both sides : the colours tell whose they were
+  // (smoke of Stéphane, 30/10).
+  if (nodes.length) {
     const label = document.createElement('span');
     label.className = 'who';
-    label.textContent = `Prises des ${SIDE_NAME[side]}`;
-    nodes.push(group('taken', label, ...images));
+    label.textContent = 'Pièces prises';
+    nodes.unshift(label);
   }
   el('captures').replaceChildren(...nodes);
   return nodes.length > 0;
