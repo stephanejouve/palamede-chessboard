@@ -155,7 +155,6 @@ main {
 }
 #captures .kind { display: inline-flex; align-items: center; }
 #captures .times { margin: 0 4px 0 1px; font-variant-numeric: tabular-nums; }
-#captures .lead { margin-left: 6px; font-weight: 600; font-variant-numeric: tabular-nums; }
 #side {
   grid-area: side;
   min-width: 0;

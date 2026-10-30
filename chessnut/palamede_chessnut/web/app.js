@@ -187,16 +187,15 @@ function renderSetup(setup) {
 }
 
 // Out of the setup, the tray shows what each side has taken (#117) : the
-// player's side first, the pieces strongest first, and « +N » beside the side
-// ahead on material. A side that has taken nothing is left out, unless it is
-// ahead : a promotion alone, say (review Admin #146).
+// player's side first, the pieces strongest first. A side that has taken
+// nothing is left out. No « +N » for the material : beside « ×N » it read as
+// one more piece (smoke of Stéphane, 30/10).
 function renderCaptures(taken, color) {
   const nodes = [];
   const order = color === 'black' ? ['black', 'white'] : ['white', 'black'];
   for (const side of order) {
     const pieces = taken ? taken[side === 'white' ? 'by_white' : 'by_black'] : [];
-    const ahead = !taken ? 0 : side === 'white' ? taken.balance : -taken.balance;
-    if (!pieces.length && ahead <= 0) continue;
+    if (!pieces.length) continue;
     // The board's own pieces, one per kind with « ×3 » beyond one (#146,
     // smoke of Stéphane : a glyph in a tile per piece was unreadable).
     const takenColour = side === 'white' ? 'black' : 'white';
@@ -212,18 +211,11 @@ function renderCaptures(taken, color) {
       return group('kind', piece, times);
     });
     // « Prises des Blancs » : the black pieces they took, not their own (review
-    // Junior, 30/10). Ahead with nothing taken (a game from a FEN) : the side alone.
+    // Junior, 30/10).
     const label = document.createElement('span');
     label.className = 'who';
-    label.textContent = pieces.length ? `Prises des ${SIDE_NAME[side]}` : SIDE_NAME[side];
-    const span = group('taken', label, ...images);
-    if (ahead > 0) {
-      const lead = document.createElement('span');
-      lead.className = 'lead';
-      lead.textContent = `+${ahead}`;
-      span.append(lead);
-    }
-    nodes.push(span);
+    label.textContent = `Prises des ${SIDE_NAME[side]}`;
+    nodes.push(group('taken', label, ...images));
   }
   el('captures').replaceChildren(...nodes);
   return nodes.length > 0;
