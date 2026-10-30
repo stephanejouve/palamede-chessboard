@@ -231,61 +231,71 @@ def test_nothing_to_set_up() -> None:
     assert setup_steps(chess.BaseBoard(), chess.BaseBoard()) == {"put": [], "remove": []}
 
 
-def _plain(symbols: list[str]) -> str:
-    return "".join(symbol.rstrip("\ufe0e") for symbol in symbols)
-
-
 def test_nothing_captured_at_the_start() -> None:
-    assert captured(chess.BaseBoard()) == {"by_white": [], "by_black": [], "balance": 0}
+    assert captured([], None) == {"by_white": [], "by_black": [], "balance": 0}
 
 
 def test_captured_strongest_first_with_the_balance() -> None:
     """#117 : what each side has taken, queen to pawn, and the material balance."""
-    board = chess.Board()
-    for san in ["e4", "d5", "exd5", "Nf6", "Bb5+", "c6", "dxc6", "Qb6", "cxb7+", "Nbd7", "bxa8=Q"]:
-        board.push_san(san)
-    # Black lost the a8 rook and three pawns (d5, c6, b7) ; the a8 queen was the e-pawn.
-    taken = captured(chess.BaseBoard(board.board_fen()))
-    assert _plain(taken["by_white"]) == "♜♟♟♟"
-    assert taken["by_black"] == []
-    assert taken["balance"] == 5 + 3 + 9 - 1
-    assert all(symbol.endswith("\ufe0e") for symbol in taken["by_white"])
+    history = ["e4", "d5", "exd5", "Nf6", "Bb5+", "c6", "dxc6", "Qb6", "cxb7+", "Nbd7", "bxa8=Q"]
+    # White took d5, c6, b7 and the a8 rook ; the a8 queen was the e-pawn.
+    taken = captured(history, chess.STARTING_FEN)
+    assert taken == {
+        "by_white": ["rook", "pawn", "pawn", "pawn"],
+        "by_black": [],
+        "balance": 5 + 3 + 9 - 1,
+    }
 
 
 def test_the_queen_before_the_rook() -> None:
-    """Queen and rook both taken : the queen first (mutant of Junior, #146)."""
-    board = chess.BaseBoard()
-    board.remove_piece_at(chess.A8)
-    board.remove_piece_at(chess.D8)
-    taken = captured(board)
-    assert _plain(taken["by_white"]) == "♛♜"
-    assert taken["balance"] == 9 + 5
+    """Rook taken first, then the queen : the queen is listed first (mutant of Junior, #146)."""
+    fen = "r2qk3/1P6/8/8/8/8/8/R3K3 w - - 0 1"
+    taken = captured(["bxa8=Q", "Kf7", "Qxd8"], fen)
+    assert taken["by_white"] == ["queen", "rook"]
 
 
-def test_a_promoted_piece_is_the_pawn_not_taken() -> None:
-    """A second white queen and no a-pawn : the pawn was promoted, not taken."""
-    board = chess.BaseBoard()
-    board.remove_piece_at(chess.A2)
-    board.set_piece_at(chess.A6, chess.Piece(chess.QUEEN, chess.WHITE))
-    board.remove_piece_at(chess.A7)
-    taken = captured(board)
-    assert taken["by_black"] == []
-    assert _plain(taken["by_white"]) == "♟"
-    assert taken["balance"] == 9 + 1 - 1
+def test_a_game_set_up_from_a_fen_starts_with_nothing_taken() -> None:
+    """Smoke of Stéphane (30/10) : rook against pawn from a FEN, nothing taken yet."""
+    fen = "r3k3/1P6/8/8/8/8/8/4K3 w - - 0 1"
+    assert captured([], fen) == {"by_white": [], "by_black": [], "balance": 1 - 5}
+    assert captured(["bxa8=N"], fen)["by_white"] == ["rook"]
+
+
+def test_a_promoted_piece_taken_is_that_piece() -> None:
+    """The queen a pawn became, then taken : a queen, as it stood on the board."""
+    fen = "4k3/1P6/8/8/8/8/r7/4K3 w - - 0 1"
+    taken = captured(["b8=Q+", "Kd7", "Qb5+", "Ke6", "Qa4", "Rxa4"], fen)
+    assert taken["by_black"] == ["queen"]
+    assert taken["by_white"] == []
+
+
+def test_en_passant_takes_a_pawn() -> None:
+    taken = captured(["e4", "a6", "e5", "d5", "exd6"], None)
+    assert taken["by_white"] == ["pawn"]
 
 
 def test_black_ahead_gives_a_negative_balance() -> None:
-    board = chess.BaseBoard()
-    board.remove_piece_at(chess.D1)
-    board.remove_piece_at(chess.B8)
-    taken = captured(board)
-    assert _plain(taken["by_black"]) == "♕"
-    assert _plain(taken["by_white"]) == "♞"
-    assert taken["balance"] == 3 - 9
+    history = ["e4", "e5", "Qh5", "Nc6", "Qxf7+", "Kxf7"]
+    taken = captured(history, None)
+    assert taken == {"by_white": ["pawn"], "by_black": ["queen"], "balance": -9 + 1}
+
+
+def test_moves_that_do_not_replay_give_nothing() -> None:
+    """A FEN game from a server without start_fen : nothing rather than wrong."""
+    assert captured(["bxa8=Q"], None) is None
 
 
 def test_snapshot_gives_the_captured_pieces() -> None:
     assert snapshot(bridge_on(e4()))["captured"] == {"by_white": [], "by_black": [], "balance": 0}
+
+
+def test_snapshot_replays_from_the_start_fen_of_the_stream() -> None:
+    board = chess.Board("r3k3/1P6/8/8/8/8/8/4K3 w - - 0 1")
+    board.push_san("bxa8=R+")
+    payload = stream(board) | {"start_fen": board.root().fen()}
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
+    bridge.apply_stream(payload)
+    assert snapshot(bridge)["captured"] == {"by_white": ["rook"], "by_black": [], "balance": 5}
 
 
 def test_board_light_is_grey_once_the_bridge_stops() -> None:

@@ -145,8 +145,8 @@ class Bridge:
         self.animation: list[leds.Frame] = []
         #: Set when the bridge stops : game over, or game impossible to follow.
         self.stopped = threading.Event()
-        #: Moves of the game so far (SAN), as the stream gives them.
-        self.history: list[str] = []
+        self.history: list[str] = []  #: moves so far (SAN), as the stream gives them
+        self.start_fen: str | None = None  #: the position before them ; None : old server
         #: ``"searching"`` or ``"connected"`` : the Bluetooth link with the board.
         self.board_link = "searching"
         #: ``"connecting"``, ``"connected"`` or ``"reconnecting"`` : the viewer's stream.
@@ -164,7 +164,7 @@ class Bridge:
             return
         log.info("game %s : ply %s, %s to move", self.game_id, payload["ply"], payload["turn"])
         history = payload.get("san_history") or []
-        self.history = list(history)
+        self.history, self.start_fen = list(history), payload.get("start_fen")
         # A move the board does not show yet : the opponent's, or one played in
         # the viewer (mixed game). Not before the setup, which relays nothing.
         behind = self.observed is None or self.observed.board_fen() != game.board_fen()

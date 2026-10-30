@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import chess
 import pytest
 from fastapi.testclient import TestClient
 
-from palamede_chessboard.chessboard_state import GameState
+from palamede_chessboard.chessboard_state import GameMetadata, GameState, TimeControl
 from tests.viewer.conftest import _create_game
 
 
@@ -123,6 +124,7 @@ class TestGameStreamPayload:
         assert p["turn"] == "white"
         assert p["result"] == "*"
         assert p["san_history"] == []
+        assert p["start_fen"] == chess.STARTING_FEN
         assert p["is_game_over"] is False
 
     def test_payload_after_moves(self, games_dir: Path) -> None:
@@ -135,7 +137,25 @@ class TestGameStreamPayload:
         assert p["ply"] == 2
         assert p["turn"] == "white"
         assert p["san_history"] == ["e4", "e5"]
+        assert p["start_fen"] == chess.STARTING_FEN
         assert p["is_game_over"] is False
+
+    def test_payload_start_fen_of_a_game_set_up_from_a_fen(self, games_dir: Path) -> None:
+        fen = "r3k3/1P5p/8/8/8/8/7P/4K3 w - - 0 1"
+        state = GameState.create(
+            GameMetadata(
+                game_id="pl4", white="w", black="b", time_control=TimeControl(format="unrated")
+            ),
+            games_dir=games_dir,
+            starting_fen=fen,
+        )
+        state.play_move("bxa8=Q+")
+        from palamede_chessboard.chessboard_viewer import _game_stream_payload
+
+        assert _game_stream_payload(state)["start_fen"] == fen
+        # Reloaded from its PGN (FEN header), the game keeps it.
+        reloaded = GameState.load("pl4", games_dir=games_dir)
+        assert _game_stream_payload(reloaded)["start_fen"] == fen
 
     def test_payload_game_over_via_result(self, games_dir: Path) -> None:
         state = _create_game(games_dir, game_id="pl3")

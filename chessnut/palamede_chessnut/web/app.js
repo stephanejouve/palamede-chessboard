@@ -187,30 +187,31 @@ function renderSetup(setup) {
 }
 
 // Out of the setup, the tray shows what each side has taken (#117) : the
-// player's side first, the pieces strongest first, and « +N » beside the side
-// ahead on material. A side that has taken nothing is left out, unless it is
-// ahead : a promotion alone, say (review Admin #146).
+// player's side first, the pieces strongest first. A side that has taken
+// nothing is left out. No « +N » for the material : beside « ×N » it read as
+// one more piece ; no label either, the colours tell whose they were (smoke
+// of Stéphane, 30/10).
 function renderCaptures(taken, color) {
   const nodes = [];
   const order = color === 'black' ? ['black', 'white'] : ['white', 'black'];
   for (const side of order) {
     const pieces = taken ? taken[side === 'white' ? 'by_white' : 'by_black'] : [];
-    const ahead = !taken ? 0 : side === 'white' ? taken.balance : -taken.balance;
-    if (!pieces.length && ahead <= 0) continue;
-    const chips = pieces.map((symbol) => {
-      const chip = document.createElement('span');
-      chip.className = 'chip';
-      chip.textContent = symbol;
-      return chip;
+    if (!pieces.length) continue;
+    // The board's own pieces, one per kind with « ×3 » beyond one (#146,
+    // smoke of Stéphane : a glyph in a tile per piece was unreadable).
+    const takenColour = side === 'white' ? 'black' : 'white';
+    const counts = new Map();
+    for (const role of pieces) counts.set(role, (counts.get(role) || 0) + 1);
+    const images = [...counts].map(([role, count]) => {
+      const piece = document.createElement('piece');
+      piece.className = `${role} ${takenColour}`;
+      if (count === 1) return piece;
+      const times = document.createElement('span');
+      times.className = 'times';
+      times.textContent = `×${count}`;
+      return group('kind', piece, times);
     });
-    const span = group('taken', `${SIDE_NAME[side]} `, ...chips);
-    if (ahead > 0) {
-      const lead = document.createElement('span');
-      lead.className = 'lead';
-      lead.textContent = `+${ahead}`;
-      span.append(lead);
-    }
-    nodes.push(span);
+    nodes.push(group('taken', ...images));
   }
   el('captures').replaceChildren(...nodes);
   return nodes.length > 0;
