@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.15.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.14.0...v0.15.0) (2026-10-30)
+
+
+### Features
+
+* **chessnut:** the captured pieces in the tray, with the material balance ([#117](https://github.com/stephanejouve/palamede-chessboard/issues/117)) ([#146](https://github.com/stephanejouve/palamede-chessboard/issues/146)) ([47fda79](https://github.com/stephanejouve/palamede-chessboard/commit/47fda794dc149f6d99a61f115aafe83cfea0ba20))
+* **chessnut:** the promotion picked on the square reached, as on lichess ([#150](https://github.com/stephanejouve/palamede-chessboard/issues/150)) ([#153](https://github.com/stephanejouve/palamede-chessboard/issues/153)) ([3365913](https://github.com/stephanejouve/palamede-chessboard/commit/33659133adcfd492268ac61291408a98944b97e4))
+
+
+### Bug Fixes
+
+* **chessnut:** captured pieces from the game's start position, one piece per kind with ×N ([#154](https://github.com/stephanejouve/palamede-chessboard/issues/154)) ([8792f4c](https://github.com/stephanejouve/palamede-chessboard/commit/8792f4c8d0da6226435e4461331cba3d040e0baa))
+
 ## [0.14.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.13.0...v0.14.0) (2026-10-30)
 
 
