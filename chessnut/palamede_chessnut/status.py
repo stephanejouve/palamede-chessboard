@@ -102,41 +102,52 @@ def setup_steps(
     }
 
 
-#: The pieces each side starts with, but the king (#117, captured pieces).
-START_COUNT = {chess.QUEEN: 1, chess.ROOK: 2, chess.BISHOP: 2, chess.KNIGHT: 2, chess.PAWN: 8}
+#: Strongest first, for the captured pieces (#117).
+ORDER = [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT, chess.PAWN]
 
 #: Material, for the difference shown beside the captured pieces.
 VALUES = {chess.QUEEN: 9, chess.ROOK: 5, chess.BISHOP: 3, chess.KNIGHT: 3, chess.PAWN: 1}
 
 
-def captured(board: chess.BaseBoard) -> dict[str, Any]:
+def captured(history: list[str], start_fen: str | None) -> dict[str, Any] | None:
     """The pieces each side has taken, strongest first, and the material balance.
 
-    Read from the position alone, as the stream gives no starting position :
-    a queen beyond the first one, say, was a pawn, so it counts as that pawn
-    not taken. A game set up from a FEN with fewer pieces shows the missing
-    ones as taken.
+    The moves are replayed from the game's starting position, which the server
+    sends (``start_fen``) : a game set up from a FEN starts with nothing taken,
+    whatever pieces it lacks (smoke of Stéphane, 30/10). A promoted piece taken
+    counts as what it was on the board. From an older server without
+    ``start_fen``, the usual starting position. ``None`` when the moves do not
+    replay from it (a FEN game on such a server) : better nothing than wrong.
 
-    ``by_white`` : the black pieces White has taken ; ``by_black`` the white
-    ones. ``balance`` : White's material minus Black's, positive when White
-    is ahead.
+    ``by_white`` : the black pieces White has taken, as chessground roles
+    (``"queen"``…) ; ``by_black`` the white ones. ``balance`` : White's material
+    minus Black's, positive when White is ahead.
     """
-    taken: dict[chess.Color, list[str]] = {}
-    for colour in chess.COLORS:
-        count = {kind: len(board.pieces(kind, colour)) for kind in START_COUNT}
-        promoted = sum(
-            max(0, count[kind] - START_COUNT[kind]) for kind in START_COUNT if kind != chess.PAWN
-        )
-        missing = []
-        for kind, start in START_COUNT.items():
-            lost = start - count[kind] - (promoted if kind == chess.PAWN else 0)
-            missing += [chess.Piece(kind, colour).unicode_symbol() + TEXT_STYLE] * max(0, lost)
-        taken[colour] = missing
+    try:
+        board = chess.Board(start_fen) if start_fen else chess.Board()
+        taken: dict[chess.Color, list[chess.PieceType]] = {chess.WHITE: [], chess.BLACK: []}
+        for san in history:
+            move = board.parse_san(san)
+            if board.is_en_passant(move):
+                taken[board.turn].append(chess.PAWN)
+            elif (piece := board.piece_at(move.to_square)) is not None:
+                taken[board.turn].append(piece.piece_type)
+            board.push(move)
+    except ValueError:
+        return None
     balance = sum(
         value * (len(board.pieces(kind, chess.WHITE)) - len(board.pieces(kind, chess.BLACK)))
         for kind, value in VALUES.items()
     )
-    return {"by_white": taken[chess.BLACK], "by_black": taken[chess.WHITE], "balance": balance}
+
+    def roles(kinds: list[chess.PieceType]) -> list[str]:
+        return [chess.piece_name(kind) for kind in sorted(kinds, key=ORDER.index)]
+
+    return {
+        "by_white": roles(taken[chess.WHITE]),
+        "by_black": roles(taken[chess.BLACK]),
+        "balance": balance,
+    }
 
 
 def relay_text(bridge: Bridge) -> str | None:
@@ -210,7 +221,7 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
             if game is not None and observed is not None
             else None
         ),
-        "captured": captured(chess.BaseBoard(game.board_fen())) if game is not None else None,
+        "captured": captured(bridge.history, bridge.start_fen) if game is not None else None,
         # Mouse play (#92) : what the page may play now, empty with a board.
         "mouse": not bridge.with_board,
         # The link in use : with --transport auto, USB or Bluetooth (#110).

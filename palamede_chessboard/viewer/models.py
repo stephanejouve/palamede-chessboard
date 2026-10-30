@@ -123,5 +123,8 @@ def _game_stream_payload(state: GameState) -> dict[str, Any]:
         "turn": "white" if state.board.turn == chess.WHITE else "black",
         "result": state.metadata.result,
         "san_history": list(state.san_history),
+        # The position before san_history, for a game set up from a FEN : the
+        # Tablier replays the moves from it to list the captured pieces.
+        "start_fen": state.board.root().fen(),
         "is_game_over": state.board.is_game_over() or state.metadata.result != "*",
     }

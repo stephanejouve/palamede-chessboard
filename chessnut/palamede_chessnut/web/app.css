@@ -21,6 +21,8 @@
   --clock-red: #c8342c;
   /* The squares to clear, on the tray : orange text, 4.9:1 on it. */
   --remove: #8f4f10;
+  /* No halo around the captured pieces on the light tray. */
+  --piece-halo: none;
   /* Chip edges, 3.2:1 or more on the tray in both themes (review Junior #125). */
   --chip-edge: #857b70;
 }
@@ -37,6 +39,8 @@
     --clock-lit: #f4efe6;
     --clock-lit-edge: #f4efe6;
     --tray: #312d29;
+    /* The black pieces, outlined in black, would vanish on the dark tray. */
+    --piece-halo: drop-shadow(0 0 1.5px rgba(244, 239, 230, 0.85));
     --remove: #e0a04a;
   }
 }
@@ -136,10 +140,21 @@ main {
 #differing .put { white-space: nowrap; }
 #differing .remove { color: var(--remove); font-weight: 600; }
 #differing[hidden], #captures[hidden] { display: none; }
-/* The captured pieces (#117) : the same chips, smaller and close together. */
-#captures { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: center; margin: 0; }
-#captures .taken { white-space: nowrap; }
-#captures .chip { font-size: 1.3em; margin-right: 2px; }
+/* The captured pieces (#117) : the board's own pieces (#captures is a .cg-wrap
+   for chessground's piece images), no tiles, one per kind with « ×3 ». */
+#captures { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center; margin: 0; }
+#captures .taken { display: flex; align-items: center; white-space: nowrap; }
+#captures .who { margin-right: 8px; color: var(--muted); }
+#captures piece {
+  position: static;
+  display: inline-block;
+  width: 30px;
+  height: 30px;
+  pointer-events: none;
+  filter: var(--piece-halo);
+}
+#captures .kind { display: inline-flex; align-items: center; }
+#captures .times { margin: 0 4px 0 1px; font-variant-numeric: tabular-nums; }
 #captures .lead { margin-left: 6px; font-weight: 600; font-variant-numeric: tabular-nums; }
 #side {
   grid-area: side;

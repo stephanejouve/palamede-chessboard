@@ -147,6 +147,9 @@ class Bridge:
         self.stopped = threading.Event()
         #: Moves of the game so far (SAN), as the stream gives them.
         self.history: list[str] = []
+        #: The position before :attr:`history` (a game set up from a FEN), or
+        #: ``None`` from a server that does not send it.
+        self.start_fen: str | None = None
         #: ``"searching"`` or ``"connected"`` : the Bluetooth link with the board.
         self.board_link = "searching"
         #: ``"connecting"``, ``"connected"`` or ``"reconnecting"`` : the viewer's stream.
@@ -165,6 +168,7 @@ class Bridge:
         log.info("game %s : ply %s, %s to move", self.game_id, payload["ply"], payload["turn"])
         history = payload.get("san_history") or []
         self.history = list(history)
+        self.start_fen = payload.get("start_fen")
         # A move the board does not show yet : the opponent's, or one played in
         # the viewer (mixed game). Not before the setup, which relays nothing.
         behind = self.observed is None or self.observed.board_fen() != game.board_fen()

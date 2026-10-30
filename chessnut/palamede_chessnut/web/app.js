@@ -197,13 +197,26 @@ function renderCaptures(taken, color) {
     const pieces = taken ? taken[side === 'white' ? 'by_white' : 'by_black'] : [];
     const ahead = !taken ? 0 : side === 'white' ? taken.balance : -taken.balance;
     if (!pieces.length && ahead <= 0) continue;
-    const chips = pieces.map((symbol) => {
-      const chip = document.createElement('span');
-      chip.className = 'chip';
-      chip.textContent = symbol;
-      return chip;
+    // The board's own pieces, one per kind with « ×3 » beyond one (#146,
+    // smoke of Stéphane : a glyph in a tile per piece was unreadable).
+    const takenColour = side === 'white' ? 'black' : 'white';
+    const counts = new Map();
+    for (const role of pieces) counts.set(role, (counts.get(role) || 0) + 1);
+    const images = [...counts].map(([role, count]) => {
+      const piece = document.createElement('piece');
+      piece.className = `${role} ${takenColour}`;
+      if (count === 1) return piece;
+      const times = document.createElement('span');
+      times.className = 'times';
+      times.textContent = `×${count}`;
+      return group('kind', piece, times);
     });
-    const span = group('taken', `${SIDE_NAME[side]} `, ...chips);
+    // « Prises des Blancs » : the black pieces they took, not their own (review
+    // Junior, 30/10). Ahead with nothing taken (a game from a FEN) : the side alone.
+    const label = document.createElement('span');
+    label.className = 'who';
+    label.textContent = pieces.length ? `Prises des ${SIDE_NAME[side]}` : SIDE_NAME[side];
+    const span = group('taken', label, ...images);
     if (ahead > 0) {
       const lead = document.createElement('span');
       lead.className = 'lead';
