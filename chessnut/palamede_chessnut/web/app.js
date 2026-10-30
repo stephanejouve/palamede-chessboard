@@ -189,7 +189,8 @@ function renderSetup(setup) {
 // Out of the setup, the tray shows what each side has taken (#117) : the
 // player's side first, the pieces strongest first. A side that has taken
 // nothing is left out. No « +N » for the material : beside « ×N » it read as
-// one more piece (smoke of Stéphane, 30/10).
+// one more piece ; no label either, the colours tell whose they were (smoke
+// of Stéphane, 30/10).
 function renderCaptures(taken, color) {
   const nodes = [];
   const order = color === 'black' ? ['black', 'white'] : ['white', 'black'];
@@ -211,14 +212,6 @@ function renderCaptures(taken, color) {
       return group('kind', piece, times);
     });
     nodes.push(group('taken', ...images));
-  }
-  // One « Pièces prises » for both sides : the colours tell whose they were
-  // (smoke of Stéphane, 30/10).
-  if (nodes.length) {
-    const label = document.createElement('span');
-    label.className = 'who';
-    label.textContent = 'Pièces prises';
-    nodes.unshift(label);
   }
   el('captures').replaceChildren(...nodes);
   return nodes.length > 0;

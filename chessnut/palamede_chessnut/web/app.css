@@ -144,7 +144,6 @@ main {
    for chessground's piece images), no tiles, one per kind with « ×3 ». */
 #captures { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center; margin: 0; }
 #captures .taken { display: flex; align-items: center; white-space: nowrap; }
-#captures .who { margin-right: 8px; color: var(--muted); }
 #captures piece {
   position: static;
   display: inline-block;
