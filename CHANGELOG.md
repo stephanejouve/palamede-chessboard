@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.15.0...v0.15.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **clock:** only a player or the arbiter ends a game on time, and FIDE 6.9 ([#157](https://github.com/stephanejouve/palamede-chessboard/issues/157)) ([229e4e6](https://github.com/stephanejouve/palamede-chessboard/commit/229e4e6119206c7f4dd6ba18d92fd3b2c7471aaf))
+
 ## [0.15.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.14.0...v0.15.0) (2026-10-30)
 
 
