@@ -43,7 +43,12 @@ async function pollPositions() {
 async function pollClock() {
   if (!gameId()) return;
   try {
-    const r = await fetch('/api/clock' + qs('viewer=' + encodeURIComponent(viewerRole())), { cache: 'no-store' });
+    // The player's token, when the tab has one : only a player's read (or the
+    // arbiter's) ends the game on time (owner, 31/10, #135).
+    const headers = {};
+    const token = window.playerToken();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const r = await fetch('/api/clock' + qs('viewer=' + encodeURIComponent(viewerRole())), { cache: 'no-store', headers });
     if (!r.ok) return;
     const data = await r.json();
     CLOCK = data.clock;

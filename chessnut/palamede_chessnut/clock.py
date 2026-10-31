@@ -1,10 +1,12 @@
 """The game's clock for the page (#135) : read from the viewer, shown in the window.
 
-The bridge reads the viewer's public ``GET /api/clock`` (never with the
-token), at most every :data:`REFRESH` seconds whatever the page's polling,
-and gives the page what is left to each side. Reading it is also what lets
-the server end a Tablier game on time when nobody moves (``settle_flag``,
-#135) : the window open is enough.
+The bridge reads the viewer's ``GET /api/clock``, at most every
+:data:`REFRESH` seconds whatever the page's polling, and gives the page what
+is left to each side. Reading it is also what lets the server end a Tablier
+game on time when nobody moves (``settle_flag``, #135) : the window open is
+enough. That read carries the player token : the server ends a game on time
+only for a player of the game or its arbiter (owner, 31/10). The token
+travels in the header, never in the URL nor in the page.
 """
 
 from __future__ import annotations
@@ -75,18 +77,23 @@ class ClockCache:
         self._closed = False
         self._use_thread = thread
         self._thread: threading.Thread | None = None
-        #: ``(viewer, game)`` the page shows : what the thread reads.
-        self._wanted: tuple[str, str] | None = None
+        #: ``(viewer, game, token)`` the page shows : what the thread reads.
+        self._wanted: tuple[str, str, str | None] | None = None
         self._game_id: str | None = None
         self._clock: Any = None
         #: When the clock shown was read : the side to move keeps running from it.
         self._fetched = 0.0
 
-    def view(self, viewer_url: str, game_id: str) -> dict[str, Any] | None:
-        """:func:`seconds_left` for ``game_id`` ; ``None`` until its first read."""
+    def view(
+        self, viewer_url: str, game_id: str, token: str | None = None
+    ) -> dict[str, Any] | None:
+        """:func:`seconds_left` for ``game_id`` ; ``None`` until its first read.
+
+        ``token`` : the player's ; without it, the public read of a spectator.
+        """
         with self._lock:
-            if self._wanted != (viewer_url, game_id):
-                self._wanted = (viewer_url, game_id)
+            if self._wanted != (viewer_url, game_id, token):
+                self._wanted = (viewer_url, game_id, token)
                 self._wake.set()  # another game : read at once
             self._start()
             if game_id != self._game_id:
@@ -115,10 +122,15 @@ class ClockCache:
             self.refresh()
             self._wake.wait(REFRESH)
 
-    def _read(self, viewer_url: str, game_id: str) -> None:
+    def _read(self, viewer_url: str, game_id: str, token: str | None = None) -> None:
         url = f"{viewer_url}/api/clock?game_id={quote(game_id)}"
         try:
-            body = viewer.get_json(url, timeout=TIMEOUT)
+            if token is None:
+                body = viewer.get_json(url, timeout=TIMEOUT)
+            else:
+                status, body = viewer.get_with_token(url, token, timeout=TIMEOUT)
+                if status != 200:
+                    raise OSError(f"HTTP {status}")
             clock = body.get("clock") if isinstance(body, dict) else None
         except Exception as exc:  # display only : the clock never breaks the page's state
             log.warning("clock of %s unreadable (%s)", game_id, exc.__class__.__name__)

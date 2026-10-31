@@ -88,18 +88,25 @@ class FakeViewer:
     def __init__(self, monkeypatch) -> None:
         self.answer: object = {"game_id": GAME, "clock": clock()}
         self.asked: list[tuple[str, float]] = []
+        #: The token each read carried : ``None`` for a public read.
+        self.tokens: list[str | None] = []
+        self.status: int | None = 200
         monkeypatch.setattr(viewer, "get_json", self.get_json)
-
-        def no_token(*_args, **_kwargs):
-            raise AssertionError("the clock is read without the token")
-
-        monkeypatch.setattr(viewer, "get_with_token", no_token)
+        monkeypatch.setattr(viewer, "get_with_token", self.get_with_token)
 
     def get_json(self, url: str, timeout: float = 10):
         self.asked.append((url, timeout))
+        self.tokens.append(None)
         if isinstance(self.answer, Exception):
             raise self.answer
         return self.answer
+
+    def get_with_token(self, url: str, token: str, timeout: float = 10):
+        self.asked.append((url, timeout))
+        self.tokens.append(token)
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.status, self.answer if self.status == 200 else None
 
 
 @pytest.fixture
@@ -250,6 +257,42 @@ def test_the_state_carries_the_clock(page, fake) -> None:
     assert state["clock"]["black"] == 290.0
 
 
+def test_the_bridge_reads_the_clock_with_the_player_token(fake) -> None:
+    """Owner, 31/10 : only a player's read ends the game on time, so the
+    read carries the token (in the header, never in the URL)."""
+    cache = cache_without_thread(Monotonic())
+    cache.view(VIEWER, GAME, TOKEN)
+    cache.refresh()
+    assert fake.tokens == [TOKEN]
+    assert fake.asked == [(f"{VIEWER}/api/clock?game_id={GAME}", clock_module.TIMEOUT)]
+    assert cache.view(VIEWER, GAME, TOKEN)["white"] == 290.0
+
+
+@pytest.mark.parametrize("status", [None, 401, 503])
+def test_a_refused_read_keeps_the_last_clock(fake, status) -> None:
+    now = Monotonic()
+    cache = cache_without_thread(now)
+    cache.view(VIEWER, GAME, TOKEN)
+    cache.refresh()
+    fake.status = status
+    now.t += 1.5
+    cache.refresh()
+    assert cache.view(VIEWER, GAME, TOKEN)["white"] == pytest.approx(288.5)
+
+
+def test_the_page_reads_the_clock_with_the_token(page, fake) -> None:
+    import http.client
+    import time
+
+    deadline = time.monotonic() + 5
+    while not fake.tokens and time.monotonic() < deadline:
+        connection = http.client.HTTPConnection("127.0.0.1", page.port, timeout=5)
+        connection.request("GET", "/state")
+        connection.getresponse().read()
+        time.sleep(0.02)
+    assert fake.tokens and set(fake.tokens) == {TOKEN}
+
+
 def test_a_slow_viewer_never_holds_the_state(page, monkeypatch) -> None:
     """Review Junior #139 : a viewer at 2 s, /state still answers at once."""
     import http.client
@@ -258,12 +301,12 @@ def test_a_slow_viewer_never_holds_the_state(page, monkeypatch) -> None:
 
     release = threading.Event()
 
-    def slow(url: str, timeout: float = 10):
+    def slow(url: str, token: str, timeout: float = 10):
         release.wait(2)
-        return {"game_id": GAME, "clock": clock()}
+        return 200, {"game_id": GAME, "clock": clock()}
 
-    monkeypatch.setattr(viewer, "get_json", slow)
-    monkeypatch.setattr(viewer, "get_with_token", lambda *_a, **_k: (None, None))
+    # The page's read carries the token : that is the read that must not hold /state.
+    monkeypatch.setattr(viewer, "get_with_token", slow)
     try:
         for _ in range(4):
             start = time.monotonic()

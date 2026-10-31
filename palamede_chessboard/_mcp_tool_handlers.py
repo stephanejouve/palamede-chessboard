@@ -17,6 +17,7 @@ from typing import Any
 import chess
 
 from palamede_chessboard._mcp_shared import (
+    REQUEST_HEADERS,
     _compute_board_facts,
     _compute_move_facts,
     _journal_board_facts_gap,
@@ -235,7 +236,7 @@ async def _handle_chess_get_commentary(arguments: dict, games_dir: Path) -> dict
 
 
 async def _handle_chess_clock_state(arguments: dict, games_dir: Path) -> dict:
-    clock = settle_flag(arguments["game_id"], games_dir)
+    clock = settle_flag(arguments["game_id"], games_dir, REQUEST_HEADERS.get())
     return {"status": "ok", "clock": clock.to_dict() if clock is not None else None}
 
 

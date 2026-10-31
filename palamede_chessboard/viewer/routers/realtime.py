@@ -52,10 +52,11 @@ def build_realtime_router() -> APIRouter:
     router = APIRouter(tags=["realtime"])
 
     @router.get("/api/clock")
-    def clock(game_id: str, viewer: str = "spectator") -> dict:
-        # A fallen flag ends the game on time even without a move (#135).
+    def clock(request: Request, game_id: str, viewer: str = "spectator") -> dict:
+        # A fallen flag ends the game on time even without a move (#135), when
+        # a player of the game or its arbiter reads it with their token.
         try:
-            clock_state = settle_flag(game_id, _games_dir())
+            clock_state = settle_flag(game_id, _games_dir(), request.headers)
         except ChessboardError as exc:  # malformed id : 400, not 500
             raise HTTPException(400, str(exc)) from exc
         return {

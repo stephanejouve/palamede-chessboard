@@ -15,7 +15,13 @@ Chessnut board, the mouse, the Maia bot) : two copies would drift apart
 * **Flag fall at reading time**, Tablier games only : :func:`settle_flag`
   ends the game on time when the side to move has run out, without waiting
   for a move that may never come. Called by ``GET /api/clock`` and
-  ``chess_clock_state`` ; a spectator's read never ends an agents' game.
+  ``chess_clock_state``. Only a player of the game or its arbiter may do it
+  (owner, 31/10 ; FIDE 6.8 : the arbiter observes it or a player claims
+  it) : anyone else's read shows the clock and changes nothing, and a
+  spectator's read never ends an agents' game.
+* **Out of time, but no mating material left** (FIDE 6.9) : the game is
+  drawn, not lost, when the opponent of the side whose flag fell cannot
+  mate by any series of legal moves (:func:`result_on_time`).
 * **One lock per game** (:func:`game_lock`), taken by a move and by
   :func:`settle_flag` : a read that ends the game on time and a move that
   cross must not lose one another (review Leader #136).
@@ -26,6 +32,9 @@ from __future__ import annotations
 import contextlib
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
+
+import chess
 
 from palamede_chessboard import _atomic
 from palamede_chessboard import chessboard_clock as clock_module
@@ -37,6 +46,7 @@ from palamede_chessboard.chessboard_clock import (
 )
 from palamede_chessboard.chessboard_state import GameNotFoundError, GameState
 from palamede_chessboard.paths import _pgn_path, _validate_game_id
+from palamede_chessboard.players.observe import authorize_move
 
 #: Ids of the games opened from Tablier (#126), reserved since #131.
 TABLIER = "tablier."
@@ -65,9 +75,24 @@ def game_lock(game_id: str, games_dir: Path) -> Iterator[None]:
         yield
 
 
-def _end_on_time(state: GameState, clock: ClockState) -> None:
+def result_on_time(board: chess.Board, flag_fall: str) -> str:
+    """The result when ``flag_fall``'s side runs out of time (FIDE 6.9).
+
+    A loss, unless the opponent cannot mate by any series of legal moves
+    from ``board``, the position when the flag fell : then a draw. Example :
+    White, king and queen, runs out against a lone king and bishop →
+    ``1/2-1/2``, not ``0-1``.
+    """
+    opponent = chess.BLACK if flag_fall == "white" else chess.WHITE
+    if board.has_insufficient_material(opponent):
+        return "1/2-1/2"
+    return result_from_flag_fall(flag_fall)
+
+
+def _end_on_time(state: GameState, clock: ClockState, board: chess.Board | None = None) -> None:
+    """``board`` : the position when the flag fell, ``state.board`` by default."""
     if clock.flag_fall is not None and state.metadata.result == "*":
-        state.metadata.result = result_from_flag_fall(clock.flag_fall)
+        state.metadata.result = result_on_time(board or state.board, clock.flag_fall)
         state.save()
 
 
@@ -88,29 +113,38 @@ def clock_after_move(state: GameState, mover: str, games_dir: Path) -> ClockStat
         clock.active = "black" if mover == "white" else "white"
     else:
         clock.on_move_played(mover=mover)
-        _end_on_time(state, clock)
+        # The flag fell before the late move : 6.9 is judged on the position
+        # it was played from, or taking the last pawn would turn a loss into a
+        # draw (review Leader #157).
+        before = state.board.copy()
+        before.pop()
+        _end_on_time(state, clock, before)
     if state.metadata.result != "*" or state.board.is_game_over():
         clock.active = None  # game over : the clock stops
     save_clock(clock, games_dir=games_dir)
     return clock
 
 
-def settle_flag(game_id: str, games_dir: Path) -> ClockState | None:
+def settle_flag(game_id: str, games_dir: Path, headers: Any = None) -> ClockState | None:
     """The clock of ``game_id``, with a fallen flag applied if time ran out.
 
-    Nothing changes for a game other than ``tablier.*``, without clock, a
-    clock not started, a flag already down, or a game already over.
+    ``headers`` carry the caller's ``Authorization: Bearer`` token : only a
+    player of the game or its arbiter may end it on time (owner, 31/10),
+    under the same rule as ``chess_clock_start``. Anyone else, or no token,
+    reads the clock unchanged. Nothing changes either for a game other than
+    ``tablier.*``, without clock, a clock not started, a flag already down,
+    or a game already over.
     """
     if not game_id.startswith(TABLIER):
         return load_clock(game_id, games_dir=games_dir)
     try:
         with game_lock(game_id, games_dir):
-            return _settle_flag_locked(game_id, games_dir)
+            return _settle_flag_locked(game_id, games_dir, headers)
     except GameNotFoundError:
         return None
 
 
-def _settle_flag_locked(game_id: str, games_dir: Path) -> ClockState | None:
+def _settle_flag_locked(game_id: str, games_dir: Path, headers: Any) -> ClockState | None:
     clock = load_clock(game_id, games_dir=games_dir)
     if clock is None or not clock.started or clock.flag_fall is not None:
         return clock
@@ -125,6 +159,9 @@ def _settle_flag_locked(game_id: str, games_dir: Path) -> ClockState | None:
         return clock
     if state.metadata.result != "*" or state.board.is_game_over():
         return clock
+    _who, refused = authorize_move(headers, state, games_dir, "chess_clock_start")
+    if refused is not None:
+        return clock  # a spectator, or no token : the clock is shown, nothing more
     clock.flag_fall = clock.active
     setattr(clock, f"{clock.active}_seconds", 0.0)
     save_clock(clock, games_dir=games_dir)
