@@ -75,22 +75,24 @@ def game_lock(game_id: str, games_dir: Path) -> Iterator[None]:
         yield
 
 
-def result_on_time(state: GameState, flag_fall: str) -> str:
+def result_on_time(board: chess.Board, flag_fall: str) -> str:
     """The result when ``flag_fall``'s side runs out of time (FIDE 6.9).
 
-    A loss, unless the opponent cannot mate by any series of legal moves :
-    then a draw. Example : White, king and queen, runs out against a lone
-    king and bishop → ``1/2-1/2``, not ``0-1``.
+    A loss, unless the opponent cannot mate by any series of legal moves
+    from ``board``, the position when the flag fell : then a draw. Example :
+    White, king and queen, runs out against a lone king and bishop →
+    ``1/2-1/2``, not ``0-1``.
     """
     opponent = chess.BLACK if flag_fall == "white" else chess.WHITE
-    if state.board.has_insufficient_material(opponent):
+    if board.has_insufficient_material(opponent):
         return "1/2-1/2"
     return result_from_flag_fall(flag_fall)
 
 
-def _end_on_time(state: GameState, clock: ClockState) -> None:
+def _end_on_time(state: GameState, clock: ClockState, board: chess.Board | None = None) -> None:
+    """``board`` : the position when the flag fell, ``state.board`` by default."""
     if clock.flag_fall is not None and state.metadata.result == "*":
-        state.metadata.result = result_on_time(state, clock.flag_fall)
+        state.metadata.result = result_on_time(board or state.board, clock.flag_fall)
         state.save()
 
 
@@ -111,7 +113,12 @@ def clock_after_move(state: GameState, mover: str, games_dir: Path) -> ClockStat
         clock.active = "black" if mover == "white" else "white"
     else:
         clock.on_move_played(mover=mover)
-        _end_on_time(state, clock)
+        # The flag fell before the late move : 6.9 is judged on the position
+        # it was played from, or taking the last pawn would turn a loss into a
+        # draw (review Leader #157).
+        before = state.board.copy()
+        before.pop()
+        _end_on_time(state, clock, before)
     if state.metadata.result != "*" or state.board.is_game_over():
         clock.active = None  # game over : the clock stops
     save_clock(clock, games_dir=games_dir)

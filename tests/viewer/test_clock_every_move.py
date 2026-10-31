@@ -229,6 +229,20 @@ def test_flag_on_a_move_against_no_mating_material_is_a_draw(
     assert GameState.load(game_id, games_dir=games_dir).metadata.result == "1/2-1/2"
 
 
+def test_a_late_move_cannot_take_away_the_mating_material(
+    client: TestClient, tokens: dict, games_dir: Path, wall: Clock
+) -> None:
+    """Review Leader #157 : 6.9 is judged when the flag fell, before the late
+    move. White, too late, takes Black's last pawn : still a loss for White."""
+    game_id = _tablier_game(games_dir, "2b1k3/8/8/8/8/8/6p1/3QK3 w - - 0 1")
+    _move(client, game_id, tokens["stephane"], "d1d2")
+    _move(client, game_id, tokens["bot-maia-1100"], "c8d7")
+    wall.advance(61)
+    _move(client, game_id, tokens["stephane"], "d2g2")  # takes the pawn, too late
+    assert load_clock(game_id, games_dir=games_dir).flag_fall == "white"
+    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "0-1"
+
+
 def test_no_flag_at_reading_time_once_the_game_is_over(
     client: TestClient, tokens: dict, games_dir: Path, wall: Clock
 ) -> None:
