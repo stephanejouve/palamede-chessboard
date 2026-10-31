@@ -28,6 +28,7 @@ from mcp.types import TextContent, Tool
 
 from palamede_chessboard._mcp_shared import (
     ARBITER_DAEMON_PIDFILE,
+    REQUEST_HEADERS,
     _arbiter_daemon_available,
     _attackers_with_symbols,
     _board_facts_log_path,
@@ -100,6 +101,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     headers = _request_headers()
     # #34 step 2 : PALAMEDE_AUTH_MODE=observe journals the verdict, never refuses.
     observe(name, arguments, headers, games_dir, transport="stdio" if headers is None else "http")
+    # Every call sets it : a handler never sees the previous caller's identity.
+    REQUEST_HEADERS.set(headers)
     try:
         handler = TOOL_HANDLERS.get(name)
         if handler is None:

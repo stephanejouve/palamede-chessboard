@@ -51,7 +51,7 @@ def post(url: str, token: str, payload: dict[str, Any] | None = None) -> tuple[i
         return None, str(exc)
 
 
-def get_with_token(url: str, token: str) -> tuple[int | None, Any]:
+def get_with_token(url: str, token: str, timeout: float = 10) -> tuple[int | None, Any]:
     """GET with the player token : ``(status, JSON body or None)``, status ``None`` if unreachable.
 
     Same unredirected header as :func:`post` ; a 3xx is reported, not followed.
@@ -59,7 +59,7 @@ def get_with_token(url: str, token: str) -> tuple[int | None, Any]:
     request = urllib.request.Request(url, method="GET")
     request.add_unredirected_header("Authorization", f"Bearer {token}")
     try:
-        with _OPENER.open(request, timeout=10) as response:
+        with _OPENER.open(request, timeout=timeout) as response:
             return int(response.status), json.load(response)
     except urllib.error.HTTPError as exc:
         return exc.code, None

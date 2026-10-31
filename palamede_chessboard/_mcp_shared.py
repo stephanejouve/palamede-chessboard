@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextvars import ContextVar
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,11 @@ import chess
 from mcp.types import TextContent
 
 from palamede_chessboard.chessboard_state import GAMES_DIR, ChessboardError
+
+#: Headers of the HTTP request carrying the current MCP call ; ``None`` over
+#: stdio. Set by ``call_tool`` for the handlers that act on the caller's
+#: identity (``chess_clock_state`` : who may end a game on time).
+REQUEST_HEADERS: ContextVar[Any] = ContextVar("REQUEST_HEADERS", default=None)
 
 # --- games dir / arbiter contract -----------------------------------------
 

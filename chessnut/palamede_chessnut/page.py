@@ -162,7 +162,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             state["notice"] = self.server.notice
             state["can_save"] = self.server.ask_path is not None
             bridge = self.server.bridge
-            state["clock"] = self.server.clocks.view(bridge.viewer, bridge.game_id)
+            # With the token, which never leaves the bridges (like games.py) :
+            # only a player's read ends the game on time (owner, 31/10).
+            state["clock"] = self.server.clocks.view(bridge.viewer, bridge.game_id, bridge._token)
             self._send(200, "application/json", json.dumps(state).encode("utf-8"))
             return
         if path == "/pgn":

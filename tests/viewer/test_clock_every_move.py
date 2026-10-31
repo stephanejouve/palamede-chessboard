@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import chess
 import pytest
 from fastapi.testclient import TestClient
 
@@ -118,21 +119,114 @@ def test_flag_fall_on_a_viewer_move_ends_the_game(
     assert GameState.load(game_id, games_dir=games_dir).metadata.result == "1-0"
 
 
+def _read(client: TestClient, game_id: str, token: str | None = None) -> dict:
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    return client.get(f"/api/clock?game_id={game_id}", headers=headers).json()["clock"]
+
+
 def test_flag_fall_at_reading_time_without_a_move(
     client: TestClient, tokens: dict, games_dir: Path, wall: Clock
 ) -> None:
-    """A player who stops playing loses on time when the clock is read."""
+    """A player who stops playing loses on time when a player reads the clock."""
     game_id = _game(client, tokens, fmt="1+0")
     _move(client, game_id, tokens["stephane"], "e2e4")
     wall.advance(30)
-    assert client.get(f"/api/clock?game_id={game_id}").json()["clock"]["flag_fall"] is None
+    assert _read(client, game_id, tokens["stephane"])["flag_fall"] is None
     assert GameState.load(game_id, games_dir=games_dir).metadata.result == "*"
     wall.advance(31)
-    body = client.get(f"/api/clock?game_id={game_id}").json()["clock"]
+    body = _read(client, game_id, tokens["stephane"])
     assert body["flag_fall"] == "black" and body["black_seconds"] == 0
     assert GameState.load(game_id, games_dir=games_dir).metadata.result == "1-0"
     # Read again : nothing more happens.
-    assert client.get(f"/api/clock?game_id={game_id}").json()["clock"]["flag_fall"] == "black"
+    assert _read(client, game_id)["flag_fall"] == "black"
+
+
+@pytest.mark.parametrize("who", [None, "pas-un-jeton", "patrice"])
+def test_only_a_player_or_the_arbiter_ends_the_game_on_time(
+    client: TestClient, tokens: dict, games_dir: Path, wall: Clock, who
+) -> None:
+    """Owner, 31/10 (FIDE 6.8) : a spectator's read, with or without a token,
+    shows the clock and ends nothing ; the next player's read does."""
+    registry.add_player(games_dir, "patrice", kind="human")
+    tokens["patrice"] = registry.issue_token(games_dir, "patrice", label="tests")
+    game_id = _game(client, tokens, fmt="1+0")
+    _move(client, game_id, tokens["stephane"], "e2e4")
+    wall.advance(61)
+    assert _read(client, game_id, tokens.get(who, who))["flag_fall"] is None
+    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "*"
+    assert _read(client, game_id, tokens["bot-maia-1100"])["flag_fall"] == "black"
+    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "1-0"
+
+
+def _tablier_game(games_dir: Path, fen: str, arbiter: str | None = None) -> str:
+    from palamede_chessboard.chessboard_clock import init_and_save_clock
+
+    game_id = "tablier.stephane.20261031-010000-6d9a"
+    GameState.create(
+        GameMetadata(
+            game_id=game_id,
+            white="stephane",
+            black="bot-maia-1100",
+            arbiter=arbiter,
+            time_control=TimeControl(format="1+0"),
+        ),
+        games_dir=games_dir,
+        starting_fen=fen,
+    )
+    init_and_save_clock(game_id, TimeControl(format="1+0"), games_dir=games_dir)
+    return game_id
+
+
+def test_the_arbiter_ends_the_game_on_time(
+    client: TestClient, tokens: dict, games_dir: Path, wall: Clock
+) -> None:
+    registry.add_player(games_dir, "leader-bot", kind="agent")
+    arbiter = registry.issue_token(games_dir, "leader-bot", label="tests")
+    game_id = _tablier_game(games_dir, chess.STARTING_FEN, arbiter="leader-bot")
+    _move(client, game_id, tokens["stephane"], "e2e4")
+    wall.advance(61)
+    assert _read(client, game_id, arbiter)["flag_fall"] == "black"
+    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "1-0"
+
+
+#: White, king and queen ; Black, king and bishop : Black can no longer mate.
+QUEEN_AGAINST_BISHOP = "2b1k3/8/8/8/8/8/8/3QK3 w - - 0 1"
+
+
+def test_out_of_time_against_no_mating_material_is_a_draw(
+    client: TestClient, tokens: dict, games_dir: Path, wall: Clock
+) -> None:
+    """FIDE 6.9 : White runs out, but a lone king and bishop cannot mate."""
+    game_id = _tablier_game(games_dir, QUEEN_AGAINST_BISHOP)
+    _move(client, game_id, tokens["stephane"], "d1d2")  # starts the clock
+    _move(client, game_id, tokens["bot-maia-1100"], "c8d7")
+    wall.advance(61)
+    assert _read(client, game_id, tokens["stephane"])["flag_fall"] == "white"
+    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "1/2-1/2"
+
+
+def test_out_of_time_against_mating_material_is_lost(
+    client: TestClient, tokens: dict, games_dir: Path, wall: Clock
+) -> None:
+    """FIDE 6.9, the other way : Black runs out against a queen, Black loses."""
+    game_id = _tablier_game(games_dir, QUEEN_AGAINST_BISHOP)
+    _move(client, game_id, tokens["stephane"], "d1d2")
+    wall.advance(61)
+    assert _read(client, game_id, tokens["stephane"])["flag_fall"] == "black"
+    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "1-0"
+
+
+def test_flag_on_a_move_against_no_mating_material_is_a_draw(
+    client: TestClient, tokens: dict, games_dir: Path, wall: Clock
+) -> None:
+    """FIDE 6.9 on the move path too : the flag found when White plays late."""
+    game_id = _tablier_game(games_dir, QUEEN_AGAINST_BISHOP)
+    _move(client, game_id, tokens["stephane"], "d1d2")
+    _move(client, game_id, tokens["bot-maia-1100"], "c8d7")
+    wall.advance(61)
+    _move(client, game_id, tokens["stephane"], "d2d7")  # takes the bishop, too late
+    assert load_clock(game_id, games_dir=games_dir).flag_fall == "white"
+    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "1/2-1/2"
 
 
 def test_no_flag_at_reading_time_once_the_game_is_over(
@@ -218,11 +312,23 @@ async def test_reading_never_ends_an_agents_game_on_time(games_dir: Path, wall: 
 
 @pytest.mark.asyncio
 async def test_mcp_clock_state_settles_a_tablier_flag(
-    client: TestClient, tokens: dict, games_dir: Path, wall: Clock
+    client: TestClient,
+    tokens: dict,
+    games_dir: Path,
+    wall: Clock,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Over MCP too, only a player's (or the arbiter's) token ends the game."""
+    from palamede_chessboard import mcp_chessboard_server
+
     game_id = _game(client, tokens, fmt="1+0")
     _move(client, game_id, tokens["stephane"], "e2e4")
     wall.advance(61)
+    body = _decode(await call_tool("chess_clock_state", {"game_id": game_id}))  # stdio
+    assert body["clock"]["flag_fall"] is None
+    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "*"
+    headers = {"authorization": f"Bearer {tokens['stephane']}"}
+    monkeypatch.setattr(mcp_chessboard_server, "_request_headers", lambda: headers)
     body = _decode(await call_tool("chess_clock_state", {"game_id": game_id}))
     assert body["clock"]["flag_fall"] == "black"
     assert GameState.load(game_id, games_dir=games_dir).metadata.result == "1-0"
