@@ -43,10 +43,11 @@ class TestClockInit:
         assert clock is None
 
     def test_init_from_5_plus_3(self) -> None:
+        # FIDE C.02.03, 3.3.3 (#160) : the increment before the first move.
         clock = ClockState.init_from_time_control("g", TimeControl(format="5+3"))
         assert clock is not None
-        assert clock.white_seconds == 300
-        assert clock.black_seconds == 300
+        assert clock.white_seconds == 303
+        assert clock.black_seconds == 303
         assert clock.increment_seconds == 3
         assert clock.active is None
         assert clock.started is False
@@ -67,19 +68,19 @@ class TestClockProgression:
         clock = self._clock()
         clock.start(now=1000.0)
         clock.on_move_played(mover="white", now=1010.0)  # 10s elapsed
-        # 300 - 10 + 3 = 293
-        assert clock.white_seconds == 293
-        assert clock.black_seconds == 300
+        # 303 - 10 + 3 = 296
+        assert clock.white_seconds == 296
+        assert clock.black_seconds == 303
         assert clock.active == "black"
 
     def test_alternating_moves(self) -> None:
         clock = self._clock()
         clock.start(now=1000.0)
-        clock.on_move_played(mover="white", now=1010.0)  # white -10+3 = 293
-        clock.on_move_played(mover="black", now=1020.0)  # black -10+3 = 293
-        clock.on_move_played(mover="white", now=1025.0)  # white -5+3 = 291
-        assert clock.white_seconds == 291
-        assert clock.black_seconds == 293
+        clock.on_move_played(mover="white", now=1010.0)  # white 303-10+3 = 296
+        clock.on_move_played(mover="black", now=1020.0)  # black 303-10+3 = 296
+        clock.on_move_played(mover="white", now=1025.0)  # white 296-5+3 = 294
+        assert clock.white_seconds == 294
+        assert clock.black_seconds == 296
         assert clock.active == "black"
 
     def test_no_op_when_not_started(self) -> None:
@@ -95,7 +96,7 @@ class TestClockProgression:
         clock.on_move_played(mover="white", now=2000.0)  # 1000s elapsed > 300
         assert clock.flag_fall == "white"
         # #46 (CD 57603) : no Fischer increment once the flag has fallen.
-        assert clock.white_seconds == 300 - 1000
+        assert clock.white_seconds == 303 - 1000
 
     def test_flag_fall_on_black(self) -> None:
         clock = self._clock()
@@ -117,15 +118,15 @@ class TestClockProgression:
         clock = self._clock()
         clock.start(now=1000.0)
         clock.on_move_played(mover="white", now=1025.0, relay_floor=30.0)
-        assert clock.white_seconds == 303.0  # 300 - 0 + 3
+        assert clock.white_seconds == 306.0  # 303 - 0 + 3
 
     def test_relay_floor_charges_overage(self) -> None:
         # 45s wall-time drift with ``relay_floor=30`` → effective 15s
-        # think → 300 - 15 + 3 = 288s.
+        # think → 303 - 15 + 3 = 291s.
         clock = self._clock()
         clock.start(now=1000.0)
         clock.on_move_played(mover="white", now=1045.0, relay_floor=30.0)
-        assert clock.white_seconds == 288.0
+        assert clock.white_seconds == 291.0
 
     def test_relay_floor_zero_keeps_legacy_behavior(self) -> None:
         # Default ``relay_floor=0`` → strict Fischer (every wall-time
@@ -133,14 +134,14 @@ class TestClockProgression:
         clock = self._clock()
         clock.start(now=1000.0)
         clock.on_move_played(mover="white", now=1010.0)
-        assert clock.white_seconds == 293.0  # 300 - 10 + 3
+        assert clock.white_seconds == 296.0  # 303 - 10 + 3
 
     def test_relay_floor_negative_treated_as_zero(self) -> None:
         # Defensive : a negative ``relay_floor`` is clamped to 0.
         clock = self._clock()
         clock.start(now=1000.0)
         clock.on_move_played(mover="white", now=1010.0, relay_floor=-50.0)
-        assert clock.white_seconds == 293.0
+        assert clock.white_seconds == 296.0
 
 
 class TestPersistence:

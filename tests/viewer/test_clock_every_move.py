@@ -75,7 +75,7 @@ def test_first_white_move_starts_the_clock_for_black(
     assert r.status_code == 200
     clock = load_clock(game_id, games_dir=games_dir)
     assert clock.started and clock.active == "black"
-    assert clock.white_seconds == 300
+    assert clock.white_seconds == 303  # 300 + the first increment (#160)
     assert r.json()["clock"]["active"] == "black"
 
 
@@ -90,8 +90,8 @@ def test_viewer_moves_spend_time_and_add_the_increment(
     wall.advance(20)
     assert _move(client, game_id, tokens["stephane"], "g1f3").status_code == 200
     clock = load_clock(game_id, games_dir=games_dir)
-    assert clock.black_seconds == 300 - 10 + 3
-    assert clock.white_seconds == 300 - 20 + 3
+    assert clock.black_seconds == 303 - 10 + 3
+    assert clock.white_seconds == 303 - 20 + 3
     assert clock.active == "black"
 
 
@@ -309,8 +309,8 @@ async def test_mcp_path_uses_the_same_helper_once_started(games_dir: Path, wall:
     wall.advance(20)
     await call_tool("chess_play_move", {"game_id": "mcp-run", "move_san": "e5", "by": "b"})
     clock = load_clock("mcp-run", games_dir=games_dir)
-    assert clock.white_seconds == 300 - 10 + 3
-    assert clock.black_seconds == 300 - 20 + 3
+    assert clock.white_seconds == 303 - 10 + 3
+    assert clock.black_seconds == 303 - 20 + 3
 
 
 @pytest.mark.asyncio

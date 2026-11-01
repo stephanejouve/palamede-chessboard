@@ -31,7 +31,7 @@ async def test_clock_created_with_5_plus_3(games_dir: Path) -> None:
     )
     assert body["status"] == "ok"
     assert body["clock"] is not None
-    assert body["clock"]["white_seconds"] == 300
+    assert body["clock"]["white_seconds"] == 303  # 300 + the first increment (#160)
     assert body["clock"]["increment_seconds"] == 3
     assert body["clock"]["started"] is False
 
