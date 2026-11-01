@@ -7,8 +7,11 @@ on macOS and Linux, ``%APPDATA%\\palamede\\`` on Windows ; ``--config`` or
     viewer = "https://chess.example"
     token_file = "~/.config/palamede/token"
     transport = "auto"
+    opponent = "bot-maia-1100"
+    time_control = "5+3"
 
-It names the token *file*, never the token : a ``token`` key is refused.
+``opponent`` and ``time_control`` are the game the board's gesture opens
+(#167), :data:`NEW_GAME` when the file says nothing. It names the token *file*, never the token : a ``token`` key is refused.
 Options given on the command line win over the file. The file chooses
 where the token is sent : one that another account could change is
 refused (review Admin #124), see :func:`check_rights`.
@@ -18,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 import tomllib
 from pathlib import Path
@@ -26,11 +30,17 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 TRANSPORTS = ("auto", "ble", "usb")
+#: The game the two rooks lifted open (#167), defaults validated by the owner on 01/11.
+NEW_GAME = {"opponent": "bot-maia-1100", "time_control": "5+3"}
+#: The viewer's own clock rule (``POST /api/games``, #126) : ``M+S`` or ``unrated``.
+TIME_CONTROL = re.compile(r"unrated|[0-9]{1,3}\+[0-9]{1,3}")
 #: Key → what it must be ; the text is the error.
 KEYS = {
     "viewer": "the viewer's base URL, a string",
     "token_file": "the path of the file holding the player token, a string",
     "transport": f"one of {', '.join(TRANSPORTS)}",
+    "opponent": "the account of the default opponent, a string",
+    "time_control": "« M+S » (minutes and increment seconds, 5+3) or « unrated »",
 }
 
 
@@ -110,9 +120,16 @@ def load(path: Path, *, named: bool = False) -> dict[str, Any]:
         settings[key] = value.strip()
     if settings.get("transport", "auto") not in TRANSPORTS:
         raise SystemExit(f"{path} : transport must be {KEYS['transport']}")
+    if not TIME_CONTROL.fullmatch(settings.get("time_control", "unrated")):
+        raise SystemExit(f"{path} : time_control must be {KEYS['time_control']}")
     if "token_file" in settings:
         token_file = Path(settings["token_file"]).expanduser()
         settings["token_file"] = (
             token_file if token_file.is_absolute() else path.parent / token_file
         )
     return settings
+
+
+def new_game(settings: dict[str, Any]) -> dict[str, str]:
+    """The opponent and the clock of the gesture's game (#167) : the file's, else :data:`NEW_GAME`."""
+    return {key: settings.get(key, default) for key, default in NEW_GAME.items()}

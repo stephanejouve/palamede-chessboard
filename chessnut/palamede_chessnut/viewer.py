@@ -35,6 +35,38 @@ def post(url: str, token: str, payload: dict[str, Any] | None = None) -> tuple[i
     The token travels in an unredirected header : even a redirect that
     some other opener followed would not carry it (review Admin #71).
     """
+    try:
+        with _OPENER.open(_post_request(url, token, payload), timeout=10) as response:
+            return int(response.status), ""
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.read().decode("utf-8", "replace")[:200]
+    except OSError as exc:
+        return None, str(exc)
+
+
+def post_json(url: str, token: str, payload: dict[str, Any]) -> tuple[int | None, Any]:
+    """:func:`post` that reads the answer : ``(status, JSON body or None)``, a refusal's too.
+
+    A refusal's body is the viewer's ``{"detail": ...}`` : what to tell the player.
+    A 2xx whose body is unreadable keeps its status : the server did act.
+    """
+    try:
+        with _OPENER.open(_post_request(url, token, payload), timeout=10) as response:
+            return int(response.status), _body(response)
+    except urllib.error.HTTPError as exc:
+        return exc.code, _body(exc)
+    except (OSError, http.client.HTTPException):
+        return None, None
+
+
+def _body(response: Any) -> Any:
+    try:
+        return json.load(response)
+    except (OSError, ValueError, http.client.HTTPException):
+        return None
+
+
+def _post_request(url: str, token: str, payload: dict[str, Any] | None) -> urllib.request.Request:
     request = urllib.request.Request(
         url,
         data=json.dumps(payload or {}).encode("utf-8"),
@@ -42,13 +74,7 @@ def post(url: str, token: str, payload: dict[str, Any] | None = None) -> tuple[i
         method="POST",
     )
     request.add_unredirected_header("Authorization", f"Bearer {token}")
-    try:
-        with _OPENER.open(request, timeout=10) as response:
-            return int(response.status), ""
-    except urllib.error.HTTPError as exc:
-        return exc.code, exc.read().decode("utf-8", "replace")[:200]
-    except OSError as exc:
-        return None, str(exc)
+    return request
 
 
 def get_with_token(url: str, token: str, timeout: float = 10) -> tuple[int | None, Any]:

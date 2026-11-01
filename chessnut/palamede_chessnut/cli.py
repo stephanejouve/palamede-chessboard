@@ -5,7 +5,8 @@
 ``--viewer``, ``--token-file`` and ``--transport`` may come from the
 per-user file of :mod:`palamede_chessnut.config` instead (#90). Without
 ``--game``, the token's newest game in progress ; without ``--color``, the
-side its account plays there (:mod:`palamede_chessnut.launch`). The player token (the one behind the viewer's 🔑 button) is read from
+side its account plays there (:mod:`palamede_chessnut.launch`). The app on
+a board starts without any, in a lobby (:mod:`palamede_chessnut.lobby`). The player token (the one behind the viewer's 🔑 button) is read from
 ``--token-file`` (readable by its owner only, under the user profile on
 Windows) or ``PALAMEDE_PLAYER_TOKEN`` ;
 it is never logged. The bridge exits by itself once the game is over and
@@ -26,6 +27,7 @@ import chess
 
 from palamede_chessnut import config, launch
 from palamede_chessnut.bridge import Bridge
+from palamede_chessnut.lobby import Lobby
 
 
 def check_viewer_url(url: str) -> None:
@@ -106,15 +108,28 @@ def bridge_from_args(argv: list[str] | None, description: str, *, app: bool = Fa
         )
     args = parser.parse_args(argv)
     check_viewer_url(args.viewer)
-    token = read_token(args.token_file)
-    # Only what the command line does not say is asked of the viewer (#90).
-    game = args.game or launch.newest_game(args.viewer, launch.account_of_token(args.viewer, token))
+    return _bridge(args, read_token(args.token_file), config.new_game(settings), app=app)
+
+
+def _bridge(args: argparse.Namespace, token: str, new_game: dict[str, str], *, app: bool) -> Bridge:
+    """The game's bridge ; without a game in progress, the app's board waits in a lobby (#167)."""
+    with_board = not getattr(args, "no_board", False)
+    game = args.game
+    if game is None:
+        # Only what the command line does not say is asked of the viewer (#90).
+        account = launch.account_of_token(args.viewer, token)
+        game = launch.newest_game(args.viewer, account)
+        if game is None:
+            if not (app and with_board):
+                raise SystemExit(launch.NO_GAME.format(account=account))
+            lobby = Lobby(args.viewer, token, board_transport=args.transport, new_game=new_game)
+            lobby.account, lobby.token_light = account, "on"  # /api/me knows the token
+            return lobby
     if args.color:
         player = chess.WHITE if args.color == "white" else chess.BLACK
     else:
         player = launch.seat_color(args.viewer, game, token)
-    with_board = not getattr(args, "no_board", False)
-    return Bridge(
+    bridge = Bridge(
         args.viewer,
         game,
         player,
@@ -122,6 +137,8 @@ def bridge_from_args(argv: list[str] | None, description: str, *, app: bool = Fa
         with_board=with_board,
         board_transport=args.transport,
     )
+    bridge.new_game = new_game
+    return bridge
 
 
 def main(argv: list[str] | None = None) -> None:

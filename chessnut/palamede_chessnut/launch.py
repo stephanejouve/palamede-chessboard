@@ -5,7 +5,8 @@ truth about it, review Admin and Leader #90), the game is the account's
 newest in progress (``GET /api/games?player=``, newest first), and the side
 is the one the account holds in it (``/seat``, as « Fichier ▸ Ouvrir »).
 Another game is then chosen in the window. Each failure exits with what to
-do : no game is ever guessed past a refusal.
+do : no game is ever guessed past a refusal. No game in progress at all :
+the app on a board waits for one in a lobby (#167), the rest exits.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from palamede_chessnut.games import GAME_ID, chosen_color, player_games
 
 UNREACHABLE = "{viewer} does not answer : check the URL, or retry in a moment"
 REFUSED = "the viewer refuses the player token (HTTP {status}) : check the token file"
+NO_GAME = "no game in progress for {account} : start one, or give --game"
 
 
 def account_of_token(viewer_url: str, token: str) -> str:
@@ -36,8 +38,8 @@ def account_of_token(viewer_url: str, token: str) -> str:
     return account
 
 
-def newest_game(viewer_url: str, account: str) -> str:
-    """The account's newest game in progress ; exits when there is none."""
+def newest_game(viewer_url: str, account: str) -> str | None:
+    """The account's newest game in progress, ``None`` when there is none ; exits if unreadable."""
     entries = player_games(viewer_url, account)
     if entries is None:
         raise SystemExit(UNREACHABLE.format(viewer=viewer_url))
@@ -45,7 +47,7 @@ def newest_game(viewer_url: str, account: str) -> str:
         # The viewer's own rule : a name it could not have given is skipped.
         if GAME_ID.fullmatch(entry["game_id"]):
             return entry["game_id"]
-    raise SystemExit(f"no game in progress for {account} : start one, or give --game")
+    return None
 
 
 def seat_color(viewer_url: str, game_id: str, token: str) -> chess.Color:

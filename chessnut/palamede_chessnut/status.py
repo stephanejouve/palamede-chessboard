@@ -35,11 +35,12 @@ class RecentLog(logging.Handler):
 def sync_light(bridge: Bridge) -> str:
     """``"waiting"`` (no game or board yet), ``"on"`` (the board matches), ``"fixing"``.
 
-    ``"none"`` without a board (#92) : nothing to keep in step.
+    ``"none"`` without a board (#92) : nothing to keep in step. A lobby (#167)
+    compares nothing : its board waits for a gesture, not for a position.
     """
     if not bridge.with_board:
         return "none"
-    if bridge.game is None or bridge.observed is None:
+    if bridge.game is None or bridge.observed is None or bridge.lobby_text() is not None:
         return "waiting"
     if bridge.observed.board_fen() == bridge.game.board_fen():
         return "on"
@@ -193,12 +194,15 @@ def _said(before: chess.Board, move: chess.Move) -> str:
 def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
     """The JSON document behind the page's ``/state``."""
     game, observed = bridge.game, bridge.observed
+    lobby = bridge.lobby_text()
+    # A lobby's board is not the game's : nothing to set up (#167).
+    compared = game is not None and observed is not None and lobby is None
     differing = (
         sorted(
             chess.square_name(s)
             for s in differing_squares(chess.BaseBoard(game.board_fen()), observed)
         )
-        if game is not None and observed is not None
+        if compared and game is not None and observed is not None
         else []
     )
     dests, promotions = legal_targets(bridge)
@@ -218,9 +222,11 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
         "differing": differing,
         "setup": (
             setup_steps(chess.BaseBoard(game.board_fen()), observed)
-            if game is not None and observed is not None
+            if compared and game is not None and observed is not None
             else None
         ),
+        # No game on the board : the gesture that opens one (#167).
+        "lobby": lobby,
         "captured": captured(bridge.history, bridge.start_fen) if game is not None else None,
         # Mouse play (#92) : what the page may play now, empty with a board.
         "mouse": not bridge.with_board,

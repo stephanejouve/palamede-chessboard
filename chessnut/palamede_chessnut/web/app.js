@@ -277,6 +277,8 @@ function renderClocks(clock, color) {
 }
 
 function statusText(state) {
+  // No game on the board : how to open one, the countdown, a refusal (#167).
+  if (state.lobby) return state.lobby;
   if (!state.fen) return 'En attente de la partie…';
   if (state.finished || (state.mouse && !state.live)) return 'Partie terminée.';
   if (!state.live) return 'Partie terminée : remettez la position finale sur l\'échiquier.';

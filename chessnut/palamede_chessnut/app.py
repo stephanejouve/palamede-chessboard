@@ -51,7 +51,8 @@ def run_bridge(bridge: Bridge) -> None:
 
 
 def title(bridge: Bridge) -> str:
-    return f"Échiquier — {bridge.game_id}"
+    # A lobby without a game (#167) has no name to show.
+    return f"Échiquier — {bridge.game_id}" if bridge.game_id else "Échiquier"
 
 
 def save_dialog(webview: Any, window: Any) -> AskPath:
