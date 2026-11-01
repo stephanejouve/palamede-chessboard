@@ -242,10 +242,10 @@ function renderBalance(taken) {
 }
 
 // m:ss, h:mm:ss beyond an hour, tenths under ten seconds (#135).
+// m:ss, h:mm:ss past an hour ; no tenths, as the FIDE Laws (owner, #147).
+// Rounded up : 0:00 shows only once the flag has fallen. The same as the viewer's.
 function clockText(seconds) {
-  const s = Math.max(seconds, 0);
-  if (s < 10) return s.toFixed(1);
-  const whole = Math.floor(s);
+  const whole = Math.max(Math.ceil(seconds), 0);
   const h = Math.floor(whole / 3600);
   const m = Math.floor((whole % 3600) / 60);
   const ss = String(whole % 60).padStart(2, '0');
