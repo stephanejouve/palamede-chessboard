@@ -59,8 +59,11 @@ class Server:
         return self.answer
 
 
-def new_lobby(**kwargs) -> Lobby:
-    return Lobby(VIEWER, TOKEN, **kwargs)
+def new_lobby(*, armed: bool = True, **kwargs) -> Lobby:
+    """A lobby ; ``armed`` : the whole starting position has stood on its board."""
+    board = Lobby(VIEWER, TOKEN, **kwargs)
+    board.armed = armed
+    return board
 
 
 # ---- the gesture ----------------------------------------------------------
@@ -129,7 +132,44 @@ async def test_the_rooks_back_before_5_s_cancel(monkeypatch) -> None:
     held(board, chess.BaseBoard(), 10)
     await board.tick(write)
     assert server.posts == [] and board.leds == frozenset()
-    assert board.lobby_text().startswith("Aucune partie : levez a1+h1")
+    assert board.lobby_text() == "Aucune partie : " + lobby.HINT
+
+
+async def test_pieces_set_up_with_the_rooks_last_open_nothing(monkeypatch) -> None:
+    server = Server(monkeypatch)
+    board, write = new_lobby(armed=False), Board()
+    held(board, lifted(chess.A1, chess.H1, chess.D1), 1)  # setting up
+    await board.tick(write)
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS + 1)  # only the rooks left
+    await board.tick(write)
+    assert server.posts == [] and board.counting is None
+    assert board.leds == frozenset()
+
+
+async def test_from_the_whole_start_one_rook_then_the_other(monkeypatch) -> None:
+    server = Server(monkeypatch)
+    board, write = new_lobby(armed=False), Board()
+    for placement, seconds in [
+        (chess.BaseBoard(), 1),
+        (lifted(chess.H8), 0.5),
+        (lifted(chess.A8, chess.H8), GESTURE_SECONDS),
+    ]:
+        held(board, placement, seconds)
+        await board.tick(write)
+    assert [payload["color"] for _url, _token, payload in server.posts] == ["black"]
+
+
+async def test_another_piece_moved_needs_the_whole_start_again(monkeypatch) -> None:
+    server = Server(monkeypatch)
+    board, write = new_lobby(armed=False), Board()
+    for placement, seconds in [
+        (chess.BaseBoard(), 1),
+        (lifted(chess.E2), 1),
+        (lifted(chess.A1, chess.H1), GESTURE_SECONDS),
+    ]:
+        held(board, placement, seconds)
+        await board.tick(write)
+    assert server.posts == [] and not board.armed
 
 
 async def test_the_chaser_then_the_window_moves_to_the_new_game(monkeypatch) -> None:
@@ -179,7 +219,7 @@ async def test_a_game_opened_but_not_shown_is_said(monkeypatch) -> None:
         (422, "not a dict", lobby.REFUSALS[422]),
         (500, None, "Partie non créée (HTTP 500)."),
         (None, None, NO_SERVER),
-        (200, {"status": "ok"}, "Partie non créée (HTTP 200)."),  # no game_id : nothing to open
+        (200, {"status": "ok"}, lobby.UNREADABLE),  # no game_id : maybe opened, nothing to open
     ],
 )
 async def test_a_refusal_is_said_without_a_light(monkeypatch, status, body, said) -> None:

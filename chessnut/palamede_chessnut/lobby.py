@@ -9,6 +9,9 @@ viewer's ``POST /api/games`` (#126) with the player's token.
 
 * a1 + h1 lifted : White ; a8 + h8 lifted : Black. No legal move takes two
   rooks off at once, and resigning lifts the king alone ;
+* the whole starting position must have stood on the board first : pieces
+  set up with the rooks last pass through « start without a1 + h1 », which
+  opens nothing (review Junior and Admin #170) ;
 * while the gesture holds, the two squares blink ; once the game is opened,
   a light runs along the player's back rank, then the window moves to the
   new game the way « Ouvrir une partie » does (#90, #121) ;
@@ -42,33 +45,56 @@ GESTURES = {
     chess.BLACK: (chess.A8, chess.H8),
 }
 SIDES = {chess.WHITE: "Blancs", chess.BLACK: "Noirs"}
-HINT = "levez a1+h1 (Blancs) ou a8+h8 (Noirs) pendant 5 s pour une nouvelle partie."
+HINT = (
+    "pièces en position de départ, levez a1+h1 (Blancs) ou a8+h8 (Noirs) pendant 5 s "
+    "pour une nouvelle partie."
+)
 #: HTTP status → what the window says when the server's own words are missing.
 REFUSALS = {
     401: "Jeton refusé par le serveur : partie non créée.",
     422: "Le serveur refuse l'adversaire ou la cadence : partie non créée.",
     429: "Trop de parties en cours : terminez-en une d'abord.",
 }
-NO_SERVER = "Le serveur ne répond pas : partie non créée, reposez les tours et réessayez."
+#: No answer, or one without the game : the server may have opened it (review Admin #170).
+NO_SERVER = (
+    "Le serveur n'a pas répondu : la partie a peut-être été créée, "
+    "voyez « Ouvrir… » avant de réessayer."
+)
+UNREADABLE = "Réponse du serveur illisible : la partie a peut-être été créée, voyez « Ouvrir… »."
 #: Told the new game : ``(HTTP status, message)``, as :meth:`.games.Session.open_game`.
 OnCreated = Callable[[str], tuple[int, str]]
+
+
+def _without(squares: tuple[chess.Square, ...]) -> chess.BaseBoard:
+    start = chess.BaseBoard()
+    for square in squares:
+        start.remove_piece_at(square)
+    return start
 
 
 def gesture_side(observed: chess.BaseBoard) -> chess.Color | None:
     """The side whose two rooks are lifted off the starting position, else ``None``."""
     for side, squares in GESTURES.items():
-        start = chess.BaseBoard()
-        for square in squares:
-            start.remove_piece_at(square)
-        if observed == start:
+        if observed == _without(squares):
             return side
     return None
+
+
+def on_the_way(observed: chess.BaseBoard) -> bool:
+    """The starting position, or one or both rooks of one side lifted : the gesture's states."""
+    return any(
+        observed == _without(lifted)
+        for squares in GESTURES.values()
+        for lifted in ((), squares[:1], squares[1:], squares)
+    )
 
 
 def refusal(status: int | None, body: Any) -> str:
     """What the window says of a game the server did not open."""
     if status is None:
         return NO_SERVER
+    if 200 <= status < 300:
+        return UNREADABLE
     detail = body.get("detail") if isinstance(body, dict) else None
     if isinstance(detail, str) and detail:
         return f"Partie non créée : {detail}"
@@ -113,6 +139,8 @@ class Lobby(Bridge):
         self.created: str | None = None
         self.counting: chess.Color | None = None
         self.refused_text: str | None = None
+        #: The whole starting position stood on the board since the last other placement.
+        self.armed = False
 
     def lobby_text(self) -> str | None:
         if self.created is not None:
@@ -141,7 +169,11 @@ class Lobby(Bridge):
             return
         if self.observed is None or self.creating or self.created is not None:
             return
-        side = gesture_side(self.observed)
+        if self.observed == chess.BaseBoard():
+            self.armed = True
+        elif not on_the_way(self.observed):
+            self.armed = False
+        side = gesture_side(self.observed) if self.armed else None
         if side is None or self.tried == self.settled_since:
             if side is None:
                 self.refused_text = None  # the rooks are back : a new try may come
