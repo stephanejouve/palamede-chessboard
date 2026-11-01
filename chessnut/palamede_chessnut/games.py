@@ -112,8 +112,10 @@ class Session:
         with self.lock:
             self.closed = True
             self.stop()
-            if self.bridge.with_board:
-                clock_hold.declare(self.bridge, False)
+            bridge = self.bridge
+        # Outside the lock : the viewer may take up to 10 s to answer (review Admin #166).
+        if bridge.with_board:
+            clock_hold.declare(bridge, False)
 
     def games(self) -> tuple[int, dict[str, Any]]:
         """``(HTTP status, body)`` for the page's list."""

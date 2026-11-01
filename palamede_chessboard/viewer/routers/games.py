@@ -37,6 +37,7 @@ from palamede_chessboard.clock_moves import (
     game_lock,
     release_on_sync,
 )
+from palamede_chessboard.players import registry
 from palamede_chessboard.players.observe import authorize_move, roles_of
 from palamede_chessboard.viewer.games_query import (
     DEFAULT_LIMIT,
@@ -138,10 +139,22 @@ def build_games_router() -> APIRouter:
 def board_of_token(game_id: str, payload: BoardPayload, request: Request) -> dict:
     """The token's bridge plays on an eBoard, or no longer does (#164).
 
-    Either player of the game may say it, for their own side(s) only.
+    Either player of the game may say it, for their own side(s) only. Only a
+    human plays on a board : an agent or a bot declaring one would only win
+    the hold at every move (review Admin and Junior #166), 403. Leaving the
+    board is open to all.
     """
-    colors = seat_of_token(game_id, request)["colors"]
-    declare_board(game_id, colors, payload.board, _games_dir())
+    gdir = _games_dir()
+    seat = seat_of_token(game_id, request)
+    if payload.board:
+        try:
+            kind = registry.load(gdir)["players"].get(seat["player"], {}).get("kind")
+        except registry.RegistryError as exc:
+            raise HTTPException(503, "Registre des joueurs illisible") from exc
+        if kind != "human":
+            raise HTTPException(403, "Seul un joueur humain joue sur un eBoard")
+    colors = seat["colors"]
+    declare_board(game_id, colors, payload.board, gdir)
     return {"status": "ok", "board": payload.board, "colors": colors}
 
 

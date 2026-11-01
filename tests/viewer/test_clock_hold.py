@@ -155,3 +155,19 @@ def test_a_clock_saved_before_the_hold_still_loads(games_dir: Path) -> None:
     (games_dir / "clock_old.json").write_text(json.dumps(saved))
     clock = load_clock("old", games_dir=games_dir)
     assert isinstance(clock, ClockState) and clock.board_sides == [] and not clock.held
+
+
+def test_only_a_human_declares_a_board(
+    client: TestClient, tokens: dict, games_dir: Path, wall: Clock
+) -> None:
+    """A bot or an agent has no eBoard : declaring one would only win 20 s a move (#166)."""
+    game_id = _game(client, tokens)
+    r = _post(client, game_id, "board", tokens["bot-maia-1100"], {"board": True})
+    assert r.status_code == 403
+    assert load_clock(game_id, games_dir=games_dir).board_sides == []
+    _move(client, game_id, tokens["stephane"], "e2e4")
+    assert not load_clock(game_id, games_dir=games_dir).held  # Maia to move : nothing held
+    assert (
+        _post(client, game_id, "board", tokens["bot-maia-1100"], {"board": False}).status_code
+        == 200
+    )
