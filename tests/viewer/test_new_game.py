@@ -192,7 +192,7 @@ def test_time_control_takes_no_other_field(
     assert _pgns(games_dir) == []
 
 
-@pytest.mark.parametrize(("fmt", "seconds"), [("1+0", 60), ("15+10", 900), ("180+180", 10800)])
+@pytest.mark.parametrize(("fmt", "seconds"), [("1+0", 60), ("15+10", 910), ("180+180", 10980)])
 def test_bounded_time_control_is_kept(
     client: TestClient, tokens: dict, games_dir: Path, fmt: str, seconds: int
 ) -> None:

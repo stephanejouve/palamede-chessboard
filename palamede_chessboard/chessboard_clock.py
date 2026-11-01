@@ -7,6 +7,9 @@ clock is a thin wrapper around two countdowns (white / black) plus an
 * Initialisation parses :class:`TimeControl` ``format`` strings of the
   form ``"M+S"`` (minutes base + per-move increment in seconds).
   ``unrated`` and unparseable values disable the clock.
+* Each side starts with ``start + increment`` : the Fischer increment is
+  added before the first move (FIDE C.02.03, 3.3.3 ; #160), so a 90+30
+  clock reads 90:30 at the start.
 * On each move the active player loses ``now - last_move_ts`` seconds
   then gains ``increment_seconds``. If they would go negative, the
   result tag flips to ``"OUT_OF_TIME"`` and the move is *still* recorded
@@ -75,15 +78,19 @@ class ClockState:
 
     @classmethod
     def init_from_time_control(cls, game_id: str, tc: TimeControl) -> ClockState | None:
-        """Build a fresh clock from a :class:`TimeControl`, or ``None``."""
+        """Build a fresh clock from a :class:`TimeControl`, or ``None``.
+
+        Both sides get the increment before the first move (FIDE C.02.03,
+        3.3.3 ; #160). Clocks already saved keep their values.
+        """
         parsed = parse_time_control(tc)
         if parsed is None:
             return None
         start, increment = parsed
         return cls(
             game_id=game_id,
-            white_seconds=float(start),
-            black_seconds=float(start),
+            white_seconds=float(start + increment),
+            black_seconds=float(start + increment),
             increment_seconds=increment,
         )
 

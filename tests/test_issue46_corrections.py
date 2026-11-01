@@ -30,21 +30,21 @@ def _clock() -> ClockState:
 def test_no_increment_when_black_flag_falls() -> None:
     clock = _clock()
     clock.on_move_played(mover="white", now=1001.0)
-    clock.on_move_played(mover="black", now=1400.0)  # 399 s > 300
+    clock.on_move_played(mover="black", now=1400.0)  # 399 s > 303
     assert clock.flag_fall == "black"
-    assert clock.black_seconds == 300 - 399
+    assert clock.black_seconds == 303 - 399
 
 
 def test_flag_exactly_at_zero_gets_no_increment() -> None:
     clock = _clock()
-    clock.on_move_played(mover="white", now=1300.0)  # exactly 300 s
+    clock.on_move_played(mover="white", now=1303.0)  # exactly 303 s (#160)
     assert clock.flag_fall == "white"
     assert clock.white_seconds == 0
 
 
 def test_increment_still_applies_in_time() -> None:
     clock = _clock()
-    clock.on_move_played(mover="white", now=1299.0)  # 1 s left
+    clock.on_move_played(mover="white", now=1302.0)  # 1 s left
     assert clock.flag_fall is None
     assert clock.white_seconds == 1 + 3
 

@@ -24,7 +24,7 @@ class TestClock:
         r = client.get("/api/clock?game_id=viewer-test&viewer=spectator")
         body = r.json()
         assert body["clock"] is not None
-        assert body["clock"]["white_seconds"] == 300
+        assert body["clock"]["white_seconds"] == 303  # 300 + 3 (#160)
         assert body["viewer"] == "spectator"
 
     def test_clock_unrated_returns_null(self, client: TestClient, games_dir: Path) -> None:
