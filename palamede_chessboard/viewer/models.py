@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 import chess
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from palamede_chessboard.chessboard_state import GAMES_DIR, GameState
 
@@ -94,6 +94,20 @@ class CommentaryPayload(BaseModel):
     ply: int
     source: str
     text: str
+
+
+class BoardPayload(BaseModel):
+    """``POST /api/games/<id>/board`` : the bridge plays on an eBoard, or not (#164)."""
+
+    model_config = ConfigDict(extra="forbid")
+    board: StrictBool
+
+
+class SyncedPayload(BaseModel):
+    """``POST /api/games/<id>/synced`` : the eBoard shows this placement (#164)."""
+
+    model_config = ConfigDict(extra="forbid")
+    fen: str = Field(max_length=100)
 
 
 class MovePayload(BaseModel):
