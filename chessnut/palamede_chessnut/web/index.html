@@ -24,14 +24,18 @@
   <!-- The clocks face their sides, as on a club table (#135) : the opponent's
        level with the top of the board, the player's with its bottom. -->
   <p class="clock" id="clock-top" hidden><span class="who"></span><span class="time"></span></p>
-  <div id="board"></div>
-  <!-- The promotion, as on lichess (#150) : four pieces on the square reached. -->
-  <div id="promo" class="cg-wrap" role="dialog" aria-label="Promotion" hidden></div>
+  <!-- The board and its tray in one column : the tray stays under the board
+       however tall the side panel grows (smoke of Stéphane, 01/11). -->
+  <div id="stage">
+    <div id="board"></div>
+    <!-- The promotion, as on lichess (#150) : four pieces on the square reached. -->
+    <div id="promo" class="cg-wrap" role="dialog" aria-label="Promotion" hidden></div>
+    <section id="tray" aria-label="Mise en place" hidden>
+      <p id="differing"></p>
+      <p id="balance" hidden></p>
+    </section>
+  </div>
   <p class="clock" id="clock-bottom" hidden><span class="who"></span><span class="time"></span></p>
-  <section id="tray" aria-label="Mise en place" hidden>
-    <p id="differing"></p>
-    <p id="balance" hidden></p>
-  </section>
   <section id="side">
     <section id="picker" aria-labelledby="picker-title" hidden>
       <h2 id="picker-title">Ouvrir une partie</h2>
