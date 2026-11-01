@@ -43,5 +43,13 @@ def test_the_wide_grid_has_no_row_of_its_own_for_the_tray() -> None:
     wide = re.search(r"main \{\s*display: grid;(.*?)\}", css, re.S)
     assert wide is not None
     assert "tray" not in wide.group(1) and '"stage ctop"' in wide.group(1)
-    # Stacked on a narrow window, the column dissolves : clock, then tray.
+    # The column is the board's height : the tray hangs out of the flow, so the
+    # player's clock stays level with the board's bottom (review Admin #171).
+    stage = re.search(r"#stage \{(.*?)\}", css, re.S)
+    tray = re.search(r"#stage > #tray \{(.*?)\}", css, re.S)
+    assert stage is not None and tray is not None
+    assert '"tray"' not in stage.group(1) and "position: relative" in stage.group(1)
+    assert "position: absolute" in tray.group(1) and "top: calc(100% + 10px)" in tray.group(1)
+    # Stacked on a narrow window, the column dissolves : clock, then tray, in the flow.
     assert "#stage { display: contents; }" in css
+    assert "#stage > #tray { grid-area: tray; position: static; }" in css

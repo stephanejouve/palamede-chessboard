@@ -88,12 +88,22 @@ main {
   gap: 10px 16px;
   align-items: start;
 }
+/* The column is the board's height only : the tray hangs under it, out of the
+   flow, or the player's clock (bottom of the cbot row) would sink to the tray's
+   bottom at each material balance (review Admin #171, #135). */
 #stage {
   grid-area: stage;
   min-width: 0;
+  position: relative;
   display: grid;
-  grid-template-areas: "board" "tray";
-  gap: 10px;
+  grid-template-areas: "board";
+}
+#stage > #tray {
+  grid-area: auto;  /* no « tray » area in #stage : placed against its padding box */
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  right: 0;
 }
 @media (max-width: 760px) {
   main {
@@ -103,6 +113,7 @@ main {
   }
   /* Stacked : the player's clock right under the board, then the tray. */
   #stage { display: contents; }
+  #stage > #tray { grid-area: tray; position: static; }
 }
 /* Square by padding, not aspect-ratio : with aspect-ratio, the app's window on macOS
    Big Sur (Safari 16.6.1 installed) drew a board of zero height, cause not found
