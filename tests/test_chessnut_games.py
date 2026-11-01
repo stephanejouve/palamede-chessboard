@@ -476,3 +476,125 @@ def test_the_page_shows_the_sessions_bridge_whatever_it_was_told(page) -> None:
     state = json.loads(request(page, "GET", "/state")[1])
     assert (state["game_id"], state["color"]) == ("009", "black")
     assert page.bridge is other
+
+
+# ---- the « Échiquier » switch (#152) ----------------------------------------
+
+
+def wait_running(session: Session, bridge: Bridge) -> None:
+    for _ in range(50):
+        if session.runs and session.runs[-1] is bridge:
+            return
+        threading.Event().wait(0.02)
+    raise AssertionError("the new bridge never ran")
+
+
+@pytest.mark.parametrize("transport", ["usb", "ble"])
+def test_the_switch_replaces_the_bridge_on_the_same_game(transport: str) -> None:
+    runs = Runs()
+    changes: list[Bridge] = []
+    old = Bridge(
+        "https://viewer.test",
+        "008d",
+        chess.BLACK,
+        TOKEN,
+        with_board=True,
+        board_transport=transport,
+    )
+    board_session = Session(old, runs, changes.append)
+    board_session.runs = runs  # type: ignore[attr-defined]
+    board_session.start()
+    try:
+        assert board_session.switch_board(False) == (200, "")
+        mouse = board_session.bridge
+        assert old.stopped.is_set() and not mouse.stopped.is_set()
+        assert (mouse.game_id, mouse.player, mouse.viewer, mouse._token) == (
+            "008d",
+            chess.BLACK,
+            old.viewer,
+            TOKEN,
+        )
+        assert (mouse.with_board, mouse.board_transport) == (False, transport)
+        wait_running(board_session, mouse)
+        assert board_session.switch_board(True) == (200, "")
+        board = board_session.bridge
+        assert mouse.stopped.is_set()
+        assert (board.with_board, board.board_transport) == (True, transport)
+        assert changes == [mouse, board]
+    finally:
+        board_session.stop()
+
+
+def test_the_switch_asks_nothing_of_the_server(session, monkeypatch) -> None:
+    """The same game, the same side : no /seat (it would be a request for nothing)."""
+    asked = answer_seat(monkeypatch, 200, {"colors": ["white"]})
+    assert session.switch_board(True) == (200, "")
+    assert asked == []
+
+
+def test_the_switch_to_the_mode_in_use_changes_nothing(session) -> None:
+    old = session.bridge
+    assert session.switch_board(False) == (200, "")
+    assert session.bridge is old and not old.stopped.is_set()
+    assert session.changes == []
+
+
+def test_no_switch_while_the_bridge_still_holds_the_board(session, monkeypatch) -> None:
+    """The guard of #121 holds for the switch : never two bridges on one board."""
+    old = session.bridge
+    release = threading.Event()
+    stuck = threading.Thread(target=release.wait, args=(5,), daemon=True)
+    stuck.start()
+    session.worker = stuck
+    monkeypatch.setattr(games, "STOP_SECONDS", 0.05)
+    assert session.switch_board(True) == (503, games.BOARD_BUSY)
+    assert session.bridge is old and session.changes == []
+    release.set()
+    stuck.join(1)
+
+
+def test_no_switch_once_the_window_closes(session) -> None:
+    session.close()
+    assert session.switch_board(True) == (503, games.CLOSING)
+    assert session.changes == []
+
+
+BOARD = json.dumps({"mode": "board"}).encode()
+
+
+def test_the_page_switches_to_the_board(page) -> None:
+    assert json.loads(request(page, "GET", "/state")[1])["mouse"] is True
+    status, body = request(page, "POST", "/board", BOARD, **good_headers(page))
+    assert (status, json.loads(body)) == (200, {"ok": True})
+    state = json.loads(request(page, "GET", "/state")[1])
+    assert (state["mouse"], state["can_switch"], state["game_id"]) == (False, True, "008d")
+
+
+@pytest.mark.parametrize("body", [b'{"mode": "both"}', b'{"mode": true}', b'{"game_id": "009"}'])
+def test_the_switch_needs_a_mode(page, body: bytes) -> None:
+    old = page.bridge
+    status, answer = request(page, "POST", "/board", body, **good_headers(page))
+    assert (status, json.loads(answer)) == (400, {"error": "mode illisible"})
+    assert page.bridge is old
+
+
+@pytest.mark.parametrize(
+    ("change", "status"),
+    [({"X-Palamede-Nonce": None}, 403), ({"Origin": "https://evil.test"}, 403)],
+)
+def test_the_switch_needs_the_page(page, change: dict, status: int) -> None:
+    old = page.bridge
+    headers = {k: v for k, v in {**good_headers(page), **change}.items() if v}
+    assert request(page, "POST", "/board", BOARD, **headers)[0] == status
+    assert page.bridge is old
+
+
+def test_without_a_session_there_is_no_switch() -> None:
+    server = PageServer(running_bridge(), RecentLog())
+    server.start()
+    try:
+        assert request(server, "POST", "/board", BOARD, **good_headers(server))[0] == 404
+        assert json.loads(request(server, "GET", "/state")[1])["can_switch"] is False
+    finally:
+        server.shutdown()
+        server.server_close()

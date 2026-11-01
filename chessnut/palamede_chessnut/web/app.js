@@ -41,6 +41,9 @@ let lastGame = null;
 let openRequests = null;
 // « Enregistrer… » only in the app, which has a native dialog (#134).
 let canSave = false;
+// The « Échiquier » switch (#152) : the mode shown, null before the first state.
+let lastMouse = null;
+let switching = false;
 
 // Squares to fix : a red LED in the corner, as on the eBoard (review of
 // Stéphane, 28/10), rather than drawn circles. Set only when they change.
@@ -402,6 +405,7 @@ function render(state) {
     renderMoves(state.history, state.first_ply);
   }
   renderMouse(state);
+  renderSwitch(state);
   renderLeds(state.differing);
   setLight('bluetooth', state.lights.bluetooth);
   el('light-bluetooth').textContent = state.transport === 'usb' ? 'USB' : 'Bluetooth';
@@ -454,6 +458,40 @@ function flipBoard() {
 }
 
 el('flip-btn').addEventListener('click', flipBoard);
+
+// The « Échiquier » switch (#152), in the app only : the bridge is replaced
+// on the same game, with the board or with the mouse.
+function renderSwitch(state) {
+  lastMouse = state.mouse;
+  const button = el('board-btn');
+  button.hidden = !state.can_switch;
+  button.setAttribute('aria-pressed', String(!state.mouse));
+  button.title = state.mouse ? 'Jouer sur l\'échiquier' : 'Jouer à la souris';
+}
+
+async function switchBoard() {
+  if (switching || lastMouse === null) return;
+  switching = true;
+  cancelPromotion();
+  showMoveError('');
+  try {
+    const response = await fetch('/board', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Palamede-Nonce': NONCE },
+      body: JSON.stringify({ mode: lastMouse ? 'board' : 'mouse' }),
+    });
+    if (!response.ok) {
+      const answer = await response.json().catch(() => ({ error: `réponse illisible (HTTP ${response.status})` }));
+      showMoveError(answer.error);
+    }
+  } catch (_err) {
+    showMoveError('Le pont ne répond plus.');
+  } finally {
+    switching = false;
+  }
+}
+
+el('board-btn').addEventListener('click', switchBoard);
 
 // A read-only field, not text : the window disables text selection (pywebview),
 // and the clipboard API may be refused there (review of Stéphane, 28/10). The
@@ -593,6 +631,7 @@ const MENU_ACTIONS = {
   'copy-fen': () => menuCopy(el('fen'), 'FEN copiée.'),
   'copy-pgn': async () => { if (await readPgn()) menuCopy(el('pgn'), 'PGN copié.'); },
   flip: flipBoard,
+  board: switchBoard,
 };
 let lastMenu = null;
 let lastNotice = null;

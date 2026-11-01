@@ -14,8 +14,8 @@ Closing the window stops the bridge, LEDs off.
 The menu « Fichier ▸ Ouvrir une partie… » lists the player's games in
 progress and moves the window to the chosen one (#90), see
 :mod:`palamede_chessnut.games`. « Enregistrer le PGN… », « Édition ▸
-Copier … » and « Présentation ▸ Retourner l'échiquier » run what the page's
-buttons do (#140). The page's « Enregistrer… » saves the
+Copier … », « Présentation ▸ Retourner l'échiquier » and « Échiquier ou
+souris » (#152) run what the page's buttons do (#140). The page's « Enregistrer… » saves the
 game's PGN through the window's native dialog (#134).
 """
 
@@ -122,7 +122,14 @@ def menus(page: PageServer, menu: Any, action: Any, copy: Copy | None = None) ->
                 action("Copier le PGN", copier(page, "pgn", copy)),
             ],
         ),
-        menu("Présentation", [action("Retourner l'échiquier", ask("flip"))]),
+        menu(
+            "Présentation",
+            [
+                action("Retourner l'échiquier", ask("flip")),
+                # The page knows the mode : it sends the other one (#152).
+                action("Échiquier ou souris", ask("board")),
+            ],
+        ),
     ]
 
 
