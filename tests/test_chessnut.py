@@ -31,7 +31,7 @@ from palamede_chessnut.bridge import (
     decide,
 )
 from palamede_chessnut.cli import check_viewer_url, read_token
-from palamede_chessnut.moves import differing_squares, find_move
+from palamede_chessnut.moves import differing_squares, find_move, relayed
 from palamede_chessnut.protocol import (
     PIECE_CODES,
     UnknownPieceCode,
@@ -672,11 +672,11 @@ async def test_move_read_is_logged_with_its_san(caplog: pytest.LogCaptureFixture
 
 def test_relayed_move_without_its_position_keeps_the_san() -> None:
     """Several moves missed (stream back after a long loss) : no UCI to rebuild, the SAN stays."""
-    assert bridge_module._relayed(chess.Board(), "Nf6", after("e4", "e5", "Nf3", "Nf6")) == "Nf6"
-    assert bridge_module._relayed(None, "Nf6", after("Nf3", "Nf6")) == "Nf6"
+    assert relayed(chess.Board(), "Nf6", after("e4", "e5", "Nf3", "Nf6")) == "Nf6"
+    assert relayed(None, "Nf6", after("Nf3", "Nf6")) == "Nf6"
     # Legal from the old position, but not the move that led to the new one (review Junior #79).
-    assert bridge_module._relayed(after("e4"), "Nf6", after("e4", "e5", "Nf3", "Nf6")) == "Nf6"
-    assert bridge_module._relayed(after("Nf3"), "Nf6", after("Nf3", "Nf6")) == "g8f6 (Nf6)"
+    assert relayed(after("e4"), "Nf6", after("e4", "e5", "Nf3", "Nf6")) == "Nf6"
+    assert relayed(after("Nf3"), "Nf6", after("Nf3", "Nf6")) == "g8f6 (Nf6)"
 
 
 async def test_guidance_cuts_the_ready_sweep() -> None:

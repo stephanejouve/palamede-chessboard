@@ -23,7 +23,7 @@ from urllib.parse import quote
 
 import chess
 
-from palamede_chessnut import viewer
+from palamede_chessnut import clock_hold, viewer
 from palamede_chessnut.bridge import Bridge
 
 log = logging.getLogger(__name__)
@@ -104,10 +104,18 @@ class Session:
         return True
 
     def close(self) -> None:
-        """The window is closing : stop the bridge, after any opening under way (review Junior #121)."""
+        """The window is closing : stop the bridge, after any opening under way (review Junior #121).
+
+        A board's bridge then says it no longer plays on the board : the time of
+        a player who goes on elsewhere is no longer held (#164).
+        """
         with self.lock:
             self.closed = True
             self.stop()
+            bridge = self.bridge
+        # Outside the lock : the viewer may take up to 10 s to answer (review Admin #166).
+        if bridge.with_board:
+            clock_hold.declare(bridge, False)
 
     def games(self) -> tuple[int, dict[str, Any]]:
         """``(HTTP status, body)`` for the page's list."""
