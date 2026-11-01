@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.16.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.15.0...v0.16.0) (2026-11-01)
+
+
+### Features
+
+* **chessnut:** « Échiquier » switch, board or mouse during the game ([#152](https://github.com/stephanejouve/palamede-chessboard/issues/152)) ([#163](https://github.com/stephanejouve/palamede-chessboard/issues/163)) ([c8b79e2](https://github.com/stephanejouve/palamede-chessboard/commit/c8b79e2a6bb1f8ae0f9644db536f4a7d19d79a60))
+* **chessnut:** captured pieces in the side panel, balance under the board ([#155](https://github.com/stephanejouve/palamede-chessboard/issues/155)) ([#159](https://github.com/stephanejouve/palamede-chessboard/issues/159)) ([b11cd93](https://github.com/stephanejouve/palamede-chessboard/commit/b11cd93da153c1915de140ca8042372283c4f6f3))
+
+
+### Bug Fixes
+
+* **chessnut:** role="group" on the captures, --square on #captures alone ([#161](https://github.com/stephanejouve/palamede-chessboard/issues/161)) ([4bac2d5](https://github.com/stephanejouve/palamede-chessboard/commit/4bac2d5ae85cb2603a43f5eb52f046f7826cb43b))
+* **clock:** Fischer increment before the first move (FIDE C.02.03 3.3.3) ([#162](https://github.com/stephanejouve/palamede-chessboard/issues/162)) ([8183dcf](https://github.com/stephanejouve/palamede-chessboard/commit/8183dcfb4157c09ac03f490708567dbf90355133))
+* **clock:** only a player or the arbiter ends a game on time, and FIDE 6.9 ([#157](https://github.com/stephanejouve/palamede-chessboard/issues/157)) ([229e4e6](https://github.com/stephanejouve/palamede-chessboard/commit/229e4e6119206c7f4dd6ba18d92fd3b2c7471aaf))
+
 ## [0.15.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.14.0...v0.15.0) (2026-10-30)
 
 
