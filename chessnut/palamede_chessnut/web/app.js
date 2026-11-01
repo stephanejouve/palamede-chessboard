@@ -25,6 +25,12 @@ const cg = Chessground(document.getElementById('board'), {
 });
 
 const el = (id) => document.getElementById(id);
+// The captured pieces take the size of the board's squares (#155) : --square
+// follows the board's width, which the window and the grid set.
+new ResizeObserver(([entry]) => {
+  const square = entry.contentRect.width / 8;
+  document.documentElement.style.setProperty('--square', `${square}px`);
+}).observe(el('board'));
 let lastFen = null;
 let lastColor = null;
 let lastDests = '';
@@ -186,17 +192,18 @@ function renderSetup(setup) {
   el('differing').replaceChildren(...nodes);
 }
 
-// Out of the setup, the tray shows what each side has taken (#117) : the
-// player's side first, the pieces strongest first. A side that has taken
-// nothing is left out. No « +N » for the material : beside « ×N » it read as
-// one more piece ; no label either, the colours tell whose they were (smoke
-// of Stéphane, 30/10).
+// What each side has taken, in the side panel (#155) : one column per side,
+// the player's first, the pieces strongest first. A side that has taken
+// nothing keeps its empty column, so that each side stays in its place. No
+// visible label, the colours tell whose they were (smoke of Stéphane, 30/10) ;
+// the material is under the board, apart from « ×N » (renderBalance).
 function renderCaptures(taken, color) {
-  const nodes = [];
+  const columns = [];
+  let any = false;
   const order = color === 'black' ? ['black', 'white'] : ['white', 'black'];
   for (const side of order) {
     const pieces = taken ? taken[side === 'white' ? 'by_white' : 'by_black'] : [];
-    if (!pieces.length) continue;
+    any = any || pieces.length > 0;
     // The board's own pieces, one per kind with « ×3 » beyond one (#146,
     // smoke of Stéphane : a glyph in a tile per piece was unreadable).
     const takenColour = side === 'white' ? 'black' : 'white';
@@ -211,10 +218,21 @@ function renderCaptures(taken, color) {
       times.textContent = `×${count}`;
       return group('kind', piece, times);
     });
-    nodes.push(group('taken', ...images));
+    const column = group('taken', ...images);
+    column.setAttribute('aria-label', side === 'white' ? 'Prises des Blancs' : 'Prises des Noirs');
+    columns.push(column);
   }
-  el('captures').replaceChildren(...nodes);
-  return nodes.length > 0;
+  el('captures').replaceChildren(...(any ? columns : []));
+  return any;
+}
+
+// The material balance under the board (#155) : « Blancs +3 », nothing when
+// the material is even or unknown.
+function renderBalance(taken) {
+  const balance = taken ? taken.balance : 0;
+  if (!balance) return false;
+  el('balance').textContent = `${balance > 0 ? 'Blancs' : 'Noirs'} +${Math.abs(balance)}`;
+  return true;
 }
 
 // m:ss, h:mm:ss beyond an hour, tenths under ten seconds (#135).
@@ -399,11 +417,14 @@ function render(state) {
   el('relay').textContent = state.relay_text || '';
   const fixing = state.lights.sync === 'fixing' && state.differing.length > 0;
   renderSetup(fixing ? state.setup : null);
-  const anyTaken = renderCaptures(fixing ? null : state.captured, state.color);
+  // The captures stay in the panel during the setup ; the balance gives way
+  // to the setup under the board (#155).
+  el('captures').hidden = !renderCaptures(state.captured, state.color);
+  const ahead = !fixing && renderBalance(state.captured);
   el('differing').hidden = !fixing;
-  el('captures').hidden = !anyTaken;
-  el('tray').hidden = !fixing && !anyTaken;
-  el('tray').setAttribute('aria-label', fixing ? 'Mise en place' : 'Pièces prises');
+  el('balance').hidden = !ahead;
+  el('tray').hidden = !fixing && !ahead;
+  el('tray').setAttribute('aria-label', fixing ? 'Mise en place' : 'Avantage matériel');
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
   canSave = Boolean(state.can_save);
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');

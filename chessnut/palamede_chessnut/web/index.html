@@ -30,7 +30,7 @@
   <p class="clock" id="clock-bottom" hidden><span class="who"></span><span class="time"></span></p>
   <section id="tray" aria-label="Mise en place" hidden>
     <p id="differing"></p>
-    <p id="captures" class="cg-wrap" aria-label="Pièces prises" hidden></p>
+    <p id="balance" hidden></p>
   </section>
   <section id="side">
     <section id="picker" aria-labelledby="picker-title" hidden>
@@ -55,6 +55,8 @@
       <p id="export-msg" role="status" hidden></p>
     </div>
     <button type="button" id="log-btn" aria-expanded="false">Journal</button>
+    <!-- The captured pieces (#155) : one column per side, at the board's size. -->
+    <div id="captures" class="cg-wrap" aria-label="Pièces prises" hidden></div>
     <pre id="log" hidden></pre>
   </section>
 </main>

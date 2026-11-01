@@ -105,7 +105,7 @@ def setup_steps(
 #: Strongest first, for the captured pieces (#117).
 ORDER = [chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT, chess.PAWN]
 
-#: Material, for the difference shown beside the captured pieces.
+#: Material, for the balance shown under the board (#155).
 VALUES = {chess.QUEEN: 9, chess.ROOK: 5, chess.BISHOP: 3, chess.KNIGHT: 3, chess.PAWN: 1}
 
 

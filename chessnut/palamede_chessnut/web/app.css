@@ -126,7 +126,7 @@ main {
 }
 #promo piece { position: static; display: block; width: 100%; height: 100%; transform: scale(0.85); }
 #promo button:hover piece, #promo button:focus-visible piece { transform: none; }
-/* The tray under the board (#117) : the setup, or else the captured pieces.
+/* The tray under the board (#117) : the setup, or else the material balance (#155).
    A background of its own, so the chips read apart from the side panel. */
 #tray {
   grid-area: tray;
@@ -139,21 +139,31 @@ main {
 #differing { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; margin: 0; }
 #differing .put { white-space: nowrap; }
 #differing .remove { color: var(--remove); font-weight: 600; }
-#differing[hidden], #captures[hidden] { display: none; }
-/* The captured pieces (#117) : the board's own pieces (#captures is a .cg-wrap
-   for chessground's piece images), no tiles, one per kind with « ×3 ». */
-#captures { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center; margin: 0; }
-#captures .taken { display: flex; align-items: center; white-space: nowrap; }
+#differing[hidden], #balance[hidden], #captures[hidden] { display: none; }
+/* The material balance (#155), where the captured pieces were. */
+#balance { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* The captured pieces (#155) : in the side panel under the buttons, one column
+   per side, the player's first ; the board's own pieces (#captures is a .cg-wrap
+   for chessground's piece images) at the size of its squares (--square, set
+   from the board's width), one per kind with « ×3 ». */
+#captures {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 0 24px;
+  align-items: start;
+  margin: 12px 0 0;
+}
+#captures .taken { display: flex; flex-direction: column; }
 #captures piece {
   position: static;
   display: inline-block;
-  width: 30px;
-  height: 30px;
+  width: var(--square, 40px);
+  height: var(--square, 40px);
   pointer-events: none;
   filter: var(--piece-halo);
 }
-#captures .kind { display: inline-flex; align-items: center; }
-#captures .times { margin: 0 4px 0 1px; font-variant-numeric: tabular-nums; }
+#captures .kind { display: inline-flex; align-items: center; white-space: nowrap; }
+#captures .times { margin-left: 2px; font-variant-numeric: tabular-nums; }
 #side {
   grid-area: side;
   min-width: 0;
