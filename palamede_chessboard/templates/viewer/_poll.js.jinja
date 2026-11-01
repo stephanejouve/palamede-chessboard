@@ -59,6 +59,16 @@ async function pollClock() {
   } catch(e) { /* silent */ }
 }
 
+// m:ss, h:mm:ss past an hour ; no tenths, as the FIDE Laws (owner, #147).
+// Rounded up : 0:00 shows only once the flag has fallen. The same as the Tablier's.
+function clockText(seconds) {
+  const whole = Math.max(Math.ceil(seconds), 0);
+  const h = Math.floor(whole / 3600);
+  const m = Math.floor((whole % 3600) / 60);
+  const ss = String(whole % 60).padStart(2, '0');
+  return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+
 function renderClocks() {
   if (!CLOCK) return;
   // Drift must be computed from the server-side ``last_move_ts``
@@ -73,14 +83,8 @@ function renderClocks() {
   let bs = CLOCK.black_seconds;
   if (CLOCK.started && active === 'white') ws -= driftS;
   else if (CLOCK.started && active === 'black') bs -= driftS;
-  const fmt = (s) => {
-    if (s <= 0) return '0:00.0';
-    if (s < 10) return s.toFixed(1).replace('.', 's.');
-    const m = Math.floor(s / 60); const r = Math.floor(s % 60);
-    return m + ':' + (r < 10 ? '0' + r : r);
-  };
-  document.getElementById('time-white').textContent = fmt(ws);
-  document.getElementById('time-black').textContent = fmt(bs);
+  document.getElementById('time-white').textContent = clockText(ws);
+  document.getElementById('time-black').textContent = clockText(bs);
   setClass('clock-white', 'active', active === 'white' && CLOCK.started);
   setClass('clock-black', 'active', active === 'black' && CLOCK.started);
   setClass('clock-white', 'low', ws > 0 && ws < 30);
