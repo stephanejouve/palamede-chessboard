@@ -26,10 +26,11 @@ const cg = Chessground(document.getElementById('board'), {
 
 const el = (id) => document.getElementById(id);
 // The captured pieces take the size of the board's squares (#155) : --square
-// follows the board's width, which the window and the grid set.
+// follows the board's width, which the window and the grid set. Set on
+// #captures alone, its only user (review Admin #159).
 new ResizeObserver(([entry]) => {
   const square = entry.contentRect.width / 8;
-  document.documentElement.style.setProperty('--square', `${square}px`);
+  el('captures').style.setProperty('--square', `${square}px`);
 }).observe(el('board'));
 let lastFen = null;
 let lastColor = null;
@@ -219,6 +220,8 @@ function renderCaptures(taken, color) {
       return group('kind', piece, times);
     });
     const column = group('taken', ...images);
+    // A role, or the label is not read on a bare span (review Junior #159).
+    column.setAttribute('role', 'group');
     column.setAttribute('aria-label', side === 'white' ? 'Prises des Blancs' : 'Prises des Noirs');
     columns.push(column);
   }
