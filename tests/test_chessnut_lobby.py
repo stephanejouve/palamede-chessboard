@@ -1,0 +1,515 @@
+"""No game on the board : two rooks lifted for 5 s open one (#167)."""
+
+from __future__ import annotations
+
+import io
+import json
+import threading
+import time
+import urllib.error
+
+import chess
+import pytest
+from palamede_chessnut import config, leds, lobby, viewer
+from palamede_chessnut.bridge import Bridge
+from palamede_chessnut.cli import bridge_from_args
+from palamede_chessnut.games import NO_GAME, Session
+from palamede_chessnut.lobby import GESTURE_SECONDS, NO_SERVER, Lobby, gesture_side
+from palamede_chessnut.page import PageServer
+from palamede_chessnut.status import snapshot, sync_light
+
+TOKEN = "secret-token-never-shown"
+VIEWER = "https://viewer.test"
+NEW = "tablier.stephane.20261101-190000-abcd"
+
+
+def lifted(*squares: chess.Square) -> chess.BaseBoard:
+    board = chess.BaseBoard()
+    for square in squares:
+        board.remove_piece_at(square)
+    return board
+
+
+def held(bridge: Bridge, placement: chess.BaseBoard, seconds: float) -> None:
+    """``placement`` on the board, still for ``seconds``."""
+    bridge.observed = placement
+    bridge.settled_since = time.monotonic() - seconds
+
+
+class Board:
+    """What the lobby writes to the board : the LED frames, in order."""
+
+    def __init__(self) -> None:
+        self.frames: list[bytes] = []
+
+    async def __call__(self, command: bytes) -> None:
+        self.frames.append(command)
+
+
+class Server:
+    """``POST /api/games`` : records the payloads, answers ``(status, body)``."""
+
+    def __init__(self, monkeypatch, status: int | None = 200, body: object = None) -> None:
+        self.answer = (status, {"status": "ok", "game_id": NEW} if body is None else body)
+        self.posts: list[tuple[str, str, dict]] = []
+        monkeypatch.setattr(viewer, "post_json", self.post_json)
+
+    def post_json(self, url: str, token: str, payload: dict):
+        self.posts.append((url, token, payload))
+        return self.answer
+
+
+def new_lobby(*, armed: bool = True, **kwargs) -> Lobby:
+    """A lobby ; ``armed`` : the whole starting position has stood on its board."""
+    board = Lobby(VIEWER, TOKEN, **kwargs)
+    board.armed = armed
+    return board
+
+
+# ---- the gesture ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("placement", "side"),
+    [
+        (lifted(chess.A1, chess.H1), chess.WHITE),
+        (lifted(chess.A8, chess.H8), chess.BLACK),
+        (chess.BaseBoard(), None),
+        (lifted(chess.A1), None),
+        (lifted(chess.A1, chess.H8), None),
+        (lifted(chess.A1, chess.H1, chess.A8, chess.H8), None),  # four rooks : out of scope
+        (lifted(chess.E1), None),  # the king alone is resigning, not this
+        (lifted(chess.A1, chess.H1, chess.E2), None),  # not the starting position
+    ],
+)
+def test_two_rooks_of_one_side_off_the_start(placement, side) -> None:
+    assert gesture_side(placement) == side
+
+
+async def test_the_gesture_held_opens_the_game_with_the_defaults(monkeypatch) -> None:
+    server = Server(monkeypatch)
+    board = new_lobby()
+    held(board, lifted(chess.A8, chess.H8), GESTURE_SECONDS + 0.1)
+    await board.tick(Board())
+    assert server.posts == [
+        (
+            f"{VIEWER}/api/games",
+            TOKEN,
+            {"opponent": "bot-maia-1100", "color": "black", "time_control": {"format": "5+3"}},
+        )
+    ]
+    assert board.created == NEW and board.player == chess.BLACK
+    assert board.animation == leds.chaser(7)
+
+
+async def test_the_settings_choose_the_opponent_and_the_clock(monkeypatch) -> None:
+    server = Server(monkeypatch)
+    board = new_lobby(new_game={"opponent": "bot-maia-1500", "time_control": "15+10"})
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS)
+    await board.tick(Board())
+    assert server.posts[0][2] == {
+        "opponent": "bot-maia-1500",
+        "color": "white",
+        "time_control": {"format": "15+10"},
+    }
+
+
+async def test_before_5_s_the_rooks_blink_and_nothing_is_asked(monkeypatch) -> None:
+    server = Server(monkeypatch)
+    board = new_lobby()
+    held(board, lifted(chess.A1, chess.H1), 2.1)
+    await board.tick(Board())
+    assert server.posts == []
+    assert board.leds in (frozenset({chess.A1, chess.H1}), frozenset())
+    assert board.lobby_text() == "Nouvelle partie avec les Blancs dans 3 s…"
+
+
+async def test_the_rooks_back_before_5_s_cancel(monkeypatch) -> None:
+    server = Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, lifted(chess.A1, chess.H1), 4)
+    await board.tick(write)
+    held(board, chess.BaseBoard(), 10)
+    await board.tick(write)
+    assert server.posts == [] and board.leds == frozenset()
+    assert board.lobby_text() == "Aucune partie : " + lobby.HINT
+
+
+async def test_pieces_set_up_with_the_rooks_last_open_nothing(monkeypatch) -> None:
+    server = Server(monkeypatch)
+    board, write = new_lobby(armed=False), Board()
+    held(board, lifted(chess.A1, chess.H1, chess.D1), 1)  # setting up
+    await board.tick(write)
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS + 1)  # only the rooks left
+    await board.tick(write)
+    assert server.posts == [] and board.counting is None
+    assert board.leds == frozenset()
+
+
+async def test_from_the_whole_start_one_rook_then_the_other(monkeypatch) -> None:
+    server = Server(monkeypatch)
+    board, write = new_lobby(armed=False), Board()
+    for placement, seconds in [
+        (chess.BaseBoard(), 1),
+        (lifted(chess.H8), 0.5),
+        (lifted(chess.A8, chess.H8), GESTURE_SECONDS),
+    ]:
+        held(board, placement, seconds)
+        await board.tick(write)
+    assert [payload["color"] for _url, _token, payload in server.posts] == ["black"]
+
+
+async def test_another_piece_moved_needs_the_whole_start_again(monkeypatch) -> None:
+    server = Server(monkeypatch)
+    board, write = new_lobby(armed=False), Board()
+    for placement, seconds in [
+        (chess.BaseBoard(), 1),
+        (lifted(chess.E2), 1),
+        (lifted(chess.A1, chess.H1), GESTURE_SECONDS),
+    ]:
+        held(board, placement, seconds)
+        await board.tick(write)
+    assert server.posts == [] and not board.armed
+
+
+async def test_the_chaser_then_the_window_moves_to_the_new_game(monkeypatch) -> None:
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    told = threading.Event()
+    opened: list[str] = []
+    board.on_created = lambda game_id: (opened.append(game_id), told.set(), (200, ""))[2]
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS)
+    await board.tick(write)
+    while board.animation:
+        await board.tick(write)
+    assert told.wait(2) and opened == [NEW]
+    assert board.lobby_text() == f"Partie {NEW} ouverte : la fenêtre la rejoint."
+
+
+async def test_a_game_opened_but_not_shown_is_said(monkeypatch) -> None:
+    Server(monkeypatch)
+    board = new_lobby()
+    board.on_created = lambda _game_id: (502, "Le serveur ne répond pas.")
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS)
+    await board.tick(Board())
+    board.animation = []
+    board.created = NEW
+    board._hand_over()
+    assert board.created is None
+    assert board.lobby_text() == f"Partie {NEW} créée, mais pas ouverte : Le serveur ne répond pas."
+
+
+# ---- refusals --------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "said"),
+    [
+        (
+            429,
+            {"detail": "Déjà 5 parties Tablier en cours : terminez-en une d'abord"},
+            "Partie non créée : Déjà 5 parties Tablier en cours : terminez-en une d'abord",
+        ),
+        (
+            422,
+            {"detail": "Adversaire inconnu : bot-x"},
+            "Partie non créée : Adversaire inconnu : bot-x",
+        ),
+        (429, None, lobby.REFUSALS[429]),
+        (422, "not a dict", lobby.REFUSALS[422]),
+        (500, None, "Partie non créée (HTTP 500)."),
+        (None, None, NO_SERVER),
+        (200, {"status": "ok"}, lobby.UNREADABLE),  # no game_id : maybe opened, nothing to open
+    ],
+)
+async def test_a_refusal_is_said_without_a_light(monkeypatch, status, body, said) -> None:
+    Server(monkeypatch, status, body if body is not None else {})
+    board, write = new_lobby(), Board()
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS)
+    await board.tick(write)
+    assert board.lobby_text() == said
+    assert board.created is None and board.animation == []
+    assert board.leds == frozenset()
+
+
+async def test_a_refused_token_turns_the_light_red(monkeypatch) -> None:
+    Server(monkeypatch, 401, {"detail": "Jeton de joueur requis ou invalide (UNAUTHENTICATED)"})
+    board = new_lobby()
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS)
+    await board.tick(Board())
+    assert board.token_light == "refused"
+
+
+async def test_a_refusal_is_not_tried_again_until_the_rooks_move(monkeypatch) -> None:
+    server = Server(monkeypatch, 429, {})
+    board, write = new_lobby(), Board()
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS)
+    await board.tick(write)
+    await board.tick(write)
+    assert len(server.posts) == 1
+    assert board.lobby_text() == lobby.REFUSALS[429]
+    held(board, chess.BaseBoard(), 1)  # rooks back
+    await board.tick(write)
+    assert board.lobby_text().startswith("Aucune partie")
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS)  # lifted again
+    await board.tick(write)
+    assert len(server.posts) == 2
+
+
+# ---- the page --------------------------------------------------------------
+
+
+def finished_bridge() -> Bridge:
+    bridge = Bridge(VIEWER, "009", chess.BLACK, TOKEN)
+    bridge.game = chess.Board("4k3/8/8/8/8/8/8/4K2q w - - 0 1")
+    bridge.history, bridge.finished = ["Qh1#"], True
+    bridge.account, bridge.token_light, bridge.stream_link = "stephane", "on", "connected"
+    return bridge
+
+
+def test_the_page_says_how_to_open_a_game() -> None:
+    board = new_lobby()
+    held(board, chess.BaseBoard(), 1)
+    state = snapshot(board)
+    assert state["lobby"] == "Aucune partie : " + lobby.HINT
+    assert state["game_id"] == "" and state["fen"] is None
+    assert state["setup"] is None and state["differing"] == []
+    assert state["lights"]["sync"] == "waiting"
+
+
+def test_a_finished_game_stays_on_screen_its_board_no_longer_compared() -> None:
+    board = new_lobby(after=finished_bridge())
+    held(board, chess.BaseBoard(), 1)
+    state = snapshot(board)
+    assert state["game_id"] == "009" and state["history"] == ["Qh1#"]
+    assert state["finished"] and state["account"] == "stephane"
+    assert state["lobby"] == "Partie terminée : " + lobby.HINT
+    assert state["setup"] is None and state["differing"] == []
+    assert sync_light(board) == "waiting"
+
+
+def test_the_window_title_without_a_game() -> None:
+    from palamede_chessnut.app import title
+
+    assert title(new_lobby()) == "Échiquier"
+    assert title(new_lobby(after=finished_bridge())) == "Échiquier — 009"
+
+
+def test_a_game_s_bridge_has_no_lobby_text() -> None:
+    assert snapshot(finished_bridge())["lobby"] is None
+
+
+def test_no_clock_is_read_without_a_game() -> None:
+    page = PageServer(new_lobby())
+    asked: list[str] = []
+    page.clocks.view = lambda _v, game_id, _t: asked.append(game_id)  # type: ignore[method-assign]
+    page.start()
+    try:
+        import http.client
+
+        conn = http.client.HTTPConnection("127.0.0.1", page.port)
+        conn.request("GET", "/state", headers={"Host": f"127.0.0.1:{page.port}"})
+        state = json.loads(conn.getresponse().read())
+    finally:
+        page.shutdown()
+        page.server_close()
+    assert state["clock"] is None and asked == []
+
+
+# ---- the launch ------------------------------------------------------------
+
+
+class FakeViewer:
+    def __init__(self, monkeypatch, in_progress: list | None = None) -> None:
+        self.in_progress = in_progress or []
+        monkeypatch.setattr(viewer, "get_with_token", self.get_with_token)
+        monkeypatch.setattr(viewer, "get_json", lambda _url: {"in_progress": self.in_progress})
+        monkeypatch.setenv("PALAMEDE_PLAYER_TOKEN", TOKEN)
+        monkeypatch.setenv("PALAMEDE_CONFIG", "/nonexistent/config.toml")
+        monkeypatch.setattr(config, "named_by_environment", lambda: False)
+
+    def get_with_token(self, url: str, _token: str):
+        if url.endswith("/api/me"):
+            return 200, {"player": "stephane", "kind": "human"}
+        return 200, {"player": "stephane", "colors": ["white"]}
+
+
+def test_the_app_on_a_board_without_a_game_waits_in_a_lobby(monkeypatch) -> None:
+    FakeViewer(monkeypatch)
+    bridge = bridge_from_args(["--viewer", VIEWER], "t", app=True)
+    assert isinstance(bridge, Lobby)
+    assert bridge.account == "stephane" and bridge.token_light == "on"
+    assert bridge.new_game == config.NEW_GAME
+
+
+@pytest.mark.parametrize(("argv", "app"), [([], False), (["--no-board"], True)])
+def test_without_a_board_or_a_window_no_game_still_exits(monkeypatch, argv, app) -> None:
+    FakeViewer(monkeypatch)
+    with pytest.raises(SystemExit) as refused:
+        bridge_from_args(["--viewer", VIEWER, *argv], "t", app=app)
+    assert "no game in progress for stephane" in str(refused.value)
+
+
+def test_a_game_in_progress_is_still_followed(monkeypatch) -> None:
+    FakeViewer(monkeypatch, [{"game_id": "009", "white": "stephane", "black": "bot"}])
+    bridge = bridge_from_args(["--viewer", VIEWER], "t", app=True)
+    assert not isinstance(bridge, Lobby) and bridge.game_id == "009"
+
+
+# ---- the session -----------------------------------------------------------
+
+
+def until(condition, seconds: float = 3.0) -> bool:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if condition():
+            return True
+        time.sleep(0.01)
+    return False
+
+
+def runner(bridge: Bridge) -> None:
+    """A game's bridge over at once ; a lobby waits to be stopped."""
+    if isinstance(bridge, Lobby):
+        bridge.stopped.wait(5)
+        return
+    bridge.finished = True
+    bridge.stopped.set()
+
+
+def test_a_board_s_game_over_hands_the_board_to_a_lobby() -> None:
+    done = finished_bridge()
+    done.finished = False
+    done.new_game = {"opponent": "bot-maia-1500", "time_control": "3+2"}
+    changes: list[Bridge] = []
+    session = Session(done, runner, changes.append)
+    session.start()
+    try:
+        assert until(lambda: isinstance(session.bridge, Lobby))
+        new = session.bridge
+        assert isinstance(new, Lobby) and new.game_id == "009" and new.finished
+        assert new.new_game == done.new_game and new._token == TOKEN
+        assert new.on_created == session.open_game
+        assert until(lambda: changes == [new])
+    finally:
+        session.close()
+
+
+def test_a_mouse_game_over_keeps_its_bridge() -> None:
+    done = Bridge(VIEWER, "009", chess.WHITE, TOKEN, with_board=False)
+    session = Session(done, runner)
+    session.start()
+    assert session.worker is not None
+    session.worker.join(2)
+    time.sleep(0.05)
+    assert session.bridge is done
+
+
+def test_no_lobby_once_the_window_is_closed() -> None:
+    done = finished_bridge()
+    session = Session(done, lambda _bridge: None)
+    session.closed = True
+    session._idle(done)
+    assert session.bridge is done
+
+
+def test_a_lobby_cannot_switch_to_the_mouse() -> None:
+    session = Session(new_lobby(), lambda bridge: bridge.stopped.wait(5))
+    session.start()
+    try:
+        assert session.switch_board(False) == (409, NO_GAME)
+    finally:
+        session.close()
+
+
+def test_the_lobby_s_finished_game_may_be_opened_again(monkeypatch) -> None:
+    monkeypatch.setattr(
+        Bridge, "seat", lambda _self: (200, {"player": "stephane", "colors": ["black"]})
+    )
+    session = Session(new_lobby(after=finished_bridge()), lambda bridge: bridge.stopped.wait(5))
+    session.start()
+    try:
+        assert session.open_game("009") == (200, "")
+        assert not isinstance(session.bridge, Lobby) and session.bridge.game_id == "009"
+        assert session.bridge.player == chess.BLACK
+    finally:
+        session.close()
+
+
+def test_closing_a_lobby_declares_nothing(monkeypatch) -> None:
+    declared: list[object] = []
+    monkeypatch.setattr(lobby.Bridge, "seat", lambda _self: (None, None))
+    from palamede_chessnut import clock_hold
+
+    monkeypatch.setattr(clock_hold, "declare", lambda *args: declared.append(args))
+    session = Session(new_lobby(), lambda bridge: bridge.stopped.wait(5))
+    session.start()
+    session.close()
+    assert declared == []
+
+
+# ---- the viewer's answer -----------------------------------------------------
+
+
+def test_post_json_reads_a_refusal_s_detail(monkeypatch) -> None:
+    body = json.dumps({"detail": "Adversaire inconnu : bot-x"}).encode()
+
+    class Opener:
+        def open(self, *_args, **_kwargs):
+            raise urllib.error.HTTPError("u", 422, "Unprocessable", {}, io.BytesIO(body))
+
+    monkeypatch.setattr(viewer, "_OPENER", Opener())
+    assert viewer.post_json(f"{VIEWER}/api/games", TOKEN, {}) == (
+        422,
+        {"detail": "Adversaire inconnu : bot-x"},
+    )
+
+
+def test_post_json_unreachable(monkeypatch) -> None:
+    class Opener:
+        def open(self, *_args, **_kwargs):
+            raise urllib.error.URLError("down")
+
+    monkeypatch.setattr(viewer, "_OPENER", Opener())
+    assert viewer.post_json(f"{VIEWER}/api/games", TOKEN, {}) == (None, None)
+
+
+def test_post_json_keeps_the_status_of_an_unreadable_success(monkeypatch) -> None:
+    class Response(io.BytesIO):
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return False
+
+    class Opener:
+        def open(self, request, **_kwargs):
+            assert "Authorization" not in request.headers  # unredirected only
+            assert request.unredirected_hdrs["Authorization"] == f"Bearer {TOKEN}"
+            return Response(b"not json")
+
+    monkeypatch.setattr(viewer, "_OPENER", Opener())
+    assert viewer.post_json(f"{VIEWER}/api/games", TOKEN, {}) == (200, None)
+
+
+# ---- the settings ------------------------------------------------------------
+
+
+def test_the_settings_give_the_new_game(tmp_path) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text('opponent = "bot-maia-1500"\ntime_control = "15+10"\n', encoding="utf-8")
+    assert config.new_game(config.load(path)) == {
+        "opponent": "bot-maia-1500",
+        "time_control": "15+10",
+    }
+    assert config.new_game({}) == {"opponent": "bot-maia-1100", "time_control": "5+3"}
+
+
+@pytest.mark.parametrize("value", ["5 + 3", "5", "blitz", "5+3+1", "1234+0"])
+def test_a_clock_the_viewer_would_refuse_is_refused_here(tmp_path, value) -> None:
+    path = tmp_path / "config.toml"
+    path.write_text(f'time_control = "{value}"\n', encoding="utf-8")
+    with pytest.raises(SystemExit, match="time_control must be"):
+        config.load(path)

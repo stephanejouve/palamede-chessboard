@@ -10,6 +10,10 @@ token, same board, takes its place.
 
 The « Échiquier » switch (#152) replaces the bridge the same way, on the
 same game, with the board or without it (mouse play).
+
+Without a game on the board, a :class:`~.lobby.Lobby` holds it (#167) : at
+launch when the account has none in progress, and once a board's game is
+over. The game its gesture opens is opened here, as a chosen one.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ import chess
 
 from palamede_chessnut import clock_hold, viewer
 from palamede_chessnut.bridge import Bridge
+from palamede_chessnut.lobby import Lobby
 
 log = logging.getLogger(__name__)
 
@@ -39,6 +44,7 @@ BOARD_BUSY = (
 )
 NOT_PLAYED = "Votre compte ne joue pas cette partie."
 CLOSING = "La fenêtre se ferme."
+NO_GAME = "Aucune partie à jouer à la souris : levez deux tours sur l'échiquier."
 #: ``/seat`` status → what the page gets ; anything else is :data:`NO_SERVER`.
 SEAT_REFUSALS = {
     401: (403, "Jeton refusé par le serveur : la partie n'est pas ouverte."),
@@ -90,8 +96,33 @@ class Session:
         self.closed = False
 
     def start(self) -> None:
-        self.worker = threading.Thread(target=self.run, args=(self.bridge,), daemon=True)
+        if isinstance(self.bridge, Lobby):
+            self.bridge.on_created = self.open_game
+        self.worker = threading.Thread(target=self._run, args=(self.bridge,), daemon=True)
         self.worker.start()
+
+    def _run(self, bridge: Bridge) -> None:
+        """The bridge's thread ; a board's game over, a lobby takes the board (#167)."""
+        self.run(bridge)
+        if bridge.finished and bridge.with_board and not isinstance(bridge, Lobby):
+            # Another thread : replacing joins this one.
+            threading.Thread(target=self._idle, args=(bridge,), daemon=True).start()
+
+    def _idle(self, done: Bridge) -> None:
+        with self.lock:
+            if self.closed or self.bridge is not done:
+                return  # closed, or another game opened meanwhile
+            lobby = Lobby(
+                done.viewer,
+                done._token,  # the same token : it never leaves the bridges
+                board_transport=done.board_transport,
+                new_game=done.new_game,
+                after=done,
+            )
+            log.info("game %s over : two rooks lifted open a new one", done.game_id)
+            if not self._replace(lobby):
+                return
+        self._tell(lobby)
 
     def stop(self) -> bool:
         """Stop the running bridge : ``False`` while its thread still runs after :data:`STOP_SECONDS`."""
@@ -114,7 +145,7 @@ class Session:
             self.stop()
             bridge = self.bridge
         # Outside the lock : the viewer may take up to 10 s to answer (review Admin #166).
-        if bridge.with_board:
+        if bridge.with_board and not isinstance(bridge, Lobby):  # a lobby plays no game
             clock_hold.declare(bridge, False)
 
     def games(self) -> tuple[int, dict[str, Any]]:
@@ -126,7 +157,8 @@ class Session:
         if entries is None:
             return 502, {"error": NO_SERVER}
         # A stopped game is not « open » : the page lets the player choose it again (Junior #123).
-        current = None if self.bridge.stopped.is_set() else self.bridge.game_id
+        idle = self.bridge.stopped.is_set() or isinstance(self.bridge, Lobby)
+        current = None if idle else self.bridge.game_id
         return 200, {"account": account, "current": current, "games": entries}
 
     def open_game(self, game_id: str) -> tuple[int, str]:
@@ -138,7 +170,8 @@ class Session:
             if self.closed:
                 return 503, CLOSING
             # A stopped bridge (503 above, game over) may be opened again (review Junior #121).
-            if game_id == old.game_id and not old.stopped.is_set():
+            # A lobby shows a finished game, which may be opened again.
+            if game_id == old.game_id and not old.stopped.is_set() and not isinstance(old, Lobby):
                 return 200, ""
             new = successor(old, game_id, old.with_board)
             status, seat = new.seat()
@@ -165,6 +198,8 @@ class Session:
             old = self.bridge
             if self.closed:
                 return 503, CLOSING
+            if isinstance(old, Lobby):
+                return 409, NO_GAME
             if with_board == old.with_board and not old.stopped.is_set():
                 return 200, ""
             new = successor(old, old.game_id, with_board)
@@ -194,7 +229,7 @@ class Session:
 
 def successor(old: Bridge, game_id: str, with_board: bool) -> Bridge:
     """A new bridge for ``game_id``, same viewer, same side, same token and transport."""
-    return Bridge(
+    new = Bridge(
         old.viewer,
         game_id,
         old.player,
@@ -202,3 +237,5 @@ def successor(old: Bridge, game_id: str, with_board: bool) -> Bridge:
         with_board=with_board,
         board_transport=old.board_transport,
     )
+    new.new_game = old.new_game
+    return new

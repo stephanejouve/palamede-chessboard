@@ -30,6 +30,9 @@ so that only the game remains on the command line :
 viewer = "https://<viewer>"
 token_file = "~/.config/palamede/token"
 transport = "auto"
+# The game two rooks lifted open (#167) ; these are the defaults.
+opponent = "bot-maia-1100"
+time_control = "5+3"
 ```
 
 ```
@@ -59,6 +62,17 @@ On the board :
 - the opponent's move lights up its squares : play it for them ;
 - to resign, lift your king off the board for 5 seconds (the LEDs blink
   meanwhile ; put it back to cancel).
+
+In the app, without a game on the board (none in progress at launch, or
+the one shown is over), set all the pieces in the starting position, then
+lift two rooks for 5 seconds (#167) : a1 + h1 for White, a8 + h8 for Black.
+Setting the pieces up with the rooks last opens nothing : the whole starting
+position must stand on the board first. Their
+squares blink meanwhile ; put them back to cancel. The game is opened
+against `opponent` in `time_control` (settings above), a light runs along
+your back rank, and the window moves to the new game. A refusal (too many
+games open, opponent unknown, token refused) is said in the window ; put
+the rooks back before trying again.
 
 ## Over the USB cable or Bluetooth (#82, #110)
 

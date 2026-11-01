@@ -36,3 +36,14 @@ def countdown(square: chess.Square | None, elapsed: float) -> Frame:
     if square is None or int(elapsed * 4) % 2:
         return frozenset()
     return frozenset({square})
+
+
+def blink(squares: Frame, elapsed: float) -> Frame:
+    """A gesture pending (#167) : its squares blink twice a second, as :func:`countdown`."""
+    return frozenset() if int(elapsed * 4) % 2 else squares
+
+
+def chaser(rank: int) -> list[Frame]:
+    """A new game opened (#167) : a light runs along the player's back rank, twice, then dark."""
+    run = [frozenset({chess.square(file, rank)}) for file in range(8)]
+    return run * 2 + [frozenset()]

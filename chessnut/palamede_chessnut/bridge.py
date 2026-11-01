@@ -35,7 +35,7 @@ from urllib.parse import quote
 
 import chess
 
-from palamede_chessnut import clock_hold, leds, token_light, transport, viewer
+from palamede_chessnut import clock_hold, config, leds, token_light, transport, viewer
 from palamede_chessnut.moves import differing_squares, find_move, relayed
 from palamede_chessnut.protocol import UnknownPieceCode, decode_board, led_frame
 
@@ -151,6 +151,12 @@ class Bridge:
         self.board_link = "searching"
         #: ``"connecting"``, ``"connected"`` or ``"reconnecting"`` : the viewer's stream.
         self.stream_link = "connecting"
+        #: The game the two rooks lifted open (#167), see :mod:`.lobby`.
+        self.new_game = dict(config.NEW_GAME)
+
+    def lobby_text(self) -> str | None:
+        """What the page says instead of the game's status : only a lobby has something (#167)."""
+        return None
 
     # ---- viewer side ------------------------------------------------------
 
