@@ -35,8 +35,8 @@ from urllib.parse import quote
 
 import chess
 
-from palamede_chessnut import leds, token_light, transport, viewer
-from palamede_chessnut.moves import differing_squares, find_move
+from palamede_chessnut import clock_hold, leds, token_light, transport, viewer
+from palamede_chessnut.moves import differing_squares, find_move, relayed
 from palamede_chessnut.protocol import UnknownPieceCode, decode_board, led_frame
 
 log = logging.getLogger(__name__)
@@ -169,7 +169,7 @@ class Bridge:
         # the viewer (mixed game). Not before the setup, which relays nothing.
         behind = self.observed is None or self.observed.board_fen() != game.board_fen()
         self.to_relay = (
-            _relayed(self.game, history[-1], game) if self.ready and history and behind else None
+            relayed(self.game, history[-1], game) if self.ready and history and behind else None
         )
         self.relay_from = self.game
         self.game = game
@@ -278,6 +278,8 @@ class Bridge:
             return
         in_sync = self.observed.board_fen() == self.game.board_fen()
         if in_sync:
+            if not self.synced and self.game.turn == self.player:
+                clock_hold.synced(self, self.game.board_fen())  # my time may run (#164)
             self.synced = True
             self.refused = None
             if self.to_relay is not None:
@@ -453,6 +455,7 @@ class Bridge:
             cancel_on_sigterm(loop, task)
         threading.Thread(target=self._follow_stream, args=(loop,), daemon=True).start()
         await asyncio.to_thread(token_light.check, self)
+        await asyncio.to_thread(clock_hold.declare, self)
         await (self.run_board() if self.with_board else self.watch_game())
 
     async def watch_game(self) -> None:
@@ -476,20 +479,6 @@ def cancel_on_sigterm(loop: asyncio.AbstractEventLoop, task: asyncio.Task[Any]) 
         loop.add_signal_handler(signal.SIGTERM, task.cancel)
     except (NotImplementedError, RuntimeError, ValueError) as exc:
         log.debug("no SIGTERM handler here (%s)", type(exc).__name__)
-
-
-def _relayed(before: chess.Board | None, san: str, after: chess.Board) -> str:
-    """``g8f6 (Nf6)`` ; the SAN alone when ``before`` is not the position it was played from."""
-    if before is not None:
-        try:
-            move = before.parse_san(san)
-        except ValueError:
-            return san
-        board = before.copy(stack=False)
-        board.push(move)
-        if board.board_fen() == after.board_fen():
-            return f"{move.uci()} ({san})"
-    return san
 
 
 async def _switch_off(write: Any) -> None:

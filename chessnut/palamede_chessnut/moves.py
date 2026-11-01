@@ -31,3 +31,17 @@ def find_move(board: chess.Board, observed: chess.BaseBoard) -> chess.Move | Non
 def differing_squares(expected: chess.BaseBoard, observed: chess.BaseBoard) -> set[chess.Square]:
     """Squares whose content differs, i.e. where the player has to act."""
     return {sq for sq in chess.SQUARES if expected.piece_at(sq) != observed.piece_at(sq)}
+
+
+def relayed(before: chess.Board | None, san: str, after: chess.Board) -> str:
+    """``g8f6 (Nf6)`` ; the SAN alone when ``before`` is not the position it was played from."""
+    if before is not None:
+        try:
+            move = before.parse_san(san)
+        except ValueError:
+            return san
+        board = before.copy(stack=False)
+        board.push(move)
+        if board.board_fen() == after.board_fen():
+            return f"{move.uci()} ({san})"
+    return san

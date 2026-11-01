@@ -14,6 +14,12 @@ clock is a thin wrapper around two countdowns (white / black) plus an
   then gains ``increment_seconds``. If they would go negative, the
   result tag flips to ``"OUT_OF_TIME"`` and the move is *still* recorded
   (the engine refuses no legal SAN — flag-fall is decided after).
+* **Relay hold** (#164) : the side to move that plays on an eBoard
+  (:attr:`ClockState.board_sides`, declared by its bridge) must first set the
+  opponent's move on the board. Its time is held until its bridge says the
+  board matches the game (:meth:`ClockState.release`), at most
+  :data:`HOLD_SECONDS` : ``last_move_ts`` is moved that far ahead, and every
+  reader already counts ``max(0, now - last_move_ts)``.
 * Persistence is a JSONL side-car ``clock_<game_id>.json`` (single-line
   snapshot, rewritten on every change) next to the PGN.
 
@@ -26,7 +32,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -35,6 +41,9 @@ from palamede_chessboard.chessboard_state import GAMES_DIR, TimeControl, _valida
 CLOCK_FORMAT_RE = re.compile(r"^\s*(\d+)\s*\+\s*(\d+)\s*$")
 OUT_OF_TIME_RESULT_WHITE_LOSES = "0-1"
 OUT_OF_TIME_RESULT_BLACK_LOSES = "1-0"
+#: The longest a relay hold lasts (#164, owner 01/11) : a silent bridge, or a
+#: board never set, cannot freeze a clock.
+HOLD_SECONDS = 20.0
 
 
 def _now() -> float:
@@ -75,6 +84,10 @@ class ClockState:
     last_move_ts: float | None = None  # UTC seconds since epoch
     started: bool = False
     flag_fall: str | None = None  # "white" / "black" when out of time
+    #: The sides played on an eBoard (#164), as their bridges declare.
+    board_sides: list[str] = field(default_factory=list)
+    #: The side to move's time is held until its board matches (#164).
+    held: bool = False
 
     @classmethod
     def init_from_time_control(cls, game_id: str, tc: TimeControl) -> ClockState | None:
@@ -149,6 +162,28 @@ class ClockState:
             raise ValueError(f"Unknown mover: {mover!r}")
         self.last_move_ts = ts
         return self
+
+    def hold_for_relay(self) -> None:
+        """After a move : hold the side to move's time if it plays on an eBoard (#164)."""
+        self.held = (
+            self.active in self.board_sides
+            and self.last_move_ts is not None
+            and self.flag_fall is None
+        )
+        if self.held and self.last_move_ts is not None:
+            self.last_move_ts += HOLD_SECONDS
+
+    def release(self, *, now: float | None = None) -> bool:
+        """The board matches (#164) : the side to move's time runs from ``now``.
+
+        ``False`` when nothing was held. Never later than the hold's end.
+        """
+        if not self.held or self.last_move_ts is None:
+            return False
+        ts = now if now is not None else _now()
+        self.last_move_ts = min(self.last_move_ts, ts)
+        self.held = False
+        return True
 
     def to_dict(self) -> dict:
         snap = asdict(self)

@@ -51,7 +51,8 @@ def seconds_left(clock: Any, age: float = 0.0) -> dict[str, Any] | None:
         active = None
     else:
         # The time spent by the side to move : on the server, then since the read.
-        left[active] -= now_ts - last_ts + age
+        # None while a relay hold lasts (#164) : last_move_ts is ahead of now.
+        left[active] -= max(now_ts - last_ts + age, 0.0)
     return {
         "white": max(left["white"], 0.0),
         "black": max(left["black"], 0.0),

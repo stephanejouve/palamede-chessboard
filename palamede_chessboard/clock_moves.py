@@ -22,6 +22,9 @@ Chessnut board, the mouse, the Maia bot) : two copies would drift apart
 * **Out of time, but no mating material left** (FIDE 6.9) : the game is
   drawn, not lost, when the opponent of the side whose flag fell cannot
   mate by any series of legal moves (:func:`result_on_time`).
+* **Relay hold** (#164) : after each move, the side to move that plays on
+  an eBoard has its time held until its board matches, see
+  :meth:`ClockState.hold_for_relay` and :func:`release_on_sync`.
 * **One lock per game** (:func:`game_lock`), taken by a move and by
   :func:`settle_flag` : a read that ends the game on time and a move that
   cross must not lose one another (review Leader #136).
@@ -121,6 +124,7 @@ def clock_after_move(state: GameState, mover: str, games_dir: Path) -> ClockStat
         _end_on_time(state, clock, before)
     if state.metadata.result != "*" or state.board.is_game_over():
         clock.active = None  # game over : the clock stops
+    clock.hold_for_relay()
     save_clock(clock, games_dir=games_dir)
     return clock
 
@@ -167,3 +171,37 @@ def _settle_flag_locked(game_id: str, games_dir: Path, headers: Any) -> ClockSta
     save_clock(clock, games_dir=games_dir)
     _end_on_time(state, clock)
     return clock
+
+
+def declare_board(game_id: str, sides: list[str], with_board: bool, games_dir: Path) -> None:
+    """The bridge of ``sides`` plays on an eBoard, or no longer does (#164).
+
+    Leaving the board ends a hold of those sides at once : nothing to set.
+    """
+    with game_lock(game_id, games_dir):
+        clock = load_clock(game_id, games_dir=games_dir)
+        if clock is None:
+            return
+        others = [side for side in clock.board_sides if side not in sides]
+        clock.board_sides = sorted(set(others + sides)) if with_board else others
+        if not with_board and clock.active in sides:
+            clock.release()
+        save_clock(clock, games_dir=games_dir)
+
+
+def release_on_sync(game_id: str, board_fen: str, games_dir: Path) -> bool:
+    """The board of the side to move shows ``board_fen`` (#164) : release its hold.
+
+    Only for the game's current position : a late signal about an older one
+    releases nothing. ``True`` when the time now runs.
+    """
+    with game_lock(game_id, games_dir):
+        clock = load_clock(game_id, games_dir=games_dir)
+        if clock is None or not clock.held:
+            return False
+        state = GameState.load(game_id, games_dir=games_dir)
+        if state.board.board_fen() != board_fen:
+            return False
+        clock.release()
+        save_clock(clock, games_dir=games_dir)
+        return True

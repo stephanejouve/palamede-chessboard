@@ -7,6 +7,8 @@ Endpoints covered :
 * ``GET /api/raw`` — raw PGN text for a game.
 * ``POST /api/games/{game_id}/move`` — drag&drop move from the viewer UI.
 * ``GET /api/games/{game_id}/seat`` — whose token, which side (Tablier, #78).
+* ``POST /api/games/{game_id}/board`` and ``.../synced`` — the relay hold of
+  a side played on an eBoard (Tablier, #164).
 * ``POST /api/games`` — unrated game opened by a player's token (Tablier, #93).
 
 Routes are mounted at the root of the FastAPI app (no prefix) to
@@ -28,7 +30,13 @@ from palamede_chessboard.chessboard_state import (
     InvalidGameStateError,
     list_games,
 )
-from palamede_chessboard.clock_moves import check_game, clock_after_move, game_lock
+from palamede_chessboard.clock_moves import (
+    check_game,
+    clock_after_move,
+    declare_board,
+    game_lock,
+    release_on_sync,
+)
 from palamede_chessboard.players.observe import authorize_move, roles_of
 from palamede_chessboard.viewer.games_query import (
     DEFAULT_LIMIT,
@@ -37,7 +45,13 @@ from palamede_chessboard.viewer.games_query import (
     listing_etag,
     select_games,
 )
-from palamede_chessboard.viewer.models import MovePayload, _games_dir, _not_found_detail
+from palamede_chessboard.viewer.models import (
+    BoardPayload,
+    MovePayload,
+    SyncedPayload,
+    _games_dir,
+    _not_found_detail,
+)
 from palamede_chessboard.viewer.new_game import NewGamePayload, create_from_viewer
 
 log = logging.getLogger(__name__)
@@ -110,7 +124,42 @@ def build_games_router() -> APIRouter:
         response.headers["Cache-Control"] = "no-store"
         return seat_of_token(game_id, request)
 
+    @router.post("/api/games/{game_id}/board")
+    def game_board(game_id: str, payload: BoardPayload, request: Request) -> dict:
+        return board_of_token(game_id, payload, request)
+
+    @router.post("/api/games/{game_id}/synced")
+    def game_synced(game_id: str, payload: SyncedPayload, request: Request) -> dict:
+        return synced_of_token(game_id, payload, request)
+
     return router
+
+
+def board_of_token(game_id: str, payload: BoardPayload, request: Request) -> dict:
+    """The token's bridge plays on an eBoard, or no longer does (#164).
+
+    Either player of the game may say it, for their own side(s) only.
+    """
+    colors = seat_of_token(game_id, request)["colors"]
+    declare_board(game_id, colors, payload.board, _games_dir())
+    return {"status": "ok", "board": payload.board, "colors": colors}
+
+
+def synced_of_token(game_id: str, payload: SyncedPayload, request: Request) -> dict:
+    """The eBoard of the side to move matches the game : its time runs (#164).
+
+    The side to move only (403 otherwise), and only for the current position.
+    """
+    gdir = _games_dir()
+    _authorized_mover(request, _load(game_id, gdir), gdir)
+    return {"status": "ok", "released": release_on_sync(game_id, payload.fen, gdir)}
+
+
+def _load(game_id: str, gdir) -> GameState:
+    try:
+        return GameState.load(game_id, games_dir=gdir)
+    except GameNotFoundError as exc:
+        raise HTTPException(404, _not_found_detail(game_id)) from exc
 
 
 def seat_of_token(game_id: str, request: Request) -> dict:
