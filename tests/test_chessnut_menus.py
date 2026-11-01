@@ -74,7 +74,7 @@ def test_the_menus_and_their_items(page) -> None:
     assert [(title, [label for label, _f in entries]) for title, entries in menus] == [
         ("Fichier", ["Ouvrir une partie…", "Enregistrer le PGN…"]),
         ("Édition", ["Copier le nom de la partie", "Copier la FEN", "Copier le PGN"]),
-        ("Présentation", ["Retourner l'échiquier"]),
+        ("Présentation", ["Retourner l'échiquier", "Échiquier ou souris"]),
     ]
 
 
@@ -84,6 +84,7 @@ def test_the_menus_and_their_items(page) -> None:
         ("Ouvrir une partie…", "open"),
         ("Enregistrer le PGN…", "save-pgn"),
         ("Retourner l'échiquier", "flip"),
+        ("Échiquier ou souris", "board"),
     ],
 )
 def test_a_menu_item_bumps_its_counter_in_the_state(page, label, action) -> None:

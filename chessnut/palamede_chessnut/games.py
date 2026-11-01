@@ -7,6 +7,9 @@ the token's light (``/seat``, #102), never from the page. Opening one asks
 there, and a game the account does not play is refused before the running
 bridge is touched. Then that bridge stops (LEDs off) and a new one, same
 token, same board, takes its place.
+
+The « Échiquier » switch (#152) replaces the bridge the same way, on the
+same game, with the board or without it (mouse play).
 """
 
 from __future__ import annotations
@@ -35,6 +38,7 @@ BOARD_BUSY = (
     "L'échiquier n'est pas encore libéré par la partie précédente : réessayez dans un instant."
 )
 NOT_PLAYED = "Votre compte ne joue pas cette partie."
+CLOSING = "La fenêtre se ferme."
 #: ``/seat`` status → what the page gets ; anything else is :data:`NO_SERVER`.
 SEAT_REFUSALS = {
     401: (403, "Jeton refusé par le serveur : la partie n'est pas ouverte."),
@@ -124,18 +128,11 @@ class Session:
         with self.lock:
             old = self.bridge
             if self.closed:
-                return 503, "La fenêtre se ferme."
+                return 503, CLOSING
             # A stopped bridge (503 above, game over) may be opened again (review Junior #121).
             if game_id == old.game_id and not old.stopped.is_set():
                 return 200, ""
-            new = Bridge(
-                old.viewer,
-                game_id,
-                old.player,
-                old._token,  # the same token : it never leaves the bridges
-                with_board=old.with_board,
-                board_transport=old.board_transport,
-            )
+            new = successor(old, game_id, old.with_board)
             status, seat = new.seat()
             if status != 200 or not isinstance(seat, dict):
                 return SEAT_REFUSALS.get(status or 0, (502, NO_SERVER))
@@ -144,15 +141,56 @@ class Session:
                 return 403, NOT_PLAYED
             new.player = color
             log.info("opening %s as %s", game_id, "white" if color else "black")
-            if not self.stop():
-                # Two bridges would talk to the same board (review Admin #121) :
-                # the old one, stopped, stays shown until a new try finds it gone.
+            if not self._replace(new):
                 return 503, BOARD_BUSY
-            self.bridge = new
-            self.start()
+        self._tell(new)
+        return 200, ""
+
+    def switch_board(self, with_board: bool) -> tuple[int, str]:
+        """« Échiquier » on or off (#152) : the same game, played on the board or with the mouse.
+
+        The new bridge reads the game from the stream again : a move of the
+        opponent that came during the switch is in its first snapshot. Back on
+        the board, the setup tray says what to move, as at launch.
+        """
+        with self.lock:
+            old = self.bridge
+            if self.closed:
+                return 503, CLOSING
+            if with_board == old.with_board and not old.stopped.is_set():
+                return 200, ""
+            new = successor(old, old.game_id, with_board)
+            log.info("%s : %s", old.game_id, "board" if with_board else "mouse")
+            if not self._replace(new):
+                return 503, BOARD_BUSY
+        self._tell(new)
+        return 200, ""
+
+    def _replace(self, new: Bridge) -> bool:
+        """Under the lock : stop the running bridge, then start ``new`` ; ``False`` if it still runs."""
+        if not self.stop():
+            # Two bridges would talk to the same board (review Admin #121) :
+            # the old one, stopped, stays shown until a new try finds it gone.
+            return False
+        self.bridge = new
+        self.start()
+        return True
+
+    def _tell(self, new: Bridge) -> None:
         # Outside the lock, which close() waits for on the main thread : a backend that
         # sets the title synchronously on that thread would wait for us (review Admin #123).
         # Read after the lock : a close() that came in meanwhile has set it.
         if self.on_change is not None and not self.closed:
             self.on_change(new)
-        return 200, ""
+
+
+def successor(old: Bridge, game_id: str, with_board: bool) -> Bridge:
+    """A new bridge for ``game_id``, same viewer, same side, same token and transport."""
+    return Bridge(
+        old.viewer,
+        game_id,
+        old.player,
+        old._token,  # the same token : it never leaves the bridges
+        with_board=with_board,
+        board_transport=old.board_transport,
+    )

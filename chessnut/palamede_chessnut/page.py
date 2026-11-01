@@ -7,7 +7,7 @@ reaching the port through a rebound DNS name reads nothing.
 
 Its writes are ``POST /move``, for mouse play without a board (#92,
 frame of Admin on #78), ``POST /open``, another game of the player
-(#90), and ``POST /save-pgn``, the game's PGN to a file chosen in a native
+(#90), ``POST /board``, the « Échiquier » switch (#152), and ``POST /save-pgn``, the game's PGN to a file chosen in a native
 dialog (#134, the app only) : the ``Origin`` must be this page, and the
 ``X-Palamede-Nonce`` header must carry the nonce drawn at launch and
 written into the page. Another site open in a browser of the machine
@@ -42,9 +42,15 @@ TYPES = {".html": "text/html", ".js": "text/javascript", ".css": "text/css"}
 #: Replaced in ``index.html`` by the nonce of this launch.
 NONCE_PLACEHOLDER = b"__PALAMEDE_NONCE__"
 #: What the window's menus can ask of the page (#90, #140).
-MENU_ACTIONS = ("open", "save-pgn", "copy-name", "copy-fen", "copy-pgn", "flip")
+MENU_ACTIONS = ("open", "save-pgn", "copy-name", "copy-fen", "copy-pgn", "flip", "board")
+#: ``POST /board`` : ``{"mode": ...}`` → the bridge's ``with_board`` (#152).
+BOARD_MODES = {"board": True, "mouse": False}
+#: The field each write reads from its body.
+FIELDS = {"/move": "uci", "/open": "game_id", "/board": "mode", "/save-pgn": "game_id"}
 #: ``{"uci": "e7e8q"}`` or ``{"game_id": ...}`` and a little room : anything bigger is refused.
 MAX_BODY_BYTES = 256
+#: What a body without its field gets.
+UNREADABLE = {"uci": "coup illisible", "game_id": "partie illisible", "mode": "mode illisible"}
 #: chessground's pieces are SVG data URIs in its CSS ; everything else is local.
 CONTENT_SECURITY_POLICY = "; ".join(
     [
@@ -161,6 +167,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             state["menu"] = dict(self.server.menu_requests)
             state["notice"] = self.server.notice
             state["can_save"] = self.server.ask_path is not None
+            state["can_switch"] = self.server.session is not None
             bridge = self.server.bridge
             # With the token, which never leaves the bridges (like games.py) :
             # only a player's read ends the game on time (owner, 31/10).
@@ -189,6 +196,9 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
         ``POST /open`` ``{"game_id": ...}`` : see :meth:`.games.Session.open_game`.
 
+        ``POST /board`` ``{"mode": "board" | "mouse"}`` : see
+        :meth:`.games.Session.switch_board`.
+
         ``POST /save-pgn`` ``{"game_id": ...}`` : the game on screen, see
         :func:`.export.save_pgn`.
         """
@@ -198,7 +208,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         session = self.server.session
         allowed = {"/move"}
         if session is not None:
-            allowed.add("/open")
+            allowed.update(("/open", "/board"))
         if self.server.ask_path is not None:
             allowed.add("/save-pgn")
         if self.path not in allowed:
@@ -211,8 +221,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         if not hmac.compare_digest(nonce, self.server.nonce.encode("ascii")):
             self._answer(403, "nonce refusé")
             return
-        field = "uci" if self.path == "/move" else "game_id"
-        value = self._read_field(field)
+        value = self._read_field(FIELDS[self.path])
         if value is None:
             return
         if self.path == "/save-pgn":
@@ -220,6 +229,11 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             return
         if session is not None and self.path == "/open":
             status, message = session.open_game(value)
+        elif session is not None and self.path == "/board":
+            if value not in BOARD_MODES:
+                self._answer(400, "mode illisible")
+                return
+            status, message = session.switch_board(BOARD_MODES[value])
         else:
             status, message = play_from_page(self.server.bridge, value)
         self._answer(status, message)
@@ -257,7 +271,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         except (ValueError, KeyError, TypeError):
             value = None
         if not isinstance(value, str):
-            self._answer(400, "coup illisible" if field == "uci" else "partie illisible")
+            self._answer(400, UNREADABLE[field])
             return None
         return value
 
