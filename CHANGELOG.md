@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.17.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.16.0...v0.17.0) (2026-11-02)
+
+
+### Features
+
+* **chessnut:** the board follows the window's height, the balance beside the captures ([#173](https://github.com/stephanejouve/palamede-chessboard/issues/173)) ([#178](https://github.com/stephanejouve/palamede-chessboard/issues/178)) ([5f5fd0f](https://github.com/stephanejouve/palamede-chessboard/commit/5f5fd0fda2a287426474b5d639d44fe5624d2091))
+* **chessnut:** the clocks, the captured pieces and the balance beside the moves ([#173](https://github.com/stephanejouve/palamede-chessboard/issues/173)) ([#174](https://github.com/stephanejouve/palamede-chessboard/issues/174)) ([2d4b31d](https://github.com/stephanejouve/palamede-chessboard/commit/2d4b31d4319a96f55636c9d25012ea1606ce53b1))
+* **chessnut:** two rooks lifted for 5 s open a game against the default opponent ([#167](https://github.com/stephanejouve/palamede-chessboard/issues/167)) ([#170](https://github.com/stephanejouve/palamede-chessboard/issues/170)) ([dab7e4c](https://github.com/stephanejouve/palamede-chessboard/commit/dab7e4c117dc35ab67c2991947ae943aa5dc05c9))
+* **clock:** relay hold, the board's player does not pay for setting the opponent's move ([#164](https://github.com/stephanejouve/palamede-chessboard/issues/164)) ([#166](https://github.com/stephanejouve/palamede-chessboard/issues/166)) ([63de0fe](https://github.com/stephanejouve/palamede-chessboard/commit/63de0fec5dcd154381106489c1572e21c0e82249))
+
+
+### Bug Fixes
+
+* **chessnut:** the balance tray stays under the board, the player's clock level with it ([#171](https://github.com/stephanejouve/palamede-chessboard/issues/171)) ([da88f32](https://github.com/stephanejouve/palamede-chessboard/commit/da88f32e8b87a4499fd32f794c3080fd9fe3184f))
+* **clock:** the clocks in m:ss under a minute, viewer and Tablier alike ([#147](https://github.com/stephanejouve/palamede-chessboard/issues/147)) ([#165](https://github.com/stephanejouve/palamede-chessboard/issues/165)) ([af649b3](https://github.com/stephanejouve/palamede-chessboard/commit/af649b336d9dfa54fad498afc47729c90e921186))
+
 ## [0.16.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.15.0...v0.16.0) (2026-11-01)
 
 
