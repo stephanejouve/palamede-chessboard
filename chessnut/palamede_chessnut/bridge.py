@@ -36,7 +36,7 @@ from urllib.parse import quote
 import chess
 
 from palamede_chessnut import clock_hold, config, leds, token_light, transport, viewer
-from palamede_chessnut.moves import differing_squares, find_move, relayed
+from palamede_chessnut.moves import differing_squares, find_move, only_king_lifted, relayed
 from palamede_chessnut.protocol import UnknownPieceCode, decode_board, led_frame
 
 log = logging.getLogger(__name__)
@@ -341,11 +341,13 @@ class Bridge:
     async def _resign_gesture(self, write: Any) -> bool:
         """The player's king off the board : countdown, then resignation. ``True`` while it runs."""
         assert self.game is not None and self.observed is not None
+        # The game, or the position before the opponent's move still to relay.
+        shown = [self.game] + ([self.relay_from] if self.to_relay and self.relay_from else [])
         if (
             not self.ready  # a king not yet set up is not a resignation (review Junior #75)
             or self.pending is not None
             or self.resign_state == "unavailable"
-            or self.observed.pieces(chess.KING, self.player)
+            or not any(only_king_lifted(b, self.observed, self.player) for b in shown)  # #179
         ):
             self.king_gone_since = None
             return False
