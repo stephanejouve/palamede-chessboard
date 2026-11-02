@@ -1,0 +1,55 @@
+"""The tray stays under the board, however tall the side panel (smoke of Stéphane, 01/11)."""
+
+from __future__ import annotations
+
+import re
+from html.parser import HTMLParser
+
+from palamede_chessnut.page import PAGE
+
+
+class Parents(HTMLParser):
+    """Each element's id → the ids of the elements around it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.stack: list[str | None] = []
+        self.around: dict[str, list[str]] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        element = dict(attrs).get("id")
+        if element:
+            self.around[element] = [e for e in self.stack if e]
+        if tag not in ("input", "br", "img", "meta", "link"):
+            self.stack.append(element)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag not in ("input", "br", "img", "meta", "link") and self.stack:
+            self.stack.pop()
+
+
+def test_the_board_and_its_tray_share_one_column() -> None:
+    parents = Parents()
+    parents.feed((PAGE / "index.html").read_text(encoding="utf-8"))
+    for element in ("board", "promo", "tray"):
+        assert parents.around[element][-1] == "stage", element
+    # The clocks and the panel stay outside : level with the board, not under it.
+    for element in ("clock-top", "clock-bottom", "side"):
+        assert "stage" not in parents.around[element], element
+
+
+def test_the_wide_grid_has_no_row_of_its_own_for_the_tray() -> None:
+    css = (PAGE / "app.css").read_text(encoding="utf-8")
+    wide = re.search(r"main \{\s*display: grid;(.*?)\}", css, re.S)
+    assert wide is not None
+    assert "tray" not in wide.group(1) and '"stage ctop"' in wide.group(1)
+    # The column is the board's height : the tray hangs out of the flow, so the
+    # player's clock stays level with the board's bottom (review Admin #171).
+    stage = re.search(r"#stage \{(.*?)\}", css, re.S)
+    tray = re.search(r"#stage > #tray \{(.*?)\}", css, re.S)
+    assert stage is not None and tray is not None
+    assert '"tray"' not in stage.group(1) and "position: relative" in stage.group(1)
+    assert "position: absolute" in tray.group(1) and "top: calc(100% + 10px)" in tray.group(1)
+    # Stacked on a narrow window, the column dissolves : clock, then tray, in the flow.
+    assert "#stage { display: contents; }" in css
+    assert "#stage > #tray { grid-area: tray; position: static; }" in css

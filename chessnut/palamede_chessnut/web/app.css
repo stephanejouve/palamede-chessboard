@@ -74,18 +74,36 @@ h1 { font-size: 18px; margin: 0; }
 .light.bad::before { background: var(--bad); }
 .light.blue::before { background: var(--blue); }
 /* The board on the left, the clocks level with its top and bottom, the panel
-   between them (#135) ; stacked on a narrow window. */
+   between them (#135) ; stacked on a narrow window. The tray belongs to the
+   board's column (#stage) : in a row of its own, a tall panel pushed it far
+   below the board (smoke of Stéphane, 01/11). */
 main {
   display: grid;
   grid-template-columns: minmax(0, 520px) minmax(240px, 1fr);
-  grid-template-rows: auto 1fr auto auto;
+  grid-template-rows: auto 1fr auto;
   grid-template-areas:
-    "board ctop"
-    "board side"
-    "board cbot"
-    "tray  .";
+    "stage ctop"
+    "stage side"
+    "stage cbot";
   gap: 10px 16px;
   align-items: start;
+}
+/* The column is the board's height only : the tray hangs under it, out of the
+   flow, or the player's clock (bottom of the cbot row) would sink to the tray's
+   bottom at each material balance (review Admin #171, #135). */
+#stage {
+  grid-area: stage;
+  min-width: 0;
+  position: relative;
+  display: grid;
+  grid-template-areas: "board";
+}
+#stage > #tray {
+  grid-area: auto;  /* no « tray » area in #stage : placed against its padding box */
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  right: 0;
 }
 @media (max-width: 760px) {
   main {
@@ -93,6 +111,9 @@ main {
     grid-template-rows: none;
     grid-template-areas: "ctop" "board" "cbot" "tray" "side";
   }
+  /* Stacked : the player's clock right under the board, then the tray. */
+  #stage { display: contents; }
+  #stage > #tray { grid-area: tray; position: static; }
 }
 /* Square by padding, not aspect-ratio : with aspect-ratio, the app's window on macOS
    Big Sur (Safari 16.6.1 installed) drew a board of zero height, cause not found
