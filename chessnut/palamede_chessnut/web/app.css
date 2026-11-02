@@ -73,47 +73,29 @@ h1 { font-size: 18px; margin: 0; }
 .light.warn::before { background: var(--warn); }
 .light.bad::before { background: var(--bad); }
 .light.blue::before { background: var(--blue); }
-/* The board on the left, the clocks level with its top and bottom, the panel
-   between them (#135) ; stacked on a narrow window. The tray belongs to the
-   board's column (#stage) : in a row of its own, a tall panel pushed it far
-   below the board (smoke of Stéphane, 01/11). */
+/* The board on the left, its tray under it, the panel on the right ; stacked
+   on a narrow window. The tray belongs to the board's column (#stage) : in a row
+   of its own, a tall panel pushed it far below the board (smoke of Stéphane,
+   01/11). The clocks live in the panel, beside the moves (#173). */
 main {
   display: grid;
   grid-template-columns: minmax(0, 520px) minmax(240px, 1fr);
-  grid-template-rows: auto 1fr auto;
-  grid-template-areas:
-    "stage ctop"
-    "stage side"
-    "stage cbot";
+  grid-template-areas: "stage side";
   gap: 10px 16px;
   align-items: start;
 }
-/* The column is the board's height only : the tray hangs under it, out of the
-   flow, or the player's clock (bottom of the cbot row) would sink to the tray's
-   bottom at each material balance (review Admin #171, #135). */
 #stage {
   grid-area: stage;
   min-width: 0;
-  position: relative;
   display: grid;
-  grid-template-areas: "board";
-}
-#stage > #tray {
-  grid-area: auto;  /* no « tray » area in #stage : placed against its padding box */
-  position: absolute;
-  top: calc(100% + 10px);
-  left: 0;
-  right: 0;
+  grid-template-areas: "board" "tray";
+  row-gap: 10px;
 }
 @media (max-width: 760px) {
   main {
     grid-template-columns: minmax(0, 520px);
-    grid-template-rows: none;
-    grid-template-areas: "ctop" "board" "cbot" "tray" "side";
+    grid-template-areas: "stage" "side";
   }
-  /* Stacked : the player's clock right under the board, then the tray. */
-  #stage { display: contents; }
-  #stage > #tray { grid-area: tray; position: static; }
 }
 /* Square by padding, not aspect-ratio : with aspect-ratio, the app's window on macOS
    Big Sur (Safari 16.6.1 installed) drew a board of zero height, cause not found
@@ -149,7 +131,7 @@ main {
 }
 #promo piece { position: static; display: block; width: 100%; height: 100%; transform: scale(0.85); }
 #promo button:hover piece, #promo button:focus-visible piece { transform: none; }
-/* The tray under the board (#117) : the setup, or else the material balance (#155).
+/* The tray under the board (#117) : the setup.
    A background of its own, so the chips read apart from the side panel. */
 #tray {
   grid-area: tray;
@@ -163,25 +145,37 @@ main {
 #differing .put { white-space: nowrap; }
 #differing .remove { color: var(--remove); font-weight: 600; }
 #differing[hidden], #balance[hidden], #captures[hidden] { display: none; }
-/* The material balance (#155), where the captured pieces were. */
-#balance { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
-/* The captured pieces (#155) : in the side panel under the buttons, one column
+/* The material balance (#155), on the right of the clocks and the captures
+   (owner, #173) : a chip of the tray's colour, level with the captures. */
+#balance {
+  align-self: center;
+  margin: 0;
+  padding: 6px 12px;
+  background: var(--tray);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* The captured pieces (#155) : between the two clocks (owner, #173), one column
    per side, the player's first ; the board's own pieces (#captures is a .cg-wrap
-   for chessground's piece images) at the size of its squares (--square, set
-   from the board's width), one per kind with « ×3 ». */
+   for chessground's piece images) at a quarter of its squares (--square, set
+   from the board's width ; owner, #173), 22 px at least to stay readable, one
+   per kind with « ×3 ». */
 #captures {
   display: grid;
   grid-template-columns: repeat(2, max-content);
   gap: 0 24px;
   align-items: start;
-  margin: 12px 0 0;
+  margin: 0;
 }
 #captures .taken { display: flex; flex-direction: column; }
 #captures piece {
   position: static;
   display: inline-block;
-  width: var(--square, 40px);
-  height: var(--square, 40px);
+  width: max(calc(var(--square, 40px) / 4), 22px);
+  height: max(calc(var(--square, 40px) / 4), 22px);
   pointer-events: none;
   filter: var(--piece-halo);
 }
@@ -214,8 +208,13 @@ main {
   color: var(--muted);
 }
 .clock[hidden] { display: none; }
-#clock-top { grid-area: ctop; }
-#clock-bottom { grid-area: cbot; align-self: end; }
+/* The moves and, on their right, the two clocks : the opponent's at the top,
+   the player's at the bottom (#135, #173), the captured pieces between them,
+   then the material balance ; under the moves if the panel is narrow. */
+#play { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: stretch; margin: 0 0 12px; }
+#play #moves { margin: 0; }
+#clocks { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; }
+#clocks[hidden] { display: none; }
 .clock .who { font-size: 14px; }
 .clock .time {
   font: 600 32px/1.15 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

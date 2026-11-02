@@ -1,4 +1,4 @@
-"""The tray stays under the board, however tall the side panel (smoke of Stéphane, 01/11)."""
+"""The board, its tray and the panel ; the clocks beside the moves (smokes of Stéphane, 01-02/11)."""
 
 from __future__ import annotations
 
@@ -33,23 +33,45 @@ def test_the_board_and_its_tray_share_one_column() -> None:
     parents.feed((PAGE / "index.html").read_text(encoding="utf-8"))
     for element in ("board", "promo", "tray"):
         assert parents.around[element][-1] == "stage", element
-    # The clocks and the panel stay outside : level with the board, not under it.
-    for element in ("clock-top", "clock-bottom", "side"):
-        assert "stage" not in parents.around[element], element
+    assert "stage" not in parents.around["side"]
 
 
-def test_the_wide_grid_has_no_row_of_its_own_for_the_tray() -> None:
+def test_the_clocks_sit_beside_the_moves() -> None:
+    """In the panel, on the right of the moves (owner, #173), the opponent's first, the captures between."""
+    parents = Parents()
+    parents.feed((PAGE / "index.html").read_text(encoding="utf-8"))
+    assert parents.around["moves"][-2:] == ["side", "play"]
+    # The material balance on the right of the clocks, out of the tray (owner, #173).
+    assert parents.around["balance"][-2:] == ["side", "play"]
+    for element in ("clock-top", "captures", "clock-bottom"):
+        assert parents.around[element][-3:] == ["side", "play", "clocks"], element
+    # The captured pieces between the two clocks (owner, #173).
+    html = (PAGE / "index.html").read_text(encoding="utf-8")
+    assert (
+        html.index('id="clock-top"') < html.index('id="captures"') < html.index('id="clock-bottom"')
+    )
+    css = (PAGE / "app.css").read_text(encoding="utf-8")
+    play = re.search(r"#play \{(.*?)\}", css, re.S)
+    clocks = re.search(r"#clocks \{(.*?)\}", css, re.S)
+    assert play is not None and clocks is not None
+    assert "display: flex" in play.group(1) and "flex-wrap: wrap" in play.group(1)
+    assert "flex-direction: column" in clocks.group(1)
+    assert "justify-content: space-between" in clocks.group(1)
+
+
+def test_the_grid_keeps_the_tray_in_the_boards_column() -> None:
     css = (PAGE / "app.css").read_text(encoding="utf-8")
     wide = re.search(r"main \{\s*display: grid;(.*?)\}", css, re.S)
     assert wide is not None
-    assert "tray" not in wide.group(1) and '"stage ctop"' in wide.group(1)
-    # The column is the board's height : the tray hangs out of the flow, so the
-    # player's clock stays level with the board's bottom (review Admin #171).
+    assert 'grid-template-areas: "stage side"' in wide.group(1)
     stage = re.search(r"#stage \{(.*?)\}", css, re.S)
-    tray = re.search(r"#stage > #tray \{(.*?)\}", css, re.S)
-    assert stage is not None and tray is not None
-    assert '"tray"' not in stage.group(1) and "position: relative" in stage.group(1)
-    assert "position: absolute" in tray.group(1) and "top: calc(100% + 10px)" in tray.group(1)
-    # Stacked on a narrow window, the column dissolves : clock, then tray, in the flow.
-    assert "#stage { display: contents; }" in css
-    assert "#stage > #tray { grid-area: tray; position: static; }" in css
+    assert stage is not None and '"board" "tray"' in stage.group(1)
+    # Stacked on a narrow window : the board and its tray, then the panel.
+    assert 'grid-template-areas: "stage" "side";' in css
+
+
+def test_the_captured_pieces_are_a_quarter_of_a_square() -> None:
+    css = (PAGE / "app.css").read_text(encoding="utf-8")
+    piece = re.search(r"#captures piece \{(.*?)\}", css, re.S)
+    assert piece is not None
+    assert "max(calc(var(--square, 40px) / 4), 22px)" in piece.group(1)

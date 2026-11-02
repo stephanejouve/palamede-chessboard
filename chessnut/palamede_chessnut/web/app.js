@@ -25,9 +25,9 @@ const cg = Chessground(document.getElementById('board'), {
 });
 
 const el = (id) => document.getElementById(id);
-// The captured pieces take the size of the board's squares (#155) : --square
-// follows the board's width, which the window and the grid set. Set on
-// #captures alone, its only user (review Admin #159).
+// The captured pieces follow the size of the board's squares (#155, a quarter
+// of it since #173) : --square follows the board's width, which the window and
+// the grid set. Set on #captures alone, its only user (review Admin #159).
 new ResizeObserver(([entry]) => {
   const square = entry.contentRect.width / 8;
   el('captures').style.setProperty('--square', `${square}px`);
@@ -232,7 +232,7 @@ function renderCaptures(taken, color) {
   return any;
 }
 
-// The material balance under the board (#155) : « Blancs +3 », nothing when
+// The material balance beside the clocks (#155, #173) : « Blancs +3 », nothing when
 // the material is even or unknown.
 function renderBalance(taken) {
   const balance = taken ? taken.balance : 0;
@@ -257,8 +257,8 @@ const SIDE_PIECE = { white: '\u2654\ufe0e', black: '\u265a\ufe0e' };
 // Under this many seconds, the clock turns red (#135).
 const LOW_SECONDS = 30;
 
-// Two faces level with the board, the opponent's above, the player's below
-// (#135, Stéphane's choice) : the side to move lit up, the other dimmed.
+// Two faces beside the moves, the opponent's above, the player's below (#135,
+// #173, Stéphane's choice) : the side to move lit up, the other dimmed.
 function renderClocks(clock, color) {
   const sides = color === 'black' ? ['white', 'black'] : ['black', 'white'];
   for (const [id, side] of [['clock-top', sides[0]], ['clock-bottom', sides[1]]]) {
@@ -426,14 +426,14 @@ function render(state) {
   el('relay').textContent = state.relay_text || '';
   const fixing = state.lights.sync === 'fixing' && state.differing.length > 0;
   renderSetup(fixing ? state.setup : null);
-  // The captures stay in the panel during the setup ; the balance gives way
-  // to the setup under the board (#155).
+  // The captures and the balance stay in the panel during the setup, which
+  // has the tray under the board to itself (#155, #173).
   el('captures').hidden = !renderCaptures(state.captured, state.color);
-  const ahead = !fixing && renderBalance(state.captured);
+  // No gap kept beside the moves with neither clock nor capture (#173).
+  el('clocks').hidden = !state.clock && el('captures').hidden;
+  el('balance').hidden = !renderBalance(state.captured);
   el('differing').hidden = !fixing;
-  el('balance').hidden = !ahead;
-  el('tray').hidden = !fixing && !ahead;
-  el('tray').setAttribute('aria-label', fixing ? 'Mise en place' : 'Avantage matériel');
+  el('tray').hidden = !fixing;
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
   canSave = Boolean(state.can_save);
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');
