@@ -43,20 +43,21 @@
     <p id="relay" hidden></p>
     <p id="move-error" role="alert" hidden></p>
     <!-- The clocks beside the moves (#173) : the opponent's on top, the
-         player's below, as on a club table (#135), the captured pieces between. -->
+         player's below, as on a club table (#135), the captured pieces and the
+         balance between. The space under the board is kept for the setup. -->
     <div id="play">
       <ol id="moves"></ol>
       <div id="clocks">
         <p class="clock" id="clock-top" hidden><span class="who"></span><span class="time"></span></p>
         <!-- The captured pieces (#155) between the clocks (owner, #173) : one
-             column per side, a quarter of a square. -->
-        <div id="captures" class="cg-wrap" role="group" aria-label="Pièces prises" hidden></div>
+             column per side, a quarter of a square ; the material balance
+             right beside them (review Admin #174). -->
+        <div id="taken">
+          <div id="captures" class="cg-wrap" role="group" aria-label="Pièces prises" hidden></div>
+          <p id="balance" hidden></p>
+        </div>
         <p class="clock" id="clock-bottom" hidden><span class="who"></span><span class="time"></span></p>
       </div>
-      <!-- The material balance on the right of the clocks (owner, #173) : the
-           space under the board is kept for the setup and, later, the choice
-           of the variant. -->
-      <p id="balance" hidden></p>
     </div>
     <div id="fen-row">
       <button type="button" id="open-btn" title="Une autre de vos parties en cours (menu Fichier ▸ Ouvrir)">Ouvrir…</button>

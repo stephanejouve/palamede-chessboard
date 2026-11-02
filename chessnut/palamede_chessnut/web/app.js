@@ -232,7 +232,7 @@ function renderCaptures(taken, color) {
   return any;
 }
 
-// The material balance beside the clocks (#155, #173) : « Blancs +3 », nothing when
+// The material balance beside the captured pieces (#155, #173) : « Blancs +3 », nothing when
 // the material is even or unknown.
 function renderBalance(taken) {
   const balance = taken ? taken.balance : 0;
@@ -283,7 +283,10 @@ function statusText(state) {
   if (state.finished || (state.mouse && !state.live)) return 'Partie terminée.';
   if (!state.live) return 'Partie terminée : remettez la position finale sur l\'échiquier.';
   const turn = state.fen.split(' ')[1] === 'w' ? 'white' : 'black';
-  return turn === state.color ? 'À vous de jouer.' : 'Au tour de l\'adversaire.';
+  // The side named : « À vous de jouer » alone did not say which (smoke of Stéphane, 02/11).
+  return turn === state.color
+    ? `À vous de jouer (${SIDE_NAME[turn]}).`
+    : `Au tour de l'adversaire (${SIDE_NAME[turn]}).`;
 }
 
 // Numbered from the game's own move numbers : a game set up with Black to move
@@ -429,9 +432,9 @@ function render(state) {
   // The captures and the balance stay in the panel during the setup, which
   // has the tray under the board to itself (#155, #173).
   el('captures').hidden = !renderCaptures(state.captured, state.color);
-  // No gap kept beside the moves with neither clock nor capture (#173).
-  el('clocks').hidden = !state.clock && el('captures').hidden;
   el('balance').hidden = !renderBalance(state.captured);
+  // No gap kept beside the moves with neither clock nor capture (#173).
+  el('clocks').hidden = !state.clock && el('captures').hidden && el('balance').hidden;
   el('differing').hidden = !fixing;
   el('tray').hidden = !fixing;
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';

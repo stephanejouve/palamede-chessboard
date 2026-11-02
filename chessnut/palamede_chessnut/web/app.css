@@ -79,7 +79,10 @@ h1 { font-size: 18px; margin: 0; }
    01/11). The clocks live in the panel, beside the moves (#173). */
 main {
   display: grid;
-  grid-template-columns: minmax(0, 520px) minmax(240px, 1fr);
+  /* The board as tall as the window allows (review Admin #174), no longer
+     capped at 520 px : less the header, the page's padding and room for the
+     setup tray under it, so that the squares to fix stay on screen. */
+  grid-template-columns: minmax(0, max(240px, calc(100vh - 150px))) minmax(240px, 1fr);
   grid-template-areas: "stage side";
   gap: 10px 16px;
   align-items: start;
@@ -145,10 +148,11 @@ main {
 #differing .put { white-space: nowrap; }
 #differing .remove { color: var(--remove); font-weight: 600; }
 #differing[hidden], #balance[hidden], #captures[hidden] { display: none; }
-/* The material balance (#155), on the right of the clocks and the captures
-   (owner, #173) : a chip of the tray's colour, level with the captures. */
+/* The captured pieces and, right beside them, the material balance (#155,
+   review Admin #174). */
+#taken { display: flex; align-items: center; gap: 16px; }
+/* The balance : a chip of the tray's colour, level with the captures. */
 #balance {
-  align-self: center;
   margin: 0;
   padding: 6px 12px;
   background: var(--tray);
@@ -209,8 +213,8 @@ main {
 }
 .clock[hidden] { display: none; }
 /* The moves and, on their right, the two clocks : the opponent's at the top,
-   the player's at the bottom (#135, #173), the captured pieces between them,
-   then the material balance ; under the moves if the panel is narrow. */
+   the player's at the bottom (#135, #173), the captured pieces and the balance
+   between them ; under the moves if the panel is narrow. */
 #play { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: stretch; margin: 0 0 12px; }
 #play #moves { margin: 0; }
 #clocks { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; }
