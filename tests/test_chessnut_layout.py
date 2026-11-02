@@ -45,7 +45,9 @@ def test_the_clocks_sit_beside_the_moves() -> None:
         assert parents.around[element][-3:] == ["side", "play", "clocks"], element
     # The captured pieces between the two clocks (owner, #173).
     html = (PAGE / "index.html").read_text(encoding="utf-8")
-    assert html.index('id="clock-top"') < html.index('id="captures"') < html.index('id="clock-bottom"')
+    assert (
+        html.index('id="clock-top"') < html.index('id="captures"') < html.index('id="clock-bottom"')
+    )
     css = (PAGE / "app.css").read_text(encoding="utf-8")
     play = re.search(r"#play \{(.*?)\}", css, re.S)
     clocks = re.search(r"#clocks \{(.*?)\}", css, re.S)
