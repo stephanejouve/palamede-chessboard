@@ -37,14 +37,18 @@ def test_the_board_and_its_tray_share_one_column() -> None:
 
 
 def test_the_clocks_sit_beside_the_moves() -> None:
-    """In the panel, on the right of the moves (owner, #173), the opponent's first, the captures between."""
+    """In the panel, on the right of the moves (owner, #173), the opponent's first, the captures and the balance between."""
     parents = Parents()
     parents.feed((PAGE / "index.html").read_text(encoding="utf-8"))
     assert parents.around["moves"][-2:] == ["side", "play"]
-    # The material balance on the right of the clocks, out of the tray (owner, #173).
-    assert parents.around["balance"][-2:] == ["side", "play"]
-    for element in ("clock-top", "captures", "clock-bottom"):
+    for element in ("clock-top", "clock-bottom"):
         assert parents.around[element][-3:] == ["side", "play", "clocks"], element
+    # The captured pieces and, right beside them, the balance, out of the tray
+    # (owner #173, review Admin #174).
+    for element in ("captures", "balance"):
+        assert parents.around[element][-4:] == ["side", "play", "clocks", "taken"], element
+    taken = re.search(r"#taken \{(.*?)\}", (PAGE / "app.css").read_text(encoding="utf-8"), re.S)
+    assert taken is not None and "display: flex" in taken.group(1)
     # The captured pieces between the two clocks (owner, #173).
     html = (PAGE / "index.html").read_text(encoding="utf-8")
     assert (
@@ -64,6 +68,8 @@ def test_the_grid_keeps_the_tray_in_the_boards_column() -> None:
     wide = re.search(r"main \{\s*display: grid;(.*?)\}", css, re.S)
     assert wide is not None
     assert 'grid-template-areas: "stage side"' in wide.group(1)
+    # The board follows the window's height (review Admin #174), room kept for the tray.
+    assert "minmax(0, max(240px, calc(100vh - 150px)))" in wide.group(1)
     stage = re.search(r"#stage \{(.*?)\}", css, re.S)
     assert stage is not None and '"board" "tray"' in stage.group(1)
     # Stacked on a narrow window : the board and its tray, then the panel.
