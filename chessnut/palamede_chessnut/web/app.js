@@ -232,7 +232,7 @@ function renderCaptures(taken, color) {
   return any;
 }
 
-// The material balance under the board (#155) : « Blancs +3 », nothing when
+// The material balance beside the clocks (#155, #173) : « Blancs +3 », nothing when
 // the material is even or unknown.
 function renderBalance(taken) {
   const balance = taken ? taken.balance : 0;
@@ -426,16 +426,14 @@ function render(state) {
   el('relay').textContent = state.relay_text || '';
   const fixing = state.lights.sync === 'fixing' && state.differing.length > 0;
   renderSetup(fixing ? state.setup : null);
-  // The captures stay in the panel during the setup ; the balance gives way
-  // to the setup under the board (#155).
+  // The captures and the balance stay in the panel during the setup, which
+  // has the tray under the board to itself (#155, #173).
   el('captures').hidden = !renderCaptures(state.captured, state.color);
   // No gap kept beside the moves with neither clock nor capture (#173).
   el('clocks').hidden = !state.clock && el('captures').hidden;
-  const ahead = !fixing && renderBalance(state.captured);
+  el('balance').hidden = !renderBalance(state.captured);
   el('differing').hidden = !fixing;
-  el('balance').hidden = !ahead;
-  el('tray').hidden = !fixing && !ahead;
-  el('tray').setAttribute('aria-label', fixing ? 'Mise en place' : 'Avantage matériel');
+  el('tray').hidden = !fixing;
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
   canSave = Boolean(state.can_save);
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');

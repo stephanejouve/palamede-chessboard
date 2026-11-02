@@ -41,6 +41,8 @@ def test_the_clocks_sit_beside_the_moves() -> None:
     parents = Parents()
     parents.feed((PAGE / "index.html").read_text(encoding="utf-8"))
     assert parents.around["moves"][-2:] == ["side", "play"]
+    # The material balance on the right of the clocks, out of the tray (owner, #173).
+    assert parents.around["balance"][-2:] == ["side", "play"]
     for element in ("clock-top", "captures", "clock-bottom"):
         assert parents.around[element][-3:] == ["side", "play", "clocks"], element
     # The captured pieces between the two clocks (owner, #173).
