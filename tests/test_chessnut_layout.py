@@ -37,12 +37,15 @@ def test_the_board_and_its_tray_share_one_column() -> None:
 
 
 def test_the_clocks_sit_beside_the_moves() -> None:
-    """In the panel, on the right of the moves (owner, #173), the opponent's first."""
+    """In the panel, on the right of the moves (owner, #173), the opponent's first, the captures between."""
     parents = Parents()
     parents.feed((PAGE / "index.html").read_text(encoding="utf-8"))
     assert parents.around["moves"][-2:] == ["side", "play"]
-    for element in ("clock-top", "clock-bottom"):
+    for element in ("clock-top", "captures", "clock-bottom"):
         assert parents.around[element][-3:] == ["side", "play", "clocks"], element
+    # The captured pieces between the two clocks (owner, #173).
+    html = (PAGE / "index.html").read_text(encoding="utf-8")
+    assert html.index('id="clock-top"') < html.index('id="captures"') < html.index('id="clock-bottom"')
     css = (PAGE / "app.css").read_text(encoding="utf-8")
     play = re.search(r"#play \{(.*?)\}", css, re.S)
     clocks = re.search(r"#clocks \{(.*?)\}", css, re.S)

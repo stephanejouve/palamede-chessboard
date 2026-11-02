@@ -260,8 +260,6 @@ const LOW_SECONDS = 30;
 // Two faces beside the moves, the opponent's above, the player's below (#135,
 // #173, Stéphane's choice) : the side to move lit up, the other dimmed.
 function renderClocks(clock, color) {
-  // No gap kept beside the moves for a game without clock (#173).
-  el('clocks').hidden = !clock;
   const sides = color === 'black' ? ['white', 'black'] : ['black', 'white'];
   for (const [id, side] of [['clock-top', sides[0]], ['clock-bottom', sides[1]]]) {
     const node = el(id);
@@ -431,6 +429,8 @@ function render(state) {
   // The captures stay in the panel during the setup ; the balance gives way
   // to the setup under the board (#155).
   el('captures').hidden = !renderCaptures(state.captured, state.color);
+  // No gap kept beside the moves with neither clock nor capture (#173).
+  el('clocks').hidden = !state.clock && el('captures').hidden;
   const ahead = !fixing && renderBalance(state.captured);
   el('differing').hidden = !fixing;
   el('balance').hidden = !ahead;

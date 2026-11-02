@@ -147,7 +147,7 @@ main {
 #differing[hidden], #balance[hidden], #captures[hidden] { display: none; }
 /* The material balance (#155), where the captured pieces were. */
 #balance { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
-/* The captured pieces (#155) : in the side panel under the buttons, one column
+/* The captured pieces (#155) : between the two clocks (owner, #173), one column
    per side, the player's first ; the board's own pieces (#captures is a .cg-wrap
    for chessground's piece images) at a quarter of its squares (--square, set
    from the board's width ; owner, #173), 22 px at least to stay readable, one
@@ -157,7 +157,7 @@ main {
   grid-template-columns: repeat(2, max-content);
   gap: 0 24px;
   align-items: start;
-  margin: 12px 0 0;
+  margin: 0;
 }
 #captures .taken { display: flex; flex-direction: column; }
 #captures piece {
@@ -198,7 +198,8 @@ main {
 }
 .clock[hidden] { display: none; }
 /* The moves and, on their right, the two clocks : the opponent's at the top,
-   the player's at the bottom (#135, #173) ; under the moves if the panel is narrow. */
+   the player's at the bottom (#135, #173), the captured pieces between them ;
+   under the moves if the panel is narrow. */
 #play { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: stretch; margin: 0 0 12px; }
 #play #moves { margin: 0; }
 #clocks { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; }

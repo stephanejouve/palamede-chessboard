@@ -44,11 +44,14 @@
     <p id="relay" hidden></p>
     <p id="move-error" role="alert" hidden></p>
     <!-- The clocks beside the moves (#173) : the opponent's on top, the
-         player's below, as on a club table (#135). -->
+         player's below, as on a club table (#135), the captured pieces between. -->
     <div id="play">
       <ol id="moves"></ol>
       <div id="clocks">
         <p class="clock" id="clock-top" hidden><span class="who"></span><span class="time"></span></p>
+        <!-- The captured pieces (#155) between the clocks (owner, #173) : one
+             column per side, a quarter of a square. -->
+        <div id="captures" class="cg-wrap" role="group" aria-label="Pièces prises" hidden></div>
         <p class="clock" id="clock-bottom" hidden><span class="who"></span><span class="time"></span></p>
       </div>
     </div>
@@ -65,8 +68,6 @@
       <p id="export-msg" role="status" hidden></p>
     </div>
     <button type="button" id="log-btn" aria-expanded="false">Journal</button>
-    <!-- The captured pieces (#155) : one column per side, a quarter of a square (#173). -->
-    <div id="captures" class="cg-wrap" role="group" aria-label="Pièces prises" hidden></div>
     <pre id="log" hidden></pre>
   </section>
 </main>
