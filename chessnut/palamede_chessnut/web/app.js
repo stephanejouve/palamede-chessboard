@@ -25,9 +25,9 @@ const cg = Chessground(document.getElementById('board'), {
 });
 
 const el = (id) => document.getElementById(id);
-// The captured pieces take the size of the board's squares (#155) : --square
-// follows the board's width, which the window and the grid set. Set on
-// #captures alone, its only user (review Admin #159).
+// The captured pieces follow the size of the board's squares (#155, a quarter
+// of it since #173) : --square follows the board's width, which the window and
+// the grid set. Set on #captures alone, its only user (review Admin #159).
 new ResizeObserver(([entry]) => {
   const square = entry.contentRect.width / 8;
   el('captures').style.setProperty('--square', `${square}px`);
@@ -257,9 +257,11 @@ const SIDE_PIECE = { white: '\u2654\ufe0e', black: '\u265a\ufe0e' };
 // Under this many seconds, the clock turns red (#135).
 const LOW_SECONDS = 30;
 
-// Two faces level with the board, the opponent's above, the player's below
-// (#135, Stéphane's choice) : the side to move lit up, the other dimmed.
+// Two faces beside the moves, the opponent's above, the player's below (#135,
+// #173, Stéphane's choice) : the side to move lit up, the other dimmed.
 function renderClocks(clock, color) {
+  // No gap kept beside the moves for a game without clock (#173).
+  el('clocks').hidden = !clock;
   const sides = color === 'black' ? ['white', 'black'] : ['black', 'white'];
   for (const [id, side] of [['clock-top', sides[0]], ['clock-bottom', sides[1]]]) {
     const node = el(id);

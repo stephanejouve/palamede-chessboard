@@ -21,9 +21,6 @@
   </ul>
 </header>
 <main>
-  <!-- The clocks face their sides, as on a club table (#135) : the opponent's
-       level with the top of the board, the player's with its bottom. -->
-  <p class="clock" id="clock-top" hidden><span class="who"></span><span class="time"></span></p>
   <!-- The board and its tray in one column : the tray stays under the board
        however tall the side panel grows (smoke of Stéphane, 01/11). -->
   <div id="stage">
@@ -35,7 +32,6 @@
       <p id="balance" hidden></p>
     </section>
   </div>
-  <p class="clock" id="clock-bottom" hidden><span class="who"></span><span class="time"></span></p>
   <section id="side">
     <section id="picker" aria-labelledby="picker-title" hidden>
       <h2 id="picker-title">Ouvrir une partie</h2>
@@ -47,7 +43,15 @@
     <p id="token-msg" role="alert" hidden></p>
     <p id="relay" hidden></p>
     <p id="move-error" role="alert" hidden></p>
-    <ol id="moves"></ol>
+    <!-- The clocks beside the moves (#173) : the opponent's on top, the
+         player's below, as on a club table (#135). -->
+    <div id="play">
+      <ol id="moves"></ol>
+      <div id="clocks">
+        <p class="clock" id="clock-top" hidden><span class="who"></span><span class="time"></span></p>
+        <p class="clock" id="clock-bottom" hidden><span class="who"></span><span class="time"></span></p>
+      </div>
+    </div>
     <div id="fen-row">
       <button type="button" id="open-btn" title="Une autre de vos parties en cours (menu Fichier ▸ Ouvrir)">Ouvrir…</button>
       <!-- The « Échiquier » switch (#152) : pressed, the board ; released, the mouse. -->
@@ -61,7 +65,7 @@
       <p id="export-msg" role="status" hidden></p>
     </div>
     <button type="button" id="log-btn" aria-expanded="false">Journal</button>
-    <!-- The captured pieces (#155) : one column per side, at the board's size. -->
+    <!-- The captured pieces (#155) : one column per side, a quarter of a square (#173). -->
     <div id="captures" class="cg-wrap" role="group" aria-label="Pièces prises" hidden></div>
     <pre id="log" hidden></pre>
   </section>
