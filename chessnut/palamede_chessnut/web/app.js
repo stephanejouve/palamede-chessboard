@@ -283,7 +283,10 @@ function statusText(state) {
   if (state.finished || (state.mouse && !state.live)) return 'Partie terminée.';
   if (!state.live) return 'Partie terminée : remettez la position finale sur l\'échiquier.';
   const turn = state.fen.split(' ')[1] === 'w' ? 'white' : 'black';
-  return turn === state.color ? 'À vous de jouer.' : 'Au tour de l\'adversaire.';
+  // The side named : « À vous de jouer » alone did not say which (smoke of Stéphane, 02/11).
+  return turn === state.color
+    ? `À vous de jouer (${SIDE_NAME[turn]}).`
+    : `Au tour de l'adversaire (${SIDE_NAME[turn]}).`;
 }
 
 // Numbered from the game's own move numbers : a game set up with Black to move
