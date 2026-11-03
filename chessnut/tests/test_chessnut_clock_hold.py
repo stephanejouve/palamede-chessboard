@@ -10,8 +10,7 @@ from palamede_chessnut import clock_hold, viewer
 from palamede_chessnut.bridge import Bridge
 from palamede_chessnut.clock import seconds_left
 from palamede_chessnut.games import Session
-
-from tests.test_chessnut import Board, after, frame, placement, ready_bridge, snapshot
+from test_chessnut import Board, after, frame, placement, ready_bridge, snapshot
 
 
 @pytest.fixture

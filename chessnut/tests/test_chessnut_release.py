@@ -13,7 +13,7 @@ from pathlib import Path
 
 from palamede_chessnut import __version__
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_version_matches_pyproject_and_manifest() -> None:
