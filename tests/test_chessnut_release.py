@@ -30,11 +30,9 @@ def test_root_package_leaves_the_tablier_to_its_component() -> None:
     assert packages["chessnut"]["include-component-in-tag"] is True
 
 
-def test_only_the_tablier_is_released_as_0_2_0() -> None:
-    """Its first release (owner, 03/11) : a fix alone would make it 0.1.1. The key
-    goes once palamede-chessnut-v0.2.0 exists, the other packages never carry it."""
+def test_no_package_forces_its_version() -> None:
+    """release-as forced the Tablier's first release to 0.2.0 ; left in place, it
+    would force every later one too (review Admin #183)."""
     config = json.loads((ROOT / ".release-please-config.json").read_text())
-    packages = config["packages"]
-    assert packages["chessnut"]["release-as"] == "0.2.0"
     assert "release-as" not in config
-    assert all("release-as" not in packages[p] for p in packages if p != "chessnut")
+    assert all("release-as" not in package for package in config["packages"].values())
