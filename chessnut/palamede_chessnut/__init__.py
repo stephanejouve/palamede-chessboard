@@ -16,3 +16,5 @@ community documented for the Air. This package installs on its own
 (``chess`` and ``bleak``), without the palamède server stack ; ``bleak``
 is imported only when the board is reached.
 """
+
+__version__ = "0.1.0"  # x-release-please-version
