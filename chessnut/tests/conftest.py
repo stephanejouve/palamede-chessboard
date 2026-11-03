@@ -1,4 +1,4 @@
-"""Shared fixtures."""
+"""Shared fixtures of the Tablier's tests."""
 
 from __future__ import annotations
 
