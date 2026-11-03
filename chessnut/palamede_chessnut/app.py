@@ -26,6 +26,7 @@ import logging
 import threading
 from typing import Any
 
+from palamede_chessnut import __version__
 from palamede_chessnut.bridge import Bridge
 from palamede_chessnut.cli import bridge_from_args
 from palamede_chessnut.clipboard import Copy, system_copy
@@ -146,6 +147,8 @@ def main(argv: list[str] | None = None) -> None:
     recent = RecentLog()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     logging.getLogger().addHandler(recent)
+    # In the journal : which release of the Tablier a smoke ran.
+    log.info("palamede-chessnut %s", __version__)
     page = PageServer(bridge, recent)
     page.start()
     session = Session(bridge, run_bridge)
