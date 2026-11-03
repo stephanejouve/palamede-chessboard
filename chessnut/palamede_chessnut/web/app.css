@@ -105,6 +105,24 @@ main {
    (Mac smoke #97). A percentage padding follows the container's width, as the width
    does ; chessground's absolute cg-container fills the padding box. */
 #board { grid-area: board; width: 100%; height: 0; padding-bottom: 100%; }
+/* A coordinate takes the colour opposite to its square's, light on a dark square,
+   dark on a light one (a1 is dark). chessground.brown.css reasons on the DOM order
+   of chessground before 9.2, where the ranks went the other way : the viewer fixed
+   it on 05/10 (_styles.css.jinja), the Tablier had kept the vendor's rule (smoke of
+   Stéphane, 03/11). Children left to right for the files, bottom up for the ranks,
+   both reversed on a flipped board. */
+.cg-wrap.orientation-white coords.files coord:nth-child(odd),
+.cg-wrap.orientation-black coords.files coord:nth-child(even),
+.cg-wrap.orientation-white coords.ranks coord:nth-child(odd),
+.cg-wrap.orientation-black coords.ranks coord:nth-child(even) {
+  color: rgba(255, 255, 255, 0.95);
+}
+.cg-wrap.orientation-white coords.files coord:nth-child(even),
+.cg-wrap.orientation-black coords.files coord:nth-child(odd),
+.cg-wrap.orientation-white coords.ranks coord:nth-child(even),
+.cg-wrap.orientation-black coords.ranks coord:nth-child(odd) {
+  color: rgba(50, 50, 50, 0.95);
+}
 /* The promotion (#150) : over the board, in the same grid cell, the board
    dimmed ; the four pieces in a column from the square reached, the queen on it. */
 #promo {

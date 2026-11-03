@@ -81,3 +81,18 @@ def test_the_captured_pieces_are_a_quarter_of_a_square() -> None:
     piece = re.search(r"#captures piece \{(.*?)\}", css, re.S)
     assert piece is not None
     assert "max(calc(var(--square, 40px) / 4), 22px)" in piece.group(1)
+
+
+def test_a_coordinate_takes_the_colour_opposite_to_its_square() -> None:
+    """a1 dark : rank 1 and file a light on a white board, reversed when flipped (smoke 03/11)."""
+    css = (PAGE / "app.css").read_text(encoding="utf-8")
+    selector = r"\.cg-wrap\.orientation-(\w+) coords\.(\w+) coord:nth-child\((\w+)\)"
+    rules = {
+        colour: set(re.findall(selector, selectors))
+        for selectors, colour in re.findall(r"([^{}]*)\{\s*color: ([^;]+);", css)
+    }
+    light = rules["rgba(255, 255, 255, 0.95)"]
+    dark = rules["rgba(50, 50, 50, 0.95)"]
+    for axis in ("files", "ranks"):
+        assert {("white", axis, "odd"), ("black", axis, "even")} <= light
+        assert {("white", axis, "even"), ("black", axis, "odd")} <= dark
