@@ -32,7 +32,7 @@ token_file = "~/.config/palamede/token"
 transport = "auto"
 # The game two rooks lifted open (#167) ; these are the defaults.
 opponent = "bot-maia-1100"
-time_control = "5+3"
+time_control = "15+10"
 ```
 
 ```
@@ -73,6 +73,15 @@ against `opponent` in `time_control` (settings above), a light runs along
 your back rank, and the window moves to the new game. A refusal (too many
 games open, opponent unknown, token refused) is said in the window ; put
 the rooks back before trying again.
+
+The same way, from the starting position, two white pieces lifted for 5
+seconds step the clock of the games opened next, one notch per gesture
+(#186) : g1 + f1 the base time (3, 5, 10, 15, 25, 90 min), b1 + c1 the
+increment (0, 2, 3, 5, 10, 30 s), back to the first notch after the last.
+Put the two pieces back between two notches. The window says the clock ;
+on the board, the squares of rank 3 (base) or rank 4 (increment) count
+the notch reached, from the a-file. The clock starts from `time_control`
+and lasts as long as the app : the settings file is not rewritten.
 
 ## Over the USB cable or Bluetooth (#82, #110)
 

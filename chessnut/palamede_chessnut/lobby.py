@@ -4,8 +4,8 @@ The app starts without a game in progress, or one is over : a lobby then
 holds the board instead of a game's bridge. It reads the placement only.
 From the starting position, the two rooks of one side lifted together for
 :data:`GESTURE_SECONDS` open a game for that side, against the default
-opponent of :func:`.config.new_game` (``bot-maia-1100`` in 5+3), through the
-viewer's ``POST /api/games`` (#126) with the player's token.
+opponent of :func:`.config.new_game` (``bot-maia-1100`` in 15+10), through
+the viewer's ``POST /api/games`` (#126) with the player's token.
 
 * a1 + h1 lifted : White ; a8 + h8 lifted : Black. No legal move takes two
   rooks off at once, and resigning lifts the king alone ;
@@ -17,6 +17,13 @@ viewer's ``POST /api/games`` (#126) with the player's token.
   new game the way « Ouvrir une partie » does (#90, #121) ;
 * a refusal (429 too many games, 422 opponent, 401 token) is said in the
   window, without a light, and not tried again until the rooks move.
+
+Two white pieces lifted the same way step the clock of the games opened
+next, one notch per gesture (#186) : g1 + f1 the base time, b1 + c1 the
+increment, back to the first notch after the last. The pieces go back
+between two notches, the window says the clock, and a row of lights counts
+the notch reached. The clock lives as long as the app : it does not rewrite
+the settings file, which also says where the token is sent.
 
 A lobby that follows a finished game keeps that game on screen.
 """
@@ -32,7 +39,7 @@ from typing import Any
 
 import chess
 
-from palamede_chessnut import leds, viewer
+from palamede_chessnut import config, leds, viewer
 from palamede_chessnut.bridge import RESIGN_SECONDS, Bridge, cancel_on_sigterm
 
 log = logging.getLogger(__name__)
@@ -45,9 +52,15 @@ GESTURES = {
     chess.BLACK: (chess.A8, chess.H8),
 }
 SIDES = {chess.WHITE: "Blancs", chess.BLACK: "Noirs"}
+#: Part of the clock (0 the base minutes, 1 the increment seconds) → the pieces
+#: lifted and the notches, validated by the owner on 02/11 (#186).
+NOTCHES = {
+    0: ((chess.G1, chess.F1), (3, 5, 10, 15, 25, 90)),
+    1: ((chess.B1, chess.C1), (0, 2, 3, 5, 10, 30)),
+}
 HINT = (
     "pièces en position de départ, levez a1+h1 (Blancs) ou a8+h8 (Noirs) pendant 5 s "
-    "pour une nouvelle partie."
+    "pour une nouvelle partie ; g1+f1 change le temps de base, b1+c1 l'incrément."
 )
 #: HTTP status → what the window says when the server's own words are missing.
 REFUSALS = {
@@ -80,13 +93,40 @@ def gesture_side(observed: chess.BaseBoard) -> chess.Color | None:
     return None
 
 
+def notch_part(observed: chess.BaseBoard) -> int | None:
+    """The part of the clock whose two pieces are lifted off the starting position, else ``None``."""
+    for part, (squares, _notches) in NOTCHES.items():
+        if observed == _without(squares):
+            return part
+    return None
+
+
 def on_the_way(observed: chess.BaseBoard) -> bool:
-    """The starting position, or one or both rooks of one side lifted : the gesture's states."""
+    """The starting position, or one or both pieces of a gesture lifted : the gestures' states."""
+    pairs = [*GESTURES.values(), *(squares for squares, _notches in NOTCHES.values())]
     return any(
         observed == _without(lifted)
-        for squares in GESTURES.values()
+        for squares in pairs
         for lifted in ((), squares[:1], squares[1:], squares)
     )
+
+
+def stepped(time_control: str, part: int) -> str:
+    """``time_control`` one notch further on ``part`` ; a value between notches goes to the next.
+
+    Without a clock (``unrated``), the steps start from the default one.
+    """
+    if time_control == "unrated":
+        time_control = config.NEW_GAME["time_control"]
+    clock = [int(n) for n in time_control.split("+")]
+    notches = NOTCHES[part][1]
+    clock[part] = next((n for n in notches if n > clock[part]), notches[0])
+    return f"{clock[0]}+{clock[1]}"
+
+
+def said(time_control: str) -> str:
+    """The clock as the window says it."""
+    return "sans pendule" if time_control == "unrated" else time_control
 
 
 def refusal(status: int | None, body: Any) -> str:
@@ -138,6 +178,8 @@ class Lobby(Bridge):
         #: The new game, once opened : handed over after the chaser.
         self.created: str | None = None
         self.counting: chess.Color | None = None
+        #: The part of the clock whose gesture is held.
+        self.stepping: int | None = None
         self.refused_text: str | None = None
         #: The whole starting position stood on the board since the last other placement.
         self.armed = False
@@ -152,7 +194,12 @@ class Lobby(Bridge):
         if self.counting is not None:
             left = max(GESTURE_SECONDS - (time.monotonic() - self.settled_since), 0.0)
             return f"Nouvelle partie avec les {SIDES[self.counting]} dans {left:.0f} s…"
-        return ("Partie terminée : " if self.finished else "Aucune partie : ") + HINT
+        clock = self.new_game["time_control"]
+        if self.stepping is not None:
+            left = max(GESTURE_SECONDS - (time.monotonic() - self.settled_since), 0.0)
+            return f"Cadence {stepped(clock, self.stepping)} dans {left:.0f} s…"
+        state = "Partie terminée" if self.finished else "Aucune partie"
+        return f"{state}, cadence {said(clock)} : {HINT}"
 
     async def run(self) -> None:
         loop = asyncio.get_running_loop()
@@ -174,21 +221,36 @@ class Lobby(Bridge):
         elif not on_the_way(self.observed):
             self.armed = False
         side = gesture_side(self.observed) if self.armed else None
-        if side is None or self.tried == self.settled_since:
-            if side is None:
-                self.refused_text = None  # the rooks are back : a new try may come
-            self.counting = None
+        part = notch_part(self.observed) if self.armed else None
+        squares = (
+            GESTURES[side] if side is not None else NOTCHES[part][0] if part is not None else None
+        )
+        if squares is None or self.tried == self.settled_since:
+            if squares is None:
+                self.refused_text = None  # the pieces are back : a new try may come
+            self.counting = self.stepping = None
             await self._show(write, frozenset())
             return
-        self.counting = side
+        self.counting, self.stepping = side, part
         self.refused_text = None
         held = time.monotonic() - self.settled_since
         if held < GESTURE_SECONDS:
-            await self._show(write, leds.blink(frozenset(GESTURES[side]), held))
+            await self._show(write, leds.blink(frozenset(squares), held))
             return
-        self.tried, self.counting = self.settled_since, None
+        self.tried, self.counting, self.stepping = self.settled_since, None, None
         await self._show(write, frozenset())
-        await self._create(side)
+        if side is not None:
+            await self._create(side)
+        elif part is not None:
+            self._step(part)
+
+    def _step(self, part: int) -> None:
+        """The clock one notch further, the notch reached counted on the board."""
+        clock = stepped(self.new_game["time_control"], part)
+        log.info("clock stepped : %s → %s", self.new_game["time_control"], clock)
+        self.new_game["time_control"] = clock
+        notch = NOTCHES[part][1].index(int(clock.split("+")[part]))
+        self.animation = leds.notch(2 + part, notch + 1)
 
     async def _create(self, side: chess.Color) -> None:
         self.creating = True

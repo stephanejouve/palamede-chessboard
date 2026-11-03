@@ -8,7 +8,7 @@ on macOS and Linux, ``%APPDATA%\\palamede\\`` on Windows ; ``--config`` or
     token_file = "~/.config/palamede/token"
     transport = "auto"
     opponent = "bot-maia-1100"
-    time_control = "5+3"
+    time_control = "15+10"
 
 ``opponent`` and ``time_control`` are the game the board's gesture opens
 (#167), :data:`NEW_GAME` when the file says nothing. It names the token *file*, never the token : a ``token`` key is refused.
@@ -30,8 +30,9 @@ from typing import Any
 log = logging.getLogger(__name__)
 
 TRANSPORTS = ("auto", "ble", "usb")
-#: The game the two rooks lifted open (#167), defaults validated by the owner on 01/11.
-NEW_GAME = {"opponent": "bot-maia-1100", "time_control": "5+3"}
+#: The game the two rooks lifted open (#167), defaults validated by the owner on 01/11,
+#: the clock 15+10 on 03/11 (#186).
+NEW_GAME = {"opponent": "bot-maia-1100", "time_control": "15+10"}
 #: The viewer's own clock rule (``POST /api/games``, #126) : ``M+S`` or ``unrated``.
 TIME_CONTROL = re.compile(r"unrated|[0-9]{1,3}\+[0-9]{1,3}")
 #: Key → what it must be ; the text is the error.
