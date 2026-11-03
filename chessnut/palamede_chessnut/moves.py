@@ -33,6 +33,18 @@ def differing_squares(expected: chess.BaseBoard, observed: chess.BaseBoard) -> s
     return {sq for sq in chess.SQUARES if expected.piece_at(sq) != observed.piece_at(sq)}
 
 
+def only_king_lifted(
+    expected: chess.BaseBoard, observed: chess.BaseBoard, color: chess.Color
+) -> bool:
+    """The board shows ``expected`` but for ``color``'s king, lifted off : the resignation gesture.
+
+    Any other square that differs means a setup under way, where a king held
+    up is not a resignation (tablier-miseenplace-001, #179).
+    """
+    king = expected.king(color)
+    return king is not None and differing_squares(expected, observed) == {king}
+
+
 def relayed(before: chess.Board | None, san: str, after: chess.Board) -> str:
     """``g8f6 (Nf6)`` ; the SAN alone when ``before`` is not the position it was played from."""
     if before is not None:

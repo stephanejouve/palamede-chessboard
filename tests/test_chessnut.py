@@ -831,6 +831,44 @@ async def test_opponent_king_off_the_board_is_not_a_resignation() -> None:
     assert bridge.king_gone_since is None
 
 
+async def test_king_held_up_while_setting_up_again_is_not_a_resignation() -> None:
+    """tablier-miseenplace-001 (#179) : once synced, a setup undone is not a resignation."""
+    bridge = ready_bridge(after("e4"), chess.BLACK)
+    bridge._post_resign = lambda: pytest.fail("not a resignation")  # type: ignore[method-assign]
+    undone = _without_king(after("e4"), chess.BLACK)
+    undone.remove_piece_at(chess.D8)
+    bridge.on_frame(None, bytearray(frame(undone)))
+    bridge.king_gone_since = time.monotonic() - 10.0
+    await bridge.tick(Board().write)
+    assert bridge.king_gone_since is None and bridge.resign_state is None
+
+
+async def test_another_piece_moved_during_the_countdown_stops_it() -> None:
+    bridge, calls, _board = await _lift_king((200, ""), held_for=1.0)
+    assert bridge.king_gone_since is not None
+    undone = _without_king(after("e4"), chess.BLACK)
+    undone.remove_piece_at(chess.D8)
+    bridge.on_frame(None, bytearray(frame(undone)))
+    await bridge.tick(Board().write)
+    assert bridge.king_gone_since is None and calls == []
+
+
+async def test_king_lifted_instead_of_relaying_the_opponent_move_resigns() -> None:
+    """The board still shows the position before the move to relay : the gesture holds."""
+    bridge = ready_bridge(after("e4"), chess.WHITE)
+    bridge.on_frame(None, bytearray(frame(placement(after("e4")))))
+    bridge.apply_stream(snapshot(after("e4", "e5")))
+    assert bridge.to_relay is not None
+    calls: list[int] = []
+    bridge._post_resign = lambda: (calls.append(1), (200, ""))[1]  # type: ignore[method-assign]
+    bridge.on_frame(None, bytearray(frame(_without_king(after("e4"), chess.WHITE))))
+    await bridge.tick(Board().write)
+    bridge.king_gone_since = time.monotonic() - RESIGN_SECONDS
+    await bridge.tick(Board().write)
+    await bridge.tick(Board().write)
+    assert calls == [1] and bridge.resign_state == "sent"
+
+
 async def test_game_over_guides_to_the_final_position_then_blinks_and_stops() -> None:
     mate = after("f3", "e5", "g4", "Qh4#")
     bridge = ready_bridge(after("f3", "e5", "g4"))
