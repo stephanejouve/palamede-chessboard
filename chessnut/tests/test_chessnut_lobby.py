@@ -14,7 +14,14 @@ from palamede_chessnut import config, leds, lobby, viewer
 from palamede_chessnut.bridge import Bridge
 from palamede_chessnut.cli import bridge_from_args
 from palamede_chessnut.games import NO_GAME, Session
-from palamede_chessnut.lobby import GESTURE_SECONDS, NO_SERVER, Lobby, gesture_side
+from palamede_chessnut.lobby import (
+    GESTURE_SECONDS,
+    NO_SERVER,
+    Lobby,
+    gesture_side,
+    notch_part,
+    stepped,
+)
 from palamede_chessnut.page import PageServer
 from palamede_chessnut.status import snapshot, sync_light
 
@@ -95,7 +102,7 @@ async def test_the_gesture_held_opens_the_game_with_the_defaults(monkeypatch) ->
         (
             f"{VIEWER}/api/games",
             TOKEN,
-            {"opponent": "bot-maia-1100", "color": "black", "time_control": {"format": "5+3"}},
+            {"opponent": "bot-maia-1100", "color": "black", "time_control": {"format": "15+10"}},
         )
     ]
     assert board.created == NEW and board.player == chess.BLACK
@@ -132,7 +139,7 @@ async def test_the_rooks_back_before_5_s_cancel(monkeypatch) -> None:
     held(board, chess.BaseBoard(), 10)
     await board.tick(write)
     assert server.posts == [] and board.leds == frozenset()
-    assert board.lobby_text() == "Aucune partie : " + lobby.HINT
+    assert board.lobby_text() == "Aucune partie, cadence 15+10 : " + lobby.HINT
 
 
 async def test_pieces_set_up_with_the_rooks_last_open_nothing(monkeypatch) -> None:
@@ -256,6 +263,120 @@ async def test_a_refusal_is_not_tried_again_until_the_rooks_move(monkeypatch) ->
     assert len(server.posts) == 2
 
 
+# ---- the clock's notches (#186) -----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("placement", "part"),
+    [
+        (lifted(chess.G1, chess.F1), 0),
+        (lifted(chess.B1, chess.C1), 1),
+        (lifted(chess.B1, chess.G1), None),  # the two knights : the lesson, not yet
+        (lifted(chess.C1, chess.F1), None),  # the two bishops : the problem, not yet
+        (lifted(chess.G8, chess.F8), None),  # Black's pieces open nothing here
+        (lifted(chess.G1, chess.F1, chess.B1), None),
+        (lifted(chess.G1), None),
+        (chess.BaseBoard(), None),
+    ],
+)
+def test_two_white_pieces_off_the_start_step_one_part(placement, part) -> None:
+    assert notch_part(placement) == part
+    assert gesture_side(placement) is None
+
+
+@pytest.mark.parametrize(
+    ("clock", "part", "after"),
+    [
+        ("15+10", 0, "25+10"),
+        ("90+10", 0, "3+10"),  # after the last, the first
+        ("15+10", 1, "15+30"),
+        ("15+30", 1, "15+0"),
+        ("7+1", 0, "10+1"),  # from the settings, between two notches : the next one
+        ("7+1", 1, "7+2"),
+        ("120+45", 0, "3+45"),
+        ("unrated", 0, "25+10"),  # no clock : from the default one
+        ("unrated", 1, "15+30"),
+    ],
+)
+def test_one_notch_further(clock, part, after) -> None:
+    assert stepped(clock, part) == after
+
+
+async def test_the_base_gesture_held_steps_the_clock_without_a_game(monkeypatch) -> None:
+    server = Server(monkeypatch)
+    board = new_lobby()
+    held(board, lifted(chess.G1, chess.F1), GESTURE_SECONDS)
+    await board.tick(Board())
+    assert server.posts == []
+    assert board.new_game["time_control"] == "25+10"
+    assert board.animation == leds.notch(2, 5)  # 25 min : the fifth notch, on rank 3
+    assert board.lobby_text() == "Aucune partie, cadence 25+10 : " + lobby.HINT
+
+
+async def test_the_increment_notch_is_counted_on_rank_4(monkeypatch) -> None:
+    Server(monkeypatch)
+    board = new_lobby()
+    held(board, lifted(chess.B1, chess.C1), GESTURE_SECONDS)
+    await board.tick(Board())
+    assert board.new_game["time_control"] == "15+30"
+    assert board.animation == leds.notch(3, 6)
+    assert leds.notch(3, 6)[0] == frozenset(chess.square(f, 3) for f in range(6))
+
+
+async def test_before_5_s_the_two_pieces_blink_and_the_window_says_the_next_clock(
+    monkeypatch,
+) -> None:
+    Server(monkeypatch)
+    board = new_lobby()
+    held(board, lifted(chess.B1, chess.C1), 2.1)
+    await board.tick(Board())
+    assert board.new_game["time_control"] == "15+10"
+    assert board.leds in (frozenset({chess.B1, chess.C1}), frozenset())
+    assert board.lobby_text() == "Cadence 15+30 dans 3 s…"
+
+
+async def test_one_notch_per_gesture_the_pieces_put_back_in_between(monkeypatch) -> None:
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, lifted(chess.G1, chess.F1), GESTURE_SECONDS)
+    await board.tick(write)
+    board.animation = []
+    await board.tick(write)  # still held : no second notch
+    assert board.new_game["time_control"] == "25+10"
+    held(board, chess.BaseBoard(), 1)
+    await board.tick(write)
+    held(board, lifted(chess.G1, chess.F1), GESTURE_SECONDS)
+    await board.tick(write)
+    assert board.new_game["time_control"] == "90+10"
+
+
+async def test_the_stepped_clock_is_the_next_game_s(monkeypatch) -> None:
+    server = Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, lifted(chess.B1, chess.C1), GESTURE_SECONDS)
+    await board.tick(write)
+    board.animation = []
+    held(board, chess.BaseBoard(), 1)
+    await board.tick(write)
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS)
+    await board.tick(write)
+    assert server.posts[0][2]["time_control"] == {"format": "15+30"}
+
+
+async def test_pieces_set_up_with_g1_f1_last_step_nothing(monkeypatch) -> None:
+    Server(monkeypatch)
+    board = new_lobby(armed=False)
+    held(board, lifted(chess.G1, chess.F1), GESTURE_SECONDS + 1)
+    await board.tick(Board())
+    assert board.new_game["time_control"] == "15+10" and board.stepping is None
+
+
+def test_without_a_clock_the_window_says_so() -> None:
+    board = new_lobby(new_game={"opponent": "bot-maia-1100", "time_control": "unrated"})
+    held(board, chess.BaseBoard(), 1)
+    assert board.lobby_text() == "Aucune partie, cadence sans pendule : " + lobby.HINT
+
+
 # ---- the page --------------------------------------------------------------
 
 
@@ -271,7 +392,7 @@ def test_the_page_says_how_to_open_a_game() -> None:
     board = new_lobby()
     held(board, chess.BaseBoard(), 1)
     state = snapshot(board)
-    assert state["lobby"] == "Aucune partie : " + lobby.HINT
+    assert state["lobby"] == "Aucune partie, cadence 15+10 : " + lobby.HINT
     assert state["game_id"] == "" and state["fen"] is None
     assert state["setup"] is None and state["differing"] == []
     assert state["lights"]["sync"] == "waiting"
@@ -283,7 +404,7 @@ def test_a_finished_game_stays_on_screen_its_board_no_longer_compared() -> None:
     state = snapshot(board)
     assert state["game_id"] == "009" and state["history"] == ["Qh1#"]
     assert state["finished"] and state["account"] == "stephane"
-    assert state["lobby"] == "Partie terminée : " + lobby.HINT
+    assert state["lobby"] == "Partie terminée, cadence 15+10 : " + lobby.HINT
     assert state["setup"] is None and state["differing"] == []
     assert sync_light(board) == "waiting"
 
@@ -499,12 +620,12 @@ def test_post_json_keeps_the_status_of_an_unreadable_success(monkeypatch) -> Non
 
 def test_the_settings_give_the_new_game(tmp_path) -> None:
     path = tmp_path / "config.toml"
-    path.write_text('opponent = "bot-maia-1500"\ntime_control = "15+10"\n', encoding="utf-8")
+    path.write_text('opponent = "bot-maia-1500"\ntime_control = "10+5"\n', encoding="utf-8")
     assert config.new_game(config.load(path)) == {
         "opponent": "bot-maia-1500",
-        "time_control": "15+10",
+        "time_control": "10+5",
     }
-    assert config.new_game({}) == {"opponent": "bot-maia-1100", "time_control": "5+3"}
+    assert config.new_game({}) == {"opponent": "bot-maia-1100", "time_control": "15+10"}
 
 
 @pytest.mark.parametrize("value", ["5 + 3", "5", "blitz", "5+3+1", "1234+0"])
