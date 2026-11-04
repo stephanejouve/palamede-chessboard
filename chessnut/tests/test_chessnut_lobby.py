@@ -490,6 +490,38 @@ async def test_a_knight_back_on_its_square_chooses_again(monkeypatch) -> None:
     assert board.animation == leds.chosen(frozenset({chess.C3}))
 
 
+async def test_the_log_tells_a_knight_without_value_and_a_disarmed_lobby(
+    monkeypatch, caplog
+) -> None:
+    """Smoke of Stéphane, 04/11 : the log must tell a gesture not seen from one not made."""
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    with caplog.at_level("INFO", logger="palamede_chessnut.lobby"):
+        held(board, knight(chess.G1, chess.H3), CHOICE_SECONDS)
+        await board.tick(write)
+        await board.tick(write)  # once per placement
+        held(board, lifted(chess.E2), 1)
+        await board.tick(write)
+    assert caplog.text.count("knight on h3 : no value there") == 1
+    assert "gestures disarmed until the starting position : " in caplog.text
+    assert not board.armed
+
+
+async def test_two_knights_put_together_on_one_rank_choose_nothing_and_say_so(
+    monkeypatch,
+) -> None:
+    """Review Junior #191 : b1 on c3 and g1 on f3 within the same 2 s."""
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, two_knights(chess.C3, chess.F3), CHOICE_SECONDS)
+    await board.tick(write)
+    assert board.new_game["time_control"] == "15+10" and board.animation == []
+    assert board.lobby_text() == "Deux cavaliers sur la rangée 3 : retirez-en un."
+    held(board, knight(chess.B1, chess.C3), CHOICE_SECONDS)
+    await board.tick(write)
+    assert board.new_game["time_control"] == "10+10" and board.clash == []
+
+
 async def test_the_value_already_in_place_is_said(monkeypatch) -> None:
     """Stéphane, 04/11 : « 15+2 → 15+2 » showed nothing, as if the gesture failed."""
     Server(monkeypatch)

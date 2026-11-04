@@ -219,6 +219,10 @@ class Lobby(Bridge):
         self.choosing: tuple[Choice, ...] = ()
         #: The squares whose choice is taken : not again while the knight stays.
         self.taken: set[chess.Square] = set()
+        #: The ranks (1-8) two knights were just put on together : neither counts.
+        self.clash: list[int] = []
+        #: ``settled_since`` of the placement whose idle knight is logged.
+        self.noted: float | None = None
         self.refused_text: str | None = None
         #: The whole starting position stood on the board since the last other placement.
         self.armed = False
@@ -234,6 +238,9 @@ class Lobby(Bridge):
             left = max(GESTURE_SECONDS - (time.monotonic() - self.settled_since), 0.0)
             return f"Nouvelle partie avec les {SIDES[self.counting]} dans {left:.0f} s…"
         clock = self.new_game["time_control"]
+        if self.clash:
+            ranks = " et ".join(str(rank) for rank in self.clash)
+            return f"Deux cavaliers sur la rangée {ranks} : retirez-en un."
         if self.choosing:
             left = max(CHOICE_SECONDS - (time.monotonic() - self.settled_since), 0.0)
             new = chosen(clock, self.choosing)
@@ -258,9 +265,17 @@ class Lobby(Bridge):
             return
         if self.observed is None or self.creating or self.created is not None:
             return
+        # What the board was read as, in the log : the smoke can then tell a
+        # gesture not seen from one not made (smoke of Stéphane, 04/11).
         if self.observed == chess.BaseBoard():
+            if not self.armed:
+                log.info("starting position on the board : gestures armed")
             self.armed = True
         elif not on_the_way(self.observed):
+            if self.armed:
+                log.info(
+                    "gestures disarmed until the starting position : %s", self.observed.board_fen()
+                )
             self.armed = False
         side = gesture_side(self.observed) if self.armed else None
         standing = choices(self.observed) if self.armed else ()
@@ -271,6 +286,9 @@ class Lobby(Bridge):
         fresh = [c for c in standing if c[2] not in self.taken]
         parts = [part for part, _value, _square in fresh]
         picked = tuple(c for c in fresh if parts.count(c[0]) == 1)
+        # Said, else nothing seems to happen (review Junior #191).
+        self.clash = sorted({CHOICES[part][0] + 1 for part in parts if parts.count(part) > 1})
+        self._note_idle_knights(self.observed, standing)
         if (side is None and not picked) or self.tried == self.settled_since:
             if side is None and not picked:
                 self.refused_text = None  # the pieces are back : a new try may come
@@ -294,6 +312,18 @@ class Lobby(Bridge):
             self._choose(picked)
         elif side is not None:
             await self._create(side)
+
+    def _note_idle_knights(self, observed: chess.BaseBoard, standing: tuple[Choice, ...]) -> None:
+        """Logs, once per placement, a knight standing where no value is."""
+        held = time.monotonic() - self.settled_since
+        if not self.armed or self.noted == self.settled_since or held < CHOICE_SECONDS:
+            return
+        valued = {square for _part, _value, square in standing}
+        idle = [s for s in knights_off(observed) or () if s not in valued]
+        if idle:
+            self.noted = self.settled_since
+            names = " ".join(chess.square_name(s) for s in idle)
+            log.info("knight on %s : no value there (a3-f3, a4-f4)", names)
 
     def _choose(self, picked: tuple[Choice, ...]) -> None:
         """The clock with the knights' values, their squares blinking to say so."""
