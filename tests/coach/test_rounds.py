@@ -5,6 +5,7 @@
 * an unchanged game is not read again (mtime filter), the registry
   changing forgets them all ;
 * a game that waited or failed is deferred for :data:`RETRY_SECONDS` ;
+* ``stop`` is read between two games, not only between two rounds ;
 * the loop makes rounds until stopped, a failing round included.
 """
 
@@ -215,15 +216,54 @@ def test_without_memory_nothing_is_deferred(gdir: Path, popen, monkeypatch) -> N
     assert run_once(gdir, engine_path="/fake", now=NOW + 1)["failed"] == ["g1"]
 
 
+# --- stop between games ---------------------------------------------------------------
+
+
+def test_stop_ends_the_round_after_the_game_in_hand(gdir: Path, popen, monkeypatch) -> None:
+    _game(gdir, "g1", SCHOLAR)
+    _game(gdir, "g2", SCHOLAR)
+    stop = threading.Event()
+    real = diagnosis._one_game
+    handled: list[str] = []
+
+    def one_game(pgn, *args, **kwargs):
+        handled.append(pgn.stem)
+        outcome = real(pgn, *args, **kwargs)
+        stop.set()  # SIGTERM during the first game
+        return outcome
+
+    monkeypatch.setattr(diagnosis, "_one_game", one_game)
+    memory = RoundMemory()
+    summary = run_once(gdir, engine_path="/fake", memory=memory, now=NOW, stop=stop)
+    assert summary["diagnosed"] == ["g1"] and handled == ["g1"]
+    assert read_report(gdir, "g1") is not None and read_report(gdir, "g2") is None
+    assert "g2" not in memory.settled  # left for the next start
+    monkeypatch.setattr(diagnosis, "_one_game", real)
+    later = run_once(gdir, engine_path="/fake", memory=memory, now=NOW + 30)
+    assert later["diagnosed"] == ["g2"]
+
+
+def test_a_stop_set_before_the_round_reads_nothing(gdir: Path, popen, loads) -> None:
+    _game(gdir, "g1", SCHOLAR)
+    stop = threading.Event()
+    stop.set()
+    loads.clear()
+    assert run_once(gdir, engine_path="/fake", stop=stop)["diagnosed"] == []
+    assert loads == []
+    popen.assert_not_called()
+
+
 # --- the loop -------------------------------------------------------------------------
 
 
 def test_the_loop_makes_rounds_until_stopped(gdir: Path, monkeypatch) -> None:
     stop = threading.Event()
     rounds: list[RoundMemory] = []
+    stops: list[threading.Event | None] = []
 
     def one_round(games_dir, **kwargs):
         rounds.append(kwargs["memory"])
+        stops.append(kwargs.get("stop"))
         if len(rounds) == 1:
             raise registry.RegistryError("unreadable")  # a failing round : the next comes
         if len(rounds) == 3:
@@ -234,6 +274,7 @@ def test_the_loop_makes_rounds_until_stopped(gdir: Path, monkeypatch) -> None:
     run_forever(gdir, interval=0, stop=stop)
     assert len(rounds) == 3
     assert rounds[0] is rounds[1] is rounds[2]  # one memory across rounds
+    assert stops == [stop, stop, stop]  # read between two games too
 
 
 def test_the_cli_runs_until_sigterm(gdir: Path, monkeypatch) -> None:
