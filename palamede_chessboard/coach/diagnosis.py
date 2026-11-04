@@ -14,7 +14,13 @@ waits for a later round rather than being reported with holes.
 Like every Stockfish path of the server, each analysis goes through
 :func:`~palamede_chessboard.chess_engine_guard.check_engine_call` and
 leaves a line in the engine log, with ``caller="coach"`` : the coach
-runs alone in production, and the fair-play log must see it too.
+runs alone in production, and the fair-play log must see it too. A game
+one of whose positions a live game reached waits **before** the engine
+is started (:func:`~palamede_chessboard.chess_engine_guard.game_in_play`),
+and is checked again after it, in case a live game got there meanwhile.
+
+``palamede-coach run`` makes a round every ``--interval`` seconds until
+SIGTERM, remembering between rounds what :mod:`~.rounds` describes.
 """
 
 from __future__ import annotations
@@ -22,12 +28,16 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import signal
+import threading
+import time
 from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
 from palamede_chessboard.chess_engine_guard import (
     check_engine_call,
+    game_in_play,
     is_exercise_game,
     log_engine_call,
     mask_walk_entries,
@@ -42,6 +52,7 @@ from palamede_chessboard.chessboard_state import ChessboardError, GameState
 from palamede_chessboard.coach import CALLER
 from palamede_chessboard.coach.exercises import exercises_of
 from palamede_chessboard.coach.motifs import HEURISTIC_MOTIFS, motif_of
+from palamede_chessboard.coach.rounds import DEFAULT_INTERVAL, RoundMemory, mtime_ns
 from palamede_chessboard.coach.store import add_exercises, game_key, read_report, write_report
 from palamede_chessboard.paths import resolve_games_dir
 from palamede_chessboard.players import registry
@@ -98,6 +109,9 @@ def diagnose(
         raise ValueError(f"{state.metadata.game_id} is in progress")
     game_id = state.metadata.game_id
     decision = check_engine_call(games_dir, tool=ENGINE_TOOL, game_id=game_id)
+    if decision["allowed"] and (match := game_in_play(state, games_dir)) is not None:
+        reason = "a position of the game is in a game in progress"
+        decision = {"allowed": False, "matched_game_id": match, "reason": reason}
     if not decision["allowed"]:
         log_engine_call(tool=ENGINE_TOOL, decision=decision, game_id=game_id, caller=CALLER)
         return None  # refused by the guard : later
@@ -157,8 +171,42 @@ def _diagnose_one(
     return added
 
 
+def _one_game(
+    pgn: Path, games_dir: Path, players: dict, *, depth: int, engine_path: str | None
+) -> tuple[str, int]:
+    """``(outcome, exercises added)`` ; outcome ``settled``, ``diagnosed``,
+    ``waiting`` or ``failed``. Settled : nothing to do until the PGN changes."""
+    game_id = pgn.stem
+    try:
+        state = GameState.load(game_id, games_dir=games_dir)
+    except ChessboardError as exc:
+        log.warning("coach: skip %s (%s)", game_id, exc)
+        return "settled", 0
+    if state.metadata.result == "*":
+        return "settled", 0
+    sides = human_sides(state, players)
+    if not sides:
+        return "settled", 0
+    existing = read_report(games_dir, game_id)
+    if existing is not None and existing.get("key") == game_key(state):
+        return "settled", 0
+    try:
+        added = _diagnose_one(state, sides, games_dir, depth=depth, engine_path=engine_path)
+    except Exception as exc:  # noqa: BLE001 — one game never stops the round
+        log.warning("coach: %s not diagnosed (%s)", game_id, exc)
+        return "failed", 0
+    if added is None:
+        return "waiting", 0
+    return "diagnosed", added
+
+
 def run_once(
-    games_dir: Path, *, depth: int = DEFAULT_DEPTH, engine_path: str | None = None
+    games_dir: Path,
+    *,
+    depth: int = DEFAULT_DEPTH,
+    engine_path: str | None = None,
+    memory: RoundMemory | None = None,
+    now: float | None = None,
 ) -> dict:
     """Diagnose every finished game of a human that has no report for its key,
     and draw its exercises.
@@ -166,50 +214,84 @@ def run_once(
     Idempotent : a game already reported under the same key is skipped.
     An unreadable registry stops the round (fail closed) ; a game that
     cannot be read or analysed is logged and left for the next round.
+    With ``memory`` (``palamede-coach run``), unchanged games are not read
+    and a game that waited or failed is ``deferred`` for a while.
     """
     players = registry.load(games_dir)["players"]
-    summary: dict = {"diagnosed": [], "waiting": [], "failed": [], "exercises": 0}
+    if memory is not None:
+        memory.start_round(games_dir)
+    now = time.time() if now is None else now
+    summary: dict = {"diagnosed": [], "waiting": [], "failed": [], "deferred": [], "exercises": 0}
     for pgn in sorted(games_dir.glob("*.pgn")):
         game_id = pgn.stem
         if is_exercise_game(game_id):
             continue  # one move from a position : no game to learn from
-        try:
-            state = GameState.load(game_id, games_dir=games_dir)
-        except ChessboardError as exc:
-            log.warning("coach: skip %s (%s)", game_id, exc)
+        if memory is not None and memory.deferred(game_id, now):
+            summary["deferred"].append(game_id)
             continue
-        if state.metadata.result == "*":
+        if memory is not None and memory.unchanged(pgn):
             continue
-        sides = human_sides(state, players)
-        if not sides:
-            continue
-        existing = read_report(games_dir, game_id)
-        if existing is not None and existing.get("key") == game_key(state):
-            continue
-        try:
-            added = _diagnose_one(state, sides, games_dir, depth=depth, engine_path=engine_path)
-        except Exception as exc:  # noqa: BLE001 — one game never stops the round
-            log.warning("coach: %s not diagnosed (%s)", game_id, exc)
-            summary["failed"].append(game_id)
-            continue
-        if added is None:
-            summary["waiting"].append(game_id)
-            continue
-        summary["diagnosed"].append(game_id)
+        mtime = mtime_ns(pgn)  # before reading : a move meanwhile is seen next round
+        outcome, added = _one_game(pgn, games_dir, players, depth=depth, engine_path=engine_path)
         summary["exercises"] += added
+        if outcome != "settled":
+            summary[outcome].append(game_id)
+        if memory is None:
+            continue
+        if outcome in ("waiting", "failed"):
+            memory.retry_later(game_id, now)
+        else:
+            memory.settle(game_id, mtime)
     return summary
 
 
+def run_forever(
+    games_dir: Path,
+    *,
+    interval: float = DEFAULT_INTERVAL,
+    depth: int = DEFAULT_DEPTH,
+    engine_path: str | None = None,
+    stop: threading.Event | None = None,
+) -> None:
+    """``palamede-coach run`` : a round every ``interval`` seconds until ``stop``.
+
+    A round that fails (an unreadable registry, a games directory gone)
+    is logged and the next one comes : the coach never stops on its own.
+    """
+    stop = stop or threading.Event()
+    memory = RoundMemory()
+    log.info("coach: running on %s every %ss", games_dir, interval)
+    while not stop.is_set():
+        try:
+            summary = run_once(games_dir, depth=depth, engine_path=engine_path, memory=memory)
+        except Exception:  # noqa: BLE001 — logged, and the next round comes
+            log.exception("coach: round failed")
+        else:
+            if any(summary[key] for key in ("diagnosed", "waiting", "failed")):
+                log.info("coach: %s", json.dumps(summary))
+        stop.wait(interval)
+    log.info("coach: stopped")
+
+
 def main(argv: list[str] | None = None) -> int:
-    """``palamede-coach once`` : one round over the games directory."""
+    """``palamede-coach once`` or ``run`` over the games directory."""
     parser = argparse.ArgumentParser(prog="palamede-coach", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     once = sub.add_parser("once", help="diagnose the finished games and draw exercises once")
-    once.add_argument("--games-dir", type=Path, default=None)
-    once.add_argument("--depth", type=int, default=DEFAULT_DEPTH)
+    run = sub.add_parser("run", help="a round every --interval seconds, until SIGTERM")
+    run.add_argument("--interval", type=float, default=DEFAULT_INTERVAL)
+    for command in (once, run):
+        command.add_argument("--games-dir", type=Path, default=None)
+        command.add_argument("--depth", type=int, default=DEFAULT_DEPTH)
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-    summary = run_once(args.games_dir or resolve_games_dir(), depth=args.depth)
+    games_dir = args.games_dir or resolve_games_dir()
+    if args.command == "run":
+        stop = threading.Event()
+        signal.signal(signal.SIGTERM, lambda *_: stop.set())
+        run_forever(games_dir, interval=args.interval, depth=args.depth, stop=stop)
+        return 0
+    summary = run_once(games_dir, depth=args.depth)
     print(json.dumps(summary, indent=2))
     return 0
 
