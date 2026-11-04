@@ -74,14 +74,20 @@ your back rank, and the window moves to the new game. A refusal (too many
 games open, opponent unknown, token refused) is said in the window ; put
 the rooks back before trying again.
 
-The same way, from the starting position, two white pieces lifted for 5
-seconds step the clock of the games opened next, one notch per gesture
-(#186) : g1 + f1 the base time (3, 5, 10, 15, 25, 90 min), b1 + c1 the
-increment (0, 2, 3, 5, 10, 30 s), back to the first notch after the last.
-Put the two pieces back between two notches. The window says the clock ;
-on the board, the squares of rank 3 (base) or rank 4 (increment) count
-the notch reached, from the a-file. The clock starts from `time_control`
-and lasts as long as the app : the settings file is not rewritten.
+From the starting position too, a white knight chooses the clock of the
+games opened next (#186) : put the g1 knight on rank 3 for the base time,
+the b1 knight on rank 4 for the increment, the file giving the value.
+
+| Knight | a | b | c | d | e | f |
+|---|---|---|---|---|---|---|
+| g1 → rank 3, base | 3 min | 5 | 10 | 15 | 25 | 90 |
+| b1 → rank 4, increment | 0 s | 2 | 3 | 5 | 10 | 30 |
+
+The value is taken once the knight has stood 2 seconds on its square (a
+square crossed on the way chooses nothing) ; the square blinks, then put
+the knight back home. Without a game, the tray under the board says the
+clock and these gestures. The clock starts from `time_control` and lasts
+as long as the app : the settings file is not rewritten.
 
 ## Over the USB cable or Bluetooth (#82, #110)
 

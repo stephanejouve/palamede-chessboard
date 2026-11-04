@@ -96,3 +96,16 @@ def test_a_coordinate_takes_the_colour_opposite_to_its_square() -> None:
     for axis in ("files", "ranks"):
         assert {("white", axis, "odd"), ("black", axis, "even")} <= light
         assert {("white", axis, "even"), ("black", axis, "odd")} <= dark
+
+
+def test_without_a_game_the_gestures_are_said_under_the_board() -> None:
+    """The lobby's text in the tray, where the notes will come ; the panel keeps a short status (Stéphane, 03/11)."""
+    parents = Parents()
+    parents.feed((PAGE / "index.html").read_text(encoding="utf-8"))
+    assert parents.around["lobby"][-2:] == ["stage", "tray"]
+    script = (PAGE / "app.js").read_text(encoding="utf-8")
+    assert "el('tray').hidden = !fixing && !state.lobby;" in script
+    assert "el('lobby').textContent = state.lobby || '';" in script
+    assert (
+        "if (state.lobby) return state.finished ? 'Partie terminée.' : 'Aucune partie.';" in script
+    )

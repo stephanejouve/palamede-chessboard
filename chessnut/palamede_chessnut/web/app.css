@@ -165,7 +165,8 @@ main {
 #differing { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; margin: 0; }
 #differing .put { white-space: nowrap; }
 #differing .remove { color: var(--remove); font-weight: 600; }
-#differing[hidden], #balance[hidden], #captures[hidden] { display: none; }
+#lobby { margin: 0; }
+#differing[hidden], #lobby[hidden], #balance[hidden], #captures[hidden] { display: none; }
 /* The captured pieces and, right beside them, the material balance (#155,
    review Admin #174). */
 #taken { display: flex; align-items: center; gap: 16px; }

@@ -277,8 +277,9 @@ function renderClocks(clock, color) {
 }
 
 function statusText(state) {
-  // No game on the board : how to open one, the countdown, a refusal (#167).
-  if (state.lobby) return state.lobby;
+  // No game on the board : the gestures, the countdown, a refusal (#167) are
+  // said in the tray under the board (smoke of Stéphane, 03/11).
+  if (state.lobby) return state.finished ? 'Partie terminée.' : 'Aucune partie.';
   if (!state.fen) return 'En attente de la partie…';
   if (state.finished || (state.mouse && !state.live)) return 'Partie terminée.';
   if (!state.live) return 'Partie terminée : remettez la position finale sur l\'échiquier.';
@@ -436,7 +437,9 @@ function render(state) {
   // No gap kept beside the moves with neither clock nor capture (#173).
   el('clocks').hidden = !state.clock && el('captures').hidden && el('balance').hidden;
   el('differing').hidden = !fixing;
-  el('tray').hidden = !fixing;
+  el('lobby').hidden = !state.lobby;
+  el('lobby').textContent = state.lobby || '';
+  el('tray').hidden = !fixing && !state.lobby;
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
   canSave = Boolean(state.can_save);
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');

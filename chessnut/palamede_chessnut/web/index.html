@@ -27,7 +27,10 @@
     <div id="board"></div>
     <!-- The promotion, as on lichess (#150) : four pieces on the square reached. -->
     <div id="promo" class="cg-wrap" role="dialog" aria-label="Promotion" hidden></div>
-    <section id="tray" aria-label="Mise en place" hidden>
+    <!-- Under the board : the setup, or without a game what the board's
+         gestures do (smoke of Stéphane, 03/11), where the notes will come. -->
+    <section id="tray" aria-label="Sous l'échiquier" hidden>
+      <p id="lobby" role="status" hidden></p>
       <p id="differing"></p>
     </section>
   </div>
