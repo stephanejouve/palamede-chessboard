@@ -55,6 +55,30 @@ function renderLeds(squares) {
   cg.set({ highlight: { custom: new Map(squares.map((square) => [square, 'led'])) } });
 }
 
+// Without a game, each knight's square says its value (smoke of Stéphane,
+// 04/11), in the square's corner, the board's orientation followed ; not over
+// a piece of the finished game left on screen (review Admin #191). Rebuilt
+// only when the values, the free squares or the orientation change.
+let lastTips = null;
+function renderTips(tips) {
+  const white = cg.state.orientation === 'white';
+  const free = Object.entries(tips).filter(([square]) => !cg.state.pieces.has(square));
+  const key = `${white}:${JSON.stringify(free)}`;
+  if (key === lastTips) return;
+  lastTips = key;
+  const nodes = free.map(([square, value]) => {
+    const file = square.charCodeAt(0) - 97;
+    const rank = Number(square[1]) - 1;
+    const span = document.createElement('span');
+    span.style.left = `${(white ? file : 7 - file) * 12.5}%`;
+    span.style.top = `${(white ? 7 - rank : rank) * 12.5}%`;
+    span.textContent = value;
+    return span;
+  });
+  el('tips').replaceChildren(...nodes);
+  el('tips').hidden = nodes.length === 0;
+}
+
 function setLight(name, value) {
   const node = el(`light-${name}`);
   node.hidden = value === 'none';
@@ -277,8 +301,9 @@ function renderClocks(clock, color) {
 }
 
 function statusText(state) {
-  // No game on the board : how to open one, the countdown, a refusal (#167).
-  if (state.lobby) return state.lobby;
+  // No game on the board : the gestures, the countdown, a refusal (#167) are
+  // said in the tray under the board (smoke of Stéphane, 03/11).
+  if (state.lobby) return state.finished ? 'Partie terminée.' : 'Aucune partie.';
   if (!state.fen) return 'En attente de la partie…';
   if (state.finished || (state.mouse && !state.live)) return 'Partie terminée.';
   if (!state.live) return 'Partie terminée : remettez la position finale sur l\'échiquier.';
@@ -412,6 +437,7 @@ function render(state) {
   renderMouse(state);
   renderSwitch(state);
   renderLeds(state.differing);
+  renderTips(state.tips || {});
   setLight('bluetooth', state.lights.bluetooth);
   el('light-bluetooth').textContent = state.transport === 'usb' ? 'USB' : 'Bluetooth';
   setLight('server', state.lights.server);
@@ -436,7 +462,10 @@ function render(state) {
   // No gap kept beside the moves with neither clock nor capture (#173).
   el('clocks').hidden = !state.clock && el('captures').hidden && el('balance').hidden;
   el('differing').hidden = !fixing;
-  el('tray').hidden = !fixing;
+  el('lobby').hidden = !state.lobby;
+  el('lobby').textContent = state.lobby || '';
+  el('gestures').hidden = !state.lobby;
+  el('tray').hidden = !fixing && !state.lobby;
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
   canSave = Boolean(state.can_save);
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');

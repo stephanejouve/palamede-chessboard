@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import chess
 
+from palamede_chessnut.lobby import tips
 from palamede_chessnut.mouse import legal_targets
 from palamede_chessnut.moves import differing_squares
 from palamede_chessnut.token_light import REFUSING
@@ -227,6 +228,8 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
         ),
         # No game on the board : the gesture that opens one (#167).
         "lobby": lobby,
+        # The knight's squares and their values, written on the screen's board.
+        "tips": tips() if lobby is not None else {},
         "captured": captured(bridge.history, bridge.start_fen) if game is not None else None,
         # Mouse play (#92) : what the page may play now, empty with a board.
         "mouse": not bridge.with_board,

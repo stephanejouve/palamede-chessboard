@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/stephanejouve/palamede-chessboard/compare/palamede-chessnut-v0.2.0...palamede-chessnut-v0.3.0) (2026-11-04)
+
+
+### Features
+
+* **chessnut:** the white knights choose the clock, said under the board ([#191](https://github.com/stephanejouve/palamede-chessboard/issues/191)) ([4cc7523](https://github.com/stephanejouve/palamede-chessboard/commit/4cc7523ddfac0f87365b481a1aeb02c344595136))
+* **chessnut:** the games the lobby opens default to 15+10 ([#189](https://github.com/stephanejouve/palamede-chessboard/issues/189)) ([e6eb7b0](https://github.com/stephanejouve/palamede-chessboard/commit/e6eb7b0093cb11791b0a7e05345c985e0fd5ad9d))
+
 ## [0.2.0](https://github.com/stephanejouve/palamede-chessboard/compare/palamede-chessnut-v0.1.0...palamede-chessnut-v0.2.0) (2026-11-03)
 
 

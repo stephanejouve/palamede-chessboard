@@ -49,8 +49,8 @@ def chaser(rank: int) -> list[Frame]:
     return run * 2 + [frozenset()]
 
 
-def notch(rank: int, count: int) -> list[Frame]:
-    """The clock stepped (#186) : ``count`` squares from the a-file on ``rank`` blink twice, then dark."""
-    lit: Frame = frozenset(chess.square(file, rank) for file in range(count))
+def chosen(squares: Frame) -> list[Frame]:
+    """The clock chosen by knights (#186) : their squares blink twice, slower than the wait, then dark."""
+    lit: Frame = squares
     dark: Frame = frozenset()
     return [lit] * 5 + [dark] * 3 + [lit] * 5 + [dark]
