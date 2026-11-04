@@ -8,6 +8,8 @@ calls :func:`metadata_from_headers` on load and :func:`pgn_text` on save.
 
 from __future__ import annotations
 
+import re
+
 import chess
 
 from palamede_chessboard.metadata import (
@@ -17,23 +19,42 @@ from palamede_chessboard.metadata import (
     TimeControl,
 )
 
+#: A ``[%cmd …]`` of the PGN supplement, such as ``[%clk 0:14:58]``.
+COMMAND_RE = re.compile(r"\[%[^\]]*\]")
 
-def _movetext(san_history: list[str], root: chess.Board) -> str:
+
+def _clk(seconds: float) -> str:
+    """``[%clk H:MM:SS]`` of the time left, in whole seconds (#151)."""
+    left = max(0, int(seconds))
+    return f"[%clk {left // 3600}:{left % 3600 // 60:02d}:{left % 60:02d}]"
+
+
+def _movetext(
+    san_history: list[str], root: chess.Board, clocks: list[float | None] | None = None
+) -> str:
     """Number ``san_history`` from the root position (issue #36).
 
     A standard game gives ``1. e4 e5 2. Nf3``. A game started from a FEN
     keeps its own move number, and opens with ``N...`` when Black moves
     first, so the PGN stays valid for the viewer and external tools.
+    ``clocks[i]``, when known, is written after move ``i`` as
+    ``{ [%clk 0:14:58] }`` (#151) ; Black's move after it takes ``N...``.
     """
+    clocks = clocks or []
     number = root.fullmove_number
     white_to_move = root.turn == chess.WHITE
     tokens: list[str] = []
-    for san in san_history:
+    commented = False
+    for i, san in enumerate(san_history):
         if white_to_move:
             tokens.append(f"{number}. {san}")
         else:
-            tokens.append(f"{number}... {san}" if not tokens else san)
+            tokens.append(f"{number}... {san}" if not tokens or commented else san)
             number += 1
+        clock = clocks[i] if i < len(clocks) else None
+        commented = clock is not None
+        if clock is not None:
+            tokens.append(f"{{ {_clk(clock)} }}")
         white_to_move = not white_to_move
     return " ".join(tokens)
 
@@ -87,7 +108,8 @@ def termination_from_pgn(
     if raw is None:
         return None, None
     if raw.lower() in TERMINATIONS:
-        return raw, final_comment or None
+        # The last move's ``[%clk]`` shares that comment : not the note.
+        return raw, " ".join(COMMAND_RE.sub(" ", final_comment).split()) or None
     return "normal", raw
 
 
@@ -132,7 +154,12 @@ def metadata_from_headers(
     )
 
 
-def pgn_text(metadata: GameMetadata, root: chess.Board, san_history: list[str]) -> str:
+def pgn_text(
+    metadata: GameMetadata,
+    root: chess.Board,
+    san_history: list[str],
+    clocks: list[float | None] | None = None,
+) -> str:
     """The PGN of a game : headers, root position, movetext and result.
 
     Built in memory, so a header refused by #128 raises before any file
@@ -149,5 +176,5 @@ def pgn_text(metadata: GameMetadata, root: chess.Board, san_history: list[str]) 
     tail = metadata.result
     if metadata.termination_note:
         tail = f"{{{metadata.termination_note}}} {tail}"
-    body = f"{_movetext(san_history, root)} {tail}" if san_history else tail
+    body = f"{_movetext(san_history, root, clocks)} {tail}" if san_history else tail
     return "\n".join(lines) + "\n\n" + body + "\n"
