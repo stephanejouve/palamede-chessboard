@@ -53,7 +53,7 @@ from palamede_chessboard.chessboard_state import (
     InvalidGameStateError,
     StalePlyError,
 )
-from palamede_chessboard.players.observe import observe
+from palamede_chessboard.players.observe import auth_mode, observe
 
 __all__ = [
     "ARBITER_DAEMON_PIDFILE",
@@ -100,7 +100,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     games_dir = _games_dir()
     headers = _request_headers()
     # #34 step 2 : PALAMEDE_AUTH_MODE=observe journals the verdict, never refuses.
-    observe(name, arguments, headers, games_dir, transport="stdio" if headers is None else "http")
+    # Its disk accesses go to a thread, not to the event loop of every call (#65).
+    if auth_mode() == "observe":
+        transport = "stdio" if headers is None else "http"
+        await asyncio.to_thread(observe, name, arguments, headers, games_dir, transport=transport)
     # Every call sets it : a handler never sees the previous caller's identity.
     REQUEST_HEADERS.set(headers)
     try:

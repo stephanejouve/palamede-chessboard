@@ -168,6 +168,46 @@ def test_observation_failure_never_breaks_the_call(
     assert obs.observe("chess_view_state", {"game_id": "g"}, {}, gdir, transport="http") is None
 
 
+def test_an_allowed_read_is_not_journaled(gdir: Path) -> None:
+    """#65 : les agents lisent en boucle, seuls les refus et les écarts de ``by`` comptent."""
+    token = registry.issue_token(gdir, "cd", label="t")
+    headers = {"authorization": f"Bearer {token}"}
+    entry = obs.observe("chess_view_state", {"game_id": "g"}, headers, gdir, transport="http")
+    assert entry is not None and entry["verdict"] == "allow"
+    assert _journal(gdir) == []
+    obs.observe(
+        "chess_view_state", {"game_id": "g", "by": "leader"}, headers, gdir, transport="http"
+    )
+    obs.observe("chess_play_move", {"game_id": "g"}, headers, gdir, transport="http")
+    assert [(e["tool"], e["by_matches"], e["code"]) for e in _journal(gdir)] == [
+        ("chess_view_state", False, None),
+        ("chess_play_move", None, "NOT_A_PLAYER"),
+    ]
+
+
+def test_the_journal_rotates_past_its_size(gdir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#65 : passé la taille, le journal devient ``.1`` ; un seul ancien gardé."""
+    path = registry.registry_path(gdir).parent / obs.OBSERVATIONS_FILENAME
+    obs.observe("chess_view_state", {"game_id": "a"}, {}, gdir, transport="http")
+    line = path.stat().st_size
+    path.unlink()
+    monkeypatch.setattr(obs, "MAX_JOURNAL_BYTES", 3 * line)  # trois lignes par fichier
+
+    def games(name: str) -> list[str]:
+        text = path.with_name(name).read_text(encoding="utf-8")
+        return [json.loads(entry)["game_id"] for entry in text.splitlines()]
+
+    for game in "abcdefg":
+        obs.observe("chess_view_state", {"game_id": game}, {}, gdir, transport="http")
+    assert games(obs.OBSERVATIONS_FILENAME) == ["g"]
+    assert games(obs.OBSERVATIONS_FILENAME + ".1") == ["d", "e", "f"]  # a, b, c perdus
+    assert sorted(p.name for p in path.parent.glob(obs.OBSERVATIONS_FILENAME + "*")) == [
+        obs.OBSERVATIONS_FILENAME,
+        obs.OBSERVATIONS_FILENAME + ".1",
+        obs.OBSERVATIONS_FILENAME + ".lock",
+    ]
+
+
 # ---- de bout en bout, transport HTTP ---------------------------------------
 
 
@@ -207,6 +247,5 @@ def test_http_end_to_end_observes_without_refusing(gdir: Path) -> None:
         ("chess_play_move", "junior", "NOT_YOUR_TURN", "http"),
         ("chess_play_move", "junior", None, "http"),
         ("chess_view_state", None, "UNAUTHENTICATED", "http"),
-        ("chess_view_state", "leader", None, "http"),
-    ]
+    ]  # la lecture de leader, autorisée, n'est pas journalisée (#65)
     assert GameState.load("g", games_dir=gdir).san_history == ["e4", "e5"]
