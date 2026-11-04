@@ -14,6 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 from palamede_chessboard import cli_matchmaking
+from palamede_chessboard.chess_engine_guard import is_exercise_game
 from palamede_chessboard.chessboard_state import (
     ChessboardError,
     GameMetadata,
@@ -51,7 +52,7 @@ def test_the_prefix_is_reserved(game_id: str) -> None:
 @pytest.mark.parametrize("game_id", ["exo-20261020-mat", "exo", "exodus.1", "tablier-like"])
 def test_older_and_other_ids_are_free(game_id: str) -> None:
     refuse_reserved_game_id(game_id)
-    assert play.is_exercise_game(game_id) is False
+    assert is_exercise_game(game_id) is False
 
 
 def test_tablier_stays_reserved() -> None:

@@ -22,6 +22,7 @@ import logging
 import chess
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
+from palamede_chessboard.chess_engine_guard import is_exercise_game
 from palamede_chessboard.chessboard_state import (
     ChessboardError,
     GameNotFoundError,
@@ -276,7 +277,7 @@ def _play(state: GameState, who: str, san: str, gdir) -> dict:
     A refused exercise move is a 409 whose ``detail`` the Tablier's bridge
     shows as is (« Ce n'est pas le coup »), the board left unchanged.
     """
-    if not exercise_play.is_exercise_game(state.metadata.game_id):
+    if not is_exercise_game(state.metadata.game_id):
         return state.play_move(san, by=who)
     try:
         return exercise_play.play_move(state, who, san, gdir)

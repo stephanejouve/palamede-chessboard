@@ -16,7 +16,11 @@ dash) are ordinary games and stay so.
 No engine here : the solution was computed when the exercise was drawn.
 It is never in a game, and an exercise shows it only once ``solved``
 (:func:`public_view`) : a live game that reaches the position would
-otherwise read it around the engine guard (Admin, #95).
+otherwise read it around the engine guard (Admin, #95). For the same
+reason an exercise is an oracle — a 409 or a 200 tells the engine's
+move — so start, the move and the answer are refused while a live game,
+not an exercise, went through its position, opening and mirror
+included ; each refusal is in the engine log (review Admin #204).
 
 Locks : a game's lock, then the player's store, never the other way.
 """
@@ -29,6 +33,10 @@ from pathlib import Path
 
 import chess
 
+from palamede_chessboard.chess_engine_guard import (
+    live_game_through,
+    log_engine_call,
+)
 from palamede_chessboard.chessboard_state import (
     GameAlreadyExistsError,
     GameMetadata,
@@ -37,9 +45,11 @@ from palamede_chessboard.chessboard_state import (
     TimeControl,
 )
 from palamede_chessboard.clock_moves import game_lock
+from palamede_chessboard.coach import CALLER
 from palamede_chessboard.coach.store import read_exercises, update_exercise
+from palamede_chessboard.paths import EXERCISE_PREFIX
 
-EXO_PREFIX = "exo."
+EXO_PREFIX = EXERCISE_PREFIX
 EVENT = "Exercice"
 #: The other side of an exercise game, never rated : a name no account can
 #: carry (a space), so no token ever acts for it in someone's exercise.
@@ -48,6 +58,9 @@ SOLVED_NOTE = "exercice réussi"
 ABANDONED_NOTE = "exercice abandonné"
 NOT_THE_MOVE = "Ce n'est pas le coup"
 FASTER_MATE = "Il y a plus rapide : un mat en moins de coups"
+POSITION_IN_PLAY = "Exercice indisponible : une partie en cours passe par cette position"
+#: How a refused exercise appears in the engine log.
+LOG_TOOL = "coach_exercise"
 #: Tools that change a game : refused on ``exo.*`` by the MCP (Admin, #95).
 MCP_REFUSED_TOOLS = frozenset(
     {
@@ -70,11 +83,6 @@ class ExerciseError(Exception):
         super().__init__(message)
         self.status = status
         self.message = message
-
-
-def is_exercise_game(game_id: object) -> bool:
-    """``exo.*``, whatever its case ; never the older ``exo-…``."""
-    return str(game_id or "").lower().startswith(EXO_PREFIX)
 
 
 def public_view(exercise: dict) -> dict:
@@ -118,6 +126,22 @@ def _attempt(exercise_id: str, games_dir: Path, player_id: str, entry: dict, ok:
     return update_exercise(games_dir, player_id, exercise_id, change)
 
 
+def _refuse_if_in_play(games_dir: Path, exercise: dict, action: str) -> None:
+    """409 while a live game went through the exercise's position, logged."""
+    fen = exercise["fen"]
+    match = live_game_through(fen, games_dir)
+    if match is None:
+        return
+    decision = {
+        "allowed": False,
+        "matched_game_id": match,
+        "reason": f"exercise {exercise['id']} : its position is in a game in progress",
+    }
+    extra = {"exercise_id": exercise["id"], "action": action}
+    log_engine_call(tool=LOG_TOOL, decision=decision, fen=fen, caller=CALLER, extra=extra)
+    raise ExerciseError(409, POSITION_IN_PLAY)
+
+
 def _close_open_games(games_dir: Path, player_id: str) -> None:
     """One exercise at a time : an open one is abandoned, never left open."""
     for pgn in sorted(games_dir.glob(f"{EXO_PREFIX}{player_id}.*.pgn")):
@@ -135,6 +159,7 @@ def start(games_dir: Path, player_id: str, exercise_id: str) -> dict:
     )
     if exercise is None:
         raise ExerciseError(404, "Exercice inconnu")
+    _refuse_if_in_play(games_dir, exercise, "start")
     _close_open_games(games_dir, player_id)
     side = exercise["side"]
     white, black = (player_id, OPPONENT) if side == "white" else (OPPONENT, player_id)
@@ -174,6 +199,7 @@ def play_move(state: GameState, player_id: str, move_san: str, games_dir: Path) 
     exercise = _exercise_of_game(games_dir, player_id, game_id)
     if exercise["kind"] != "find_move":
         raise ExerciseError(409, "Répondez en désignant les cases des pièces en prise")
+    _refuse_if_in_play(games_dir, exercise, "move")
     try:
         uci = state.board.parse_san(move_san).uci()
     except ValueError as exc:
@@ -213,6 +239,7 @@ def answer(games_dir: Path, player_id: str, exercise_id: str, squares: list[str]
         state = GameState.load(game_id, games_dir=games_dir)
         if state.metadata.result != "*":
             raise ExerciseError(409, "Cet exercice est terminé")
+        _refuse_if_in_play(games_dir, exercise, "answer")
         entry = {"game_id": game_id, "squares": given}
         if given != exercise["solution_squares"]:
             _attempt(exercise_id, games_dir, player_id, entry, ok=False)

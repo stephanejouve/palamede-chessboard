@@ -44,6 +44,7 @@ from palamede_chessboard._mcp_shared import (
 )
 from palamede_chessboard._mcp_tool_handlers import TOOL_HANDLERS
 from palamede_chessboard._mcp_tool_schemas import TOOL_SCHEMAS
+from palamede_chessboard.chess_engine_guard import is_exercise_game
 from palamede_chessboard.chessboard_engine import EngineUnavailableError
 from palamede_chessboard.chessboard_state import (
     ChessboardError,
@@ -108,9 +109,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     # Every call sets it : a handler never sees the previous caller's identity.
     REQUEST_HEADERS.set(headers)
     try:
-        if name in exercise_play.MCP_REFUSED_TOOLS and exercise_play.is_exercise_game(
-            arguments.get("game_id")
-        ):
+        if name in exercise_play.MCP_REFUSED_TOOLS and is_exercise_game(arguments.get("game_id")):
             # The MCP takes ``by`` as given : an exercise is played under a
             # player's token, in the viewer only (Admin, #95).
             return _mcp_response(

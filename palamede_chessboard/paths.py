@@ -56,9 +56,10 @@ GAME_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-][a-zA-Z0-9_.-]{0,63}$")
 #: trust that only a human's token opens these games (review Leader #131).
 #: ``exo.`` : an exercise of the coach, judged against a solution (#95) ; the
 #: older ``exo-…`` games (a dash) are not reserved.
+EXERCISE_PREFIX = "exo."
 RESERVED_GAME_ID_PREFIXES = {
     "tablier.": "games opened from Tablier",
-    "exo.": "exercises of the coach",
+    EXERCISE_PREFIX: "exercises of the coach",
 }
 
 
