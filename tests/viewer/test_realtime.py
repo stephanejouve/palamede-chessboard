@@ -12,8 +12,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from palamede_chessboard.chessboard_state import GameMetadata, GameState, TimeControl
-from palamede_chessboard.viewer.models import VIEWER_ROLES
-from palamede_chessboard.viewer.routers.realtime import ENGINE_REFUSED
+from palamede_chessboard.viewer.models import DEPTH_OPTIONS, VIEWER_ROLES
+from palamede_chessboard.viewer.routers.realtime import ENGINE_REFUSED, MAX_DEPTH
 from tests.viewer.conftest import _create_game
 
 
@@ -103,7 +103,7 @@ class TestEngineLive:
                 return_value=cm,
             ),
         ):
-            yield
+            yield engine
 
     def test_a_live_game_is_refused_whatever_the_role(
         self, client: TestClient, games_dir: Path, mock_engine, engine_log: Path
@@ -173,6 +173,28 @@ class TestEngineLive:
         _create_game(games_dir, result="1-0")
         r = client.get("/api/engine/live?game_id=viewer-test&depth=5&fen=not-a-fen")
         assert r.status_code == 400
+
+    def test_a_depth_out_of_range_is_422_before_the_engine(
+        self, client: TestClient, games_dir: Path, mock_engine, engine_log: Path
+    ) -> None:
+        _create_game(games_dir, result="1-0")
+        for depth in (0, -1, MAX_DEPTH + 1, 10_000):
+            r = client.get(f"/api/engine/live?game_id=viewer-test&depth={depth}")
+            assert r.status_code == 422, depth
+            assert r.json()["detail"][0]["loc"] == ["query", "depth"]
+        assert _log(engine_log) == []  # refused before the guard and the engine
+        mock_engine.analyse.assert_not_called()
+
+    def test_the_bounds_are_evaluated_at_their_depth(
+        self, client: TestClient, games_dir: Path, mock_engine
+    ) -> None:
+        _create_game(games_dir, result="1-0")
+        assert MAX_DEPTH == max(DEPTH_OPTIONS) == 20  # the viewer's menu
+        for depth in (1, MAX_DEPTH):
+            r = client.get(f"/api/engine/live?game_id=viewer-test&depth={depth}")
+            assert r.status_code == 200, depth
+            limit = mock_engine.analyse.call_args.args[1]
+            assert limit.depth == depth
 
     def test_unknown_viewer_role_400(
         self, client: TestClient, games_dir: Path, mock_engine
