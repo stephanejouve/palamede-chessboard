@@ -85,8 +85,10 @@ the b1 knight on rank 4 for the increment, the file giving the value.
 
 The value is taken once the knight has stood 2 seconds on its square (a
 square crossed on the way chooses nothing) ; the square blinks, then put
-the knight back home. Without a game, the tray under the board says the
-clock and these gestures. The clock starts from `time_control` and lasts
+the knight back home. Without a game, the screen's board writes each
+value in its square, and the tray under it says the clock, with the
+gestures in a short help that folds once learnt (open at each launch).
+The clock starts from `time_control` and lasts
 as long as the app : the settings file is not rewritten.
 
 ## Over the USB cable or Bluetooth (#82, #110)

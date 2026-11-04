@@ -109,3 +109,22 @@ def test_without_a_game_the_gestures_are_said_under_the_board() -> None:
     assert (
         "if (state.lobby) return state.finished ? 'Partie terminée.' : 'Aucune partie.';" in script
     )
+
+
+def test_the_gestures_help_folds_and_says_the_knight_s_ends() -> None:
+    """Smaller, folded once learnt ; its ends are those of the lobby's values (Stéphane, 04/11)."""
+    from palamede_chessnut.lobby import CHOICES
+
+    page = (PAGE / "index.html").read_text(encoding="utf-8")
+    parents = Parents()
+    parents.feed(page)
+    assert parents.around["gestures"][-2:] == ["stage", "tray"]
+    assert parents.around["tips"][-1] == "stage"
+    assert '<details id="gestures" open hidden>' in page
+    help_text = page[page.index('<details id="gestures"') : page.index("</details>")]
+    minutes, increments = CHOICES[0][2], CHOICES[1][2]
+    assert f"de a3 ({minutes[0]} min) à f3 ({minutes[-1]} min)" in help_text
+    assert f"de a4 ({increments[0]} s) à f4 ({increments[-1]} s)" in help_text
+    script = (PAGE / "app.js").read_text(encoding="utf-8")
+    assert "el('gestures').hidden = !state.lobby;" in script
+    assert "renderTips(state.tips || {});" in script

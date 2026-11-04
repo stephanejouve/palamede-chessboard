@@ -62,12 +62,6 @@ CHOICES = {
     0: (chess.G1, 2, (3, 5, 10, 15, 25, 90)),
     1: (chess.B1, 3, (0, 2, 3, 5, 10, 30)),
 }
-HINT = (
-    "pièces en position de départ, levez a1+h1 (Blancs) ou a8+h8 (Noirs) pendant 5 s "
-    "pour une nouvelle partie. Cadence : posez le cavalier g1 en rangée 3 "
-    "(a3 à f3 : 3, 5, 10, 15, 25, 90 min) ou le cavalier b1 en rangée 4 "
-    "(a4 à f4 : 0, 2, 3, 5, 10, 30 s), puis remettez-le."
-)
 #: The choice under way : ``(part, value, square)``.
 Choice = tuple[int, int, chess.Square]
 #: HTTP status → what the window says when the server's own words are missing.
@@ -143,6 +137,17 @@ def chosen(time_control: str, part: int, value: int) -> str:
     clock = time_control.split("+")
     clock[part] = str(value)
     return "+".join(clock)
+
+
+def tips() -> dict[str, str]:
+    """Square → the value the knight chooses there, for the screen's board (smoke of Stéphane, 04/11)."""
+    unit = {0: "′", 1: ""}
+    sign = {0: "", 1: "+"}
+    return {
+        chess.square_name(chess.square(file, rank)): f"{sign[part]}{value}{unit[part]}"
+        for part, (_knight, rank, values) in CHOICES.items()
+        for file, value in enumerate(values)
+    }
 
 
 def said(time_control: str) -> str:
@@ -221,7 +226,7 @@ class Lobby(Bridge):
             left = max(CHOICE_SECONDS - (time.monotonic() - self.settled_since), 0.0)
             return f"Cadence {chosen(clock, part, value)} dans {left:.0f} s…"
         state = "Partie terminée" if self.finished else "Aucune partie"
-        return f"{state}, cadence {said(clock)} : {HINT}"
+        return f"{state}, cadence {said(clock)}."
 
     async def run(self) -> None:
         loop = asyncio.get_running_loop()

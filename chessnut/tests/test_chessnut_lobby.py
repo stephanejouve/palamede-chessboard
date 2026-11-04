@@ -141,7 +141,7 @@ async def test_the_rooks_back_before_5_s_cancel(monkeypatch) -> None:
     held(board, chess.BaseBoard(), 10)
     await board.tick(write)
     assert server.posts == [] and board.leds == frozenset()
-    assert board.lobby_text() == "Aucune partie, cadence 15+10 : " + lobby.HINT
+    assert board.lobby_text() == "Aucune partie, cadence 15+10."
 
 
 async def test_pieces_set_up_with_the_rooks_last_open_nothing(monkeypatch) -> None:
@@ -370,7 +370,7 @@ async def test_the_knight_still_2_s_chooses_the_base_without_a_game(monkeypatch)
     assert board.new_game["time_control"] == "90+10"
     assert board.animation == leds.chosen(chess.F3)
     assert leds.chosen(chess.F3)[0] == frozenset({chess.F3})
-    assert board.lobby_text() == "Aucune partie, cadence 90+10 : " + lobby.HINT
+    assert board.lobby_text() == "Aucune partie, cadence 90+10."
 
 
 async def test_the_b1_knight_on_a4_chooses_no_increment(monkeypatch) -> None:
@@ -439,7 +439,7 @@ async def test_pieces_set_up_with_a_knight_on_rank_3_choose_nothing(monkeypatch)
 def test_without_a_clock_the_window_says_so() -> None:
     board = new_lobby(new_game={"opponent": "bot-maia-1100", "time_control": "unrated"})
     held(board, chess.BaseBoard(), 1)
-    assert board.lobby_text() == "Aucune partie, cadence sans pendule : " + lobby.HINT
+    assert board.lobby_text() == "Aucune partie, cadence sans pendule."
 
 
 def test_the_chosen_clock_outlives_the_game_it_opened() -> None:
@@ -474,7 +474,8 @@ def test_the_page_says_how_to_open_a_game() -> None:
     board = new_lobby()
     held(board, chess.BaseBoard(), 1)
     state = snapshot(board)
-    assert state["lobby"] == "Aucune partie, cadence 15+10 : " + lobby.HINT
+    assert state["lobby"] == "Aucune partie, cadence 15+10."
+    assert state["tips"]["f3"] == "90′" and state["tips"]["a4"] == "+0"
     assert state["game_id"] == "" and state["fen"] is None
     assert state["setup"] is None and state["differing"] == []
     assert state["lights"]["sync"] == "waiting"
@@ -486,7 +487,7 @@ def test_a_finished_game_stays_on_screen_its_board_no_longer_compared() -> None:
     state = snapshot(board)
     assert state["game_id"] == "009" and state["history"] == ["Qh1#"]
     assert state["finished"] and state["account"] == "stephane"
-    assert state["lobby"] == "Partie terminée, cadence 15+10 : " + lobby.HINT
+    assert state["lobby"] == "Partie terminée, cadence 15+10."
     assert state["setup"] is None and state["differing"] == []
     assert sync_light(board) == "waiting"
 
@@ -499,7 +500,23 @@ def test_the_window_title_without_a_game() -> None:
 
 
 def test_a_game_s_bridge_has_no_lobby_text() -> None:
-    assert snapshot(finished_bridge())["lobby"] is None
+    state = snapshot(finished_bridge())
+    assert state["lobby"] is None and state["tips"] == {}
+
+
+def test_the_screen_s_board_says_what_each_knight_square_chooses() -> None:
+    """Smoke of Stéphane, 04/11 : the knight's gesture was not found from the text alone."""
+    assert lobby.tips() == {
+        "a3": "3′", "b3": "5′", "c3": "10′", "d3": "15′", "e3": "25′", "f3": "90′",
+        "a4": "+0", "b4": "+2", "c4": "+3", "d4": "+5", "e4": "+10", "f4": "+30",
+    }  # fmt: skip
+    for square, value in lobby.tips().items():
+        knight = chess.G1 if value.endswith("′") else chess.B1
+        observed = chess.BaseBoard()
+        observed.remove_piece_at(knight)
+        observed.set_piece_at(chess.parse_square(square), chess.Piece(chess.KNIGHT, chess.WHITE))
+        picked = choice(observed)
+        assert picked is not None and str(picked[1]) == value.strip("+′"), square
 
 
 def test_no_clock_is_read_without_a_game() -> None:
