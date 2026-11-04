@@ -4,7 +4,7 @@ Endpoints covered :
 
 * ``GET /api/games/{game_id}/stream`` — Server-Sent Events on mtime change.
 * ``GET /api/clock`` — current clock snapshot (visible to all viewers).
-* ``GET /api/engine/live`` — Stockfish eval with viewer honor-system gate.
+* ``GET /api/engine/live`` — Stockfish eval, behind the engine guard (#206).
 * ``GET /api/commentary`` — read JSONL side-car entries.
 * ``POST /api/commentary`` — append a JSONL side-car entry.
 
@@ -19,9 +19,11 @@ import json
 import time
 from collections.abc import AsyncIterator
 
+import chess
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from palamede_chessboard.chess_engine_guard import check_engine_call, log_engine_call
 from palamede_chessboard.chessboard_engine import (
     DEFAULT_DEPTH,
     EngineUnavailableError,
@@ -37,13 +39,22 @@ from palamede_chessboard.chessboard_state import (
 from palamede_chessboard.clock_moves import settle_flag
 from palamede_chessboard.viewer.models import (
     ACCEPTED_VIEWERS,
-    PLAYER_VIEWERS,
     SSE_HEARTBEAT_SECONDS,
     SSE_POLL_INTERVAL_SECONDS,
     CommentaryPayload,
     _game_stream_payload,
     _games_dir,
     _not_found_detail,
+)
+
+#: The guarded tool the viewer's live evaluation counts as, in the guard and the log.
+ENGINE_TOOL = "chess_analyze_position"
+#: ``caller`` of the viewer's lines in the engine log.
+CALLER = "viewer"
+#: 403 of ``/api/engine/live`` : the game, or the position, is in play.
+ENGINE_REFUSED = (
+    "Engine evaluation is not available while a game is in progress "
+    "(fair-play) : wait for the end of the game."
 )
 
 
@@ -77,9 +88,10 @@ def build_realtime_router() -> APIRouter:
         except GameNotFoundError as exc:
             raise HTTPException(404, _not_found_detail(game_id)) from exc
 
-        _enforce_engine_gate(state, viewer)
-
-        target_fen = fen or state.board.fen()
+        if viewer not in ACCEPTED_VIEWERS:
+            raise HTTPException(400, f"Unknown viewer role {viewer!r}")
+        target_fen = _valid_fen(fen) if fen else state.board.fen()
+        _enforce_engine_guard(game_id, target_fen, viewer)
         try:
             analysis = analyze_position(target_fen, depth=int(depth))
         except EngineUnavailableError as exc:
@@ -128,25 +140,34 @@ def build_realtime_router() -> APIRouter:
     return router
 
 
-def _enforce_engine_gate(state: GameState, viewer: str) -> None:
-    """Raise ``HTTPException`` if the viewer isn't allowed engine access.
+def _valid_fen(fen: str) -> str:
+    """``fen`` if it is a position, else 400."""
+    try:
+        chess.Board(fen)
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid FEN") from exc
+    return fen
 
-    * Unknown role → 400 (not a known viewer bucket).
-    * Known player role on a live game → 403 (fair-play honor system).
 
-    Factored out of ``engine_live`` to keep the handler under the
-    80-line CD budget.
+def _enforce_engine_guard(game_id: str, fen: str, viewer: str) -> None:
+    """403 if the engine guard refuses the evaluation of ``fen`` (#206).
+
+    Refused : a game in progress — whatever ``viewer`` says, which the
+    client declares and nobody checks — and a position one of them went
+    through, mirror included (``exo.*`` games too). Every call, allowed
+    or refused, goes to the engine log with ``caller="viewer"``.
     """
-    if viewer not in ACCEPTED_VIEWERS:
-        raise HTTPException(400, f"Unknown viewer role {viewer!r}")
-    is_over = state.metadata.result not in {"*", ""}
-    if viewer in PLAYER_VIEWERS and not is_over:
-        raise HTTPException(
-            403,
-            "Engine eval hidden from players while the game is live "
-            "(fair-play honor system). Wait for game over or use "
-            "viewer=spectator|arbiter.",
-        )
+    decision = check_engine_call(_games_dir(), tool=ENGINE_TOOL, game_id=game_id, fen=fen)
+    log_engine_call(
+        tool=ENGINE_TOOL,
+        decision=decision,
+        game_id=game_id,
+        fen=fen,
+        caller=CALLER,
+        extra={"viewer": viewer},
+    )
+    if not decision["allowed"]:
+        raise HTTPException(403, ENGINE_REFUSED)
 
 
 async def _sse_event_generator(game_id: str, request: Request) -> AsyncIterator[str]:

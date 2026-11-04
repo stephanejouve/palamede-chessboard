@@ -96,20 +96,22 @@ function setClass(id, cls, on) {
   if (el) el.classList.toggle(cls, !!on);
 }
 
+// #206 : no engine evaluation while the game is in progress, for every
+// role. The page does not even ask (each refusal would be logged).
+const ENGINE_LOCKED = '<h3>Analyse Stockfish</h3><div class="locked">🔒 Analyse masquée pendant une partie en cours (fair-play). Disponible une fois la partie terminée.</div>';
+
 async function pollEngine() {
   if (!gameId() || POS.length === 0) return;
   const fen = POS[idx] && POS[idx].fen;
   if (!fen) return;
   const role = viewerRole();
   const eng = document.getElementById('engine');
+  if (lastResult === '*') { eng.innerHTML = ENGINE_LOCKED; return; }
   try {
     const depthSel = document.getElementById('engineDepth');
     const depth = depthSel ? parseInt(depthSel.value, 10) : 15;
     const r = await fetch('/api/engine/live' + qs('viewer=' + encodeURIComponent(role) + '&fen=' + encodeURIComponent(fen) + '&depth=' + depth), { cache: 'no-store' });
-    if (r.status === 403) {
-      eng.innerHTML = '<h3>Analyse Stockfish</h3><div class="locked">🔒 Engine masqué aux joueurs pendant la partie (fair-play). Disponible post-partie ou en mode spectator/arbiter.</div>';
-      return;
-    }
+    if (r.status === 403) { eng.innerHTML = ENGINE_LOCKED; return; }
     if (r.status === 503) {
       eng.innerHTML = '<h3>Analyse Stockfish</h3><div class="empty">Engine indisponible (binaire Stockfish manquant).</div>';
       return;

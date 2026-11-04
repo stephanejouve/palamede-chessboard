@@ -19,6 +19,8 @@ class TestHtmlIndex:
         assert "<title>Chess Viewer</title>" in body
         assert "/api/board.svg" in body  # JS references the endpoint
         assert "/api/engine/live" in body
+        # #206 : the page does not ask the engine while the game is in progress.
+        assert "if (lastResult === '*') { eng.innerHTML = ENGINE_LOCKED; return; }" in body
         assert "/api/clock" in body
 
     def test_role_select_renders_all_viewer_roles(self, client: TestClient) -> None:

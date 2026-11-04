@@ -6,7 +6,7 @@ script was carved into one ``APIRouter`` per domain
 ``build_app`` assembler. All shared pieces live here :
 
 * role whitelists (``VIEWER_ROLES``, ``ACCEPTED_VIEWERS``,
-  ``PLAYER_VIEWERS``), kept honor-system per PR #122 follow-up ;
+  ``PLAYER_VIEWERS``), declared by the client, gating nothing (#206) ;
 * UI constants (``DEPTH_OPTIONS``, ``TEMPLATES_DIR``) ;
 * SSE timings (``SSE_HEARTBEAT_SECONDS`` /
   ``SSE_POLL_INTERVAL_SECONDS``) ;
@@ -33,17 +33,11 @@ from palamede_chessboard.chessboard_state import GAMES_DIR, GameState
 
 #: Roles declarable as ``viewer`` query param.
 #:
-#: Honor system (PR #122 follow-up review #121) : ``viewer`` is
-#: client-declared, the server does not verify it (no signed token /
-#: no auth). A dishonest player can self-declare ``spectator`` or
-#: ``arbiter`` to bypass the 403. The effective server-side gate is
-#: purely ``is_over`` : if the game is live, roles ``player_white`` /
-#: ``player_black`` are 403'd ; otherwise everyone has access.
-#:
-#: To turn into real auth (exit honor system) : add an HMAC token
-#: signed by the MCP server at game creation, distributed to players
-#: via the ``chess_create_game`` tool, verified viewer-side in a
-#: ``X-Chessboard-Token`` header. Separate T-id.
+#: ``viewer`` is client-declared, the server does not verify it : it
+#: gates nothing. ``/api/engine/live`` goes through the engine guard
+#: for every role (#206, the end of the PR #122 honor system) : no
+#: evaluation of a game in progress, nor of a position one went
+#: through. A verified role (an arbiter's token) is a later step.
 VIEWER_ROLES: tuple[str, ...] = (
     "spectator",
     "arbiter",
