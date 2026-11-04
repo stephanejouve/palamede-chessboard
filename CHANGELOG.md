@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.18.0...v0.18.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **viewer:** the live evaluation goes through the engine guard, and is logged ([#207](https://github.com/stephanejouve/palamede-chessboard/issues/207)) ([10eb45b](https://github.com/stephanejouve/palamede-chessboard/commit/10eb45bd567e60cb1f76f2822e7905863b0b49df)), closes [#206](https://github.com/stephanejouve/palamede-chessboard/issues/206)
+
 ## [0.18.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.17.0...v0.18.0) (2026-11-04)
 
 
