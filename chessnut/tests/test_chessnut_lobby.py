@@ -324,6 +324,29 @@ def test_other_pieces_off_choose_nothing(placement) -> None:
     assert choice(placement) is None and gesture_side(placement) is None
 
 
+def spare(
+    piece: chess.Piece, square: chess.Square, home: chess.Square = chess.G1
+) -> chess.BaseBoard:
+    """``home`` emptied, ``piece`` put on ``square`` : not the knight that left."""
+    board = lifted(home)
+    board.set_piece_at(square, piece)
+    return board
+
+
+@pytest.mark.parametrize(
+    "placement",
+    [
+        # The board comes with spare queens (review Junior #191).
+        spare(chess.Piece(chess.QUEEN, chess.WHITE), chess.D3),
+        spare(chess.Piece(chess.KNIGHT, chess.BLACK), chess.D3),
+        # The knight on a pawn's square : not a square of its own.
+        spare(chess.Piece(chess.KNIGHT, chess.WHITE), chess.E2),
+    ],
+)
+def test_only_the_knight_itself_on_an_empty_square_chooses(placement) -> None:
+    assert choice(placement) is None and not on_the_way(placement)
+
+
 @pytest.mark.parametrize(
     ("clock", "part", "value", "after"),
     [
