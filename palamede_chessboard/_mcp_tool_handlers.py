@@ -22,6 +22,7 @@ from palamede_chessboard._mcp_shared import (
     _compute_move_facts,
     _journal_board_facts_gap,
     _refuse_reserved_game_id,
+    _refuse_unaccountable_players,
     _require_arbiter_or_daemon,
 )
 from palamede_chessboard.chess_elo import (
@@ -68,6 +69,7 @@ from palamede_chessboard.player_prefs import (
 async def _handle_chess_create_game(arguments: dict, games_dir: Path) -> dict:
     _require_arbiter_or_daemon(arguments.get("arbiter"), games_dir)
     _refuse_reserved_game_id(arguments.get("game_id"))
+    _refuse_unaccountable_players(arguments.get("white"), arguments.get("black"))
     # Issue #33 : strict boolean, so a malformed client (``"false"``,
     # ``0``) can never create a rated game by accident.
     rated = arguments.get("rated", True)
