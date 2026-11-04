@@ -20,7 +20,7 @@ import time
 from collections.abc import AsyncIterator
 
 import chess
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
 from palamede_chessboard.chess_engine_guard import check_engine_call, log_engine_call
@@ -39,6 +39,7 @@ from palamede_chessboard.chessboard_state import (
 from palamede_chessboard.clock_moves import settle_flag
 from palamede_chessboard.viewer.models import (
     ACCEPTED_VIEWERS,
+    DEPTH_OPTIONS,
     SSE_HEARTBEAT_SECONDS,
     SSE_POLL_INTERVAL_SECONDS,
     CommentaryPayload,
@@ -51,6 +52,10 @@ from palamede_chessboard.viewer.models import (
 ENGINE_TOOL = "chess_analyze_position"
 #: ``caller`` of the viewer's lines in the engine log.
 CALLER = "viewer"
+#: Deepest ``/api/engine/live`` evaluation : the viewer's own menu never asks
+#: more, and each call is a Stockfish process (up to its 10 s timeout). Beyond
+#: it the call is refused (422), not capped : asking 50 must not get 20 unknowingly.
+MAX_DEPTH = max(DEPTH_OPTIONS)
 #: 403 of ``/api/engine/live`` : the game, or the position, is in play.
 ENGINE_REFUSED = (
     "Engine evaluation is not available while a game is in progress "
@@ -81,7 +86,7 @@ def build_realtime_router() -> APIRouter:
         game_id: str,
         viewer: str = "spectator",
         fen: str | None = None,
-        depth: int = DEFAULT_DEPTH,
+        depth: int = Query(DEFAULT_DEPTH, ge=1, le=MAX_DEPTH),
     ) -> dict:
         try:
             state = GameState.load(game_id, games_dir=_games_dir())
@@ -93,7 +98,7 @@ def build_realtime_router() -> APIRouter:
         target_fen = _valid_fen(fen) if fen else state.board.fen()
         _enforce_engine_guard(game_id, target_fen, viewer)
         try:
-            analysis = analyze_position(target_fen, depth=int(depth))
+            analysis = analyze_position(target_fen, depth=depth)
         except EngineUnavailableError as exc:
             raise HTTPException(503, str(exc)) from exc
         return {
