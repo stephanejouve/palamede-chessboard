@@ -132,7 +132,12 @@ def test_a_mate_given_is_no_mistake_of_the_human(gdir: Path, popen) -> None:
 
 def test_a_game_in_progress_is_never_analysed(gdir: Path, popen) -> None:
     state = _game(gdir, "live", SCHOLAR[:4])
-    assert run_once(gdir, engine_path="/fake") == {"diagnosed": [], "waiting": [], "failed": []}
+    assert run_once(gdir, engine_path="/fake") == {
+        "diagnosed": [],
+        "waiting": [],
+        "failed": [],
+        "exercises": 0,
+    }
     popen.assert_not_called()
     with pytest.raises(ValueError, match="in progress"):
         diagnose(state, {"black": HUMAN}, gdir, engine_path="/fake")
