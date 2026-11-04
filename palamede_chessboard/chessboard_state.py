@@ -377,8 +377,9 @@ class GameState:
         path = _pgn_path(self.games_dir, self.metadata.game_id)
         tmp = path.with_suffix(".pgn.tmp")
         root = self.board.root()
+        headers = self.metadata.pgn_headers_to_write()  # refused before the tmp file (#128)
         with tmp.open("w", encoding="utf-8") as f:
-            for tag, value in self.metadata.to_pgn_headers().items():
+            for tag, value in headers.items():
                 f.write(f'[{tag} "{value}"]\n')
             # Issue #36 : a game created from ``starting_fen`` must keep
             # its root position, or ``load`` (``game.board()``) restarts
