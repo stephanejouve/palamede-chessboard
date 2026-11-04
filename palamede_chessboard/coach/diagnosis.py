@@ -207,6 +207,7 @@ def run_once(
     engine_path: str | None = None,
     memory: RoundMemory | None = None,
     now: float | None = None,
+    stop: threading.Event | None = None,
 ) -> dict:
     """Diagnose every finished game of a human that has no report for its key,
     and draw its exercises.
@@ -216,6 +217,9 @@ def run_once(
     cannot be read or analysed is logged and left for the next round.
     With ``memory`` (``palamede-coach run``), unchanged games are not read
     and a game that waited or failed is ``deferred`` for a while.
+    ``stop`` is read between two games : a SIGTERM during the first
+    catch-up (a round of 10 to 30 min) ends the round after the game in
+    hand, the games left are read at the next start.
     """
     players = registry.load(games_dir)["players"]
     if memory is not None:
@@ -223,6 +227,8 @@ def run_once(
     now = time.time() if now is None else now
     summary: dict = {"diagnosed": [], "waiting": [], "failed": [], "deferred": [], "exercises": 0}
     for pgn in sorted(games_dir.glob("*.pgn")):
+        if stop is not None and stop.is_set():
+            break
         game_id = pgn.stem
         if is_exercise_game(game_id):
             continue  # one move from a position : no game to learn from
@@ -263,7 +269,9 @@ def run_forever(
     log.info("coach: running on %s every %ss", games_dir, interval)
     while not stop.is_set():
         try:
-            summary = run_once(games_dir, depth=depth, engine_path=engine_path, memory=memory)
+            summary = run_once(
+                games_dir, depth=depth, engine_path=engine_path, memory=memory, stop=stop
+            )
         except Exception:  # noqa: BLE001 — logged, and the next round comes
             log.exception("coach: round failed")
         else:
