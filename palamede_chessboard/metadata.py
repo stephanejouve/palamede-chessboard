@@ -8,10 +8,17 @@ compat.
 
 from __future__ import annotations
 
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from palamede_chessboard.errors import ChessboardError
+
+#: Characters a header value may not hold (#128) : ``"`` and ``\`` would need
+#: the PGN escapes, which python-chess neither writes nor reads back, and the
+#: braces would close the ``{termination}`` comment of the movetext. Control
+#: characters, the line breaks among them, are refused too.
+FORBIDDEN_IN_HEADER = frozenset('"\\{}')
 
 #: Default time control for new tournament games (chantier ELO volet 3a,
 #: Stéphane arbitrage 2026-10-05) : « classique » 30 min + 30 sec Fischer,
@@ -107,6 +114,20 @@ class GameMetadata:
             # through our writer path stays excluded without a dedicated
             # ``rated=False`` opt-out call.
             headers["Rated"] = "true"
+        return headers
+
+    def pgn_headers_to_write(self) -> dict[str, str]:
+        """:meth:`to_pgn_headers`, refused if a value would break out of its ``[Tag "value"]`` (#128).
+
+        Raises :class:`ChessboardError` before anything is written, so a
+        forged value never reaches the PGN, and a game read back keeps the
+        exact headers it was saved with.
+        """
+        headers = self.to_pgn_headers()
+        for tag, value in headers.items():
+            for char in value:
+                if char in FORBIDDEN_IN_HEADER or unicodedata.category(char) == "Cc":
+                    raise ChessboardError(f"PGN header {tag}: character {char!r} is not allowed")
         return headers
 
     def resolve_side(self, by: str) -> str:
