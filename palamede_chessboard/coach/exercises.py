@@ -40,6 +40,7 @@ from palamede_chessboard.chessboard_engine import (
 )
 from palamede_chessboard.coach import CALLER
 from palamede_chessboard.coach.motifs import _hanging
+from palamede_chessboard.coach.rounds import Wait
 
 #: The motifs an exercise is drawn from : facts, never one of ``HEURISTIC_MOTIFS``.
 EXERCISE_MOTIFS = frozenset({"missed_mate", "hanging_piece", "ignored_threat"})
@@ -144,8 +145,9 @@ def exercises_of(
     *,
     depth: int = DEFAULT_DEPTH,
     engine_path: str | None = None,
-) -> dict[str, list[dict]] | None:
-    """``{player_id: exercises}`` drawn from ``report``, or ``None`` to wait a round."""
+) -> dict[str, list[dict]] | Wait:
+    """``{player_id: exercises}`` drawn from ``report``, or the :class:`Wait`
+    for the live game that reached one of its positions."""
     found: dict[str, list[dict]] = {}
     for side, data in report["sides"].items():
         exercises = found.setdefault(data["player"], [])
@@ -165,7 +167,7 @@ def exercises_of(
                 tool=ENGINE_TOOL, decision=decision, fen=fen, caller=CALLER, extra=extra
             )
             if not decision["allowed"]:
-                return None  # a live game reached this position : later
+                return Wait.on(decision.get("matched_game_id"))
             lines = best_two(fen, depth=depth, engine_path=engine_path)
             kept = clear_solution(lines, board.parse_san(mistake["san"]).uci())
             if kept is None:
