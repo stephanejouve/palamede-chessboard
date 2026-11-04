@@ -10,6 +10,11 @@ The engine never looks at a game in progress : a game whose result is
 ``*`` is never analysed, and a finished game that shares a position
 with a live one (:func:`~palamede_chessboard.chess_engine_guard.mask_walk_entries`)
 waits for a later round rather than being reported with holes.
+
+Like every Stockfish path of the server, each analysis goes through
+:func:`~palamede_chessboard.chess_engine_guard.check_engine_call` and
+leaves a line in the engine log, with ``caller="coach"`` : the coach
+runs alone in production, and the fair-play log must see it too.
 """
 
 from __future__ import annotations
@@ -21,7 +26,11 @@ from collections import Counter
 from datetime import UTC, datetime
 from pathlib import Path
 
-from palamede_chessboard.chess_engine_guard import mask_walk_entries
+from palamede_chessboard.chess_engine_guard import (
+    check_engine_call,
+    log_engine_call,
+    mask_walk_entries,
+)
 from palamede_chessboard.chessboard_engine import (
     DEFAULT_DEPTH,
     GameWalkEntry,
@@ -38,6 +47,9 @@ log = logging.getLogger(__name__)
 
 #: The least a move must have cost to be reported.
 MIN_CLASSIFICATION = "mistake"
+#: How the coach's calls appear in the engine log.
+ENGINE_TOOL = "chess_get_my_mistakes"
+CALLER = "coach"
 
 
 def human_sides(state: GameState, players: dict) -> dict[str, str]:
@@ -82,8 +94,20 @@ def diagnose(
     """
     if state.metadata.result == "*":
         raise ValueError(f"{state.metadata.game_id} is in progress")
+    game_id = state.metadata.game_id
+    decision = check_engine_call(games_dir, tool=ENGINE_TOOL, game_id=game_id)
+    if not decision["allowed"]:
+        log_engine_call(tool=ENGINE_TOOL, decision=decision, game_id=game_id, caller=CALLER)
+        return None  # refused by the guard : later
     walk = analyze_game(state, depth=depth, engine_path=engine_path, reuse_after=True)
-    _walk, masked, _details = mask_walk_entries(walk, games_dir)
+    _walk, masked, details = mask_walk_entries(walk, games_dir)
+    log_engine_call(
+        tool=ENGINE_TOOL,
+        decision=decision,
+        game_id=game_id,
+        caller=CALLER,
+        extra={"masked_plies": details} if details else None,
+    )
     if masked:
         return None  # a live game reached one of its positions : later
     report_sides = {}
@@ -98,7 +122,7 @@ def diagnose(
             "by_motif": dict(Counter(m["motif"] for m in mistakes)),
         }
     return {
-        "game_id": state.metadata.game_id,
+        "game_id": game_id,
         "key": game_key(state),
         "result": state.metadata.result,
         "depth": depth,

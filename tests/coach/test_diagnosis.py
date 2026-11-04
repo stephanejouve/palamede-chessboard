@@ -185,11 +185,58 @@ def test_the_key_is_the_game_not_its_bytes(gdir: Path) -> None:
     assert game_key(other) != key
 
 
-def test_a_game_sharing_a_live_position_waits(gdir: Path, popen, monkeypatch) -> None:
+def test_a_game_sharing_a_live_position_waits(
+    gdir: Path, popen, monkeypatch, engine_log: Path
+) -> None:
     _game(gdir, "g1", SCHOLAR)
-    monkeypatch.setattr(diagnosis, "mask_walk_entries", lambda walk, _gdir: (walk, 1, [{}]))
+    details = [{"ply": 5, "matched_game_id": "live"}]
+    monkeypatch.setattr(diagnosis, "mask_walk_entries", lambda walk, _gdir: (walk, 1, details))
     summary = run_once(gdir, engine_path="/fake")
     assert summary["waiting"] == ["g1"] and summary["diagnosed"] == []
+    assert read_report(gdir, "g1") is None
+    [line] = _log_lines(engine_log)
+    assert line["masked_plies"] == details and line["caller"] == "coach"
+
+
+def _log_lines(engine_log: Path) -> list[dict]:
+    return [json.loads(line) for line in engine_log.read_text(encoding="utf-8").splitlines()]
+
+
+def test_each_analysis_is_in_the_engine_log(gdir: Path, popen, engine_log: Path) -> None:
+    _game(gdir, "g1", SCHOLAR)
+    assert run_once(gdir, engine_path="/fake")["diagnosed"] == ["g1"]
+    [line] = _log_lines(engine_log)
+    assert (line["tool"], line["game_id"], line["caller"]) == (
+        "chess_get_my_mistakes",
+        "g1",
+        "coach",
+    )
+    assert line["decision"] == "allowed" and "masked_plies" not in line
+    run_once(gdir, engine_path="/fake")  # already reported : no engine, no line
+    assert len(_log_lines(engine_log)) == 1
+
+
+def test_a_refusal_of_the_guard_is_logged_and_waits(
+    gdir: Path, popen, engine_log: Path, monkeypatch
+) -> None:
+    _game(gdir, "g1", SCHOLAR)
+    refused = {"allowed": False, "matched_game_id": "live", "reason": "shared position"}
+    seen = []
+
+    def guard(games_dir, **kwargs):
+        seen.append((games_dir, kwargs))
+        return refused
+
+    monkeypatch.setattr(diagnosis, "check_engine_call", guard)
+    assert run_once(gdir, engine_path="/fake")["waiting"] == ["g1"]
+    popen.assert_not_called()
+    assert seen == [(gdir, {"tool": "chess_get_my_mistakes", "game_id": "g1"})]
+    [line] = _log_lines(engine_log)
+    assert (line["decision"], line["matched_game_id"], line["caller"]) == (
+        "refused",
+        "live",
+        "coach",
+    )
     assert read_report(gdir, "g1") is None
 
 
