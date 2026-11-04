@@ -132,7 +132,7 @@ class GameState:
         if game is None:
             log.warning("PGN at %s is unreadable", path)  # the path for the server log only
             raise ChessboardError(f"PGN of {game_id} is unreadable")
-        metadata = metadata_from_headers(game_id, dict(game.headers))
+        metadata = metadata_from_headers(game_id, dict(game.headers), game.end().comment)
         board = game.board()
         san_history: list[str] = []
         for move in game.mainline_moves():
@@ -184,12 +184,14 @@ class GameState:
             self.metadata.draw_offer = None
         if self.board.is_checkmate():
             self.metadata.result = "0-1" if self.board.turn == chess.WHITE else "1-0"
+            self.metadata.termination = "normal"
         elif (
             self.board.is_stalemate()
             or self.board.is_insufficient_material()
             or self.board.can_claim_draw()
         ):
             self.metadata.result = "1/2-1/2"
+            self.metadata.termination = "normal"
         self.save()
         return {
             "san": san_normalised,
@@ -221,6 +223,7 @@ class GameState:
         self.metadata.result = "0-1" if side == "white" else "1-0"
         loser = self.metadata.white if side == "white" else self.metadata.black
         self.metadata.termination_note = f"{loser or side} resigns"
+        self.metadata.termination = "normal"
         self.metadata.draw_offer = None
         self.save()
         return {
@@ -288,6 +291,7 @@ class GameState:
             )
         self.metadata.result = "1/2-1/2"
         self.metadata.termination_note = "draw agreed"
+        self.metadata.termination = "normal"
         self.metadata.draw_offer = None
         self.save()
         return {

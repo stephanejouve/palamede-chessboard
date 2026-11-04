@@ -219,7 +219,7 @@ class TestResign:
         state.resign(by="black")
         pgn = state.raw_pgn()
         assert '[Result "1-0"]' in pgn
-        assert '[Termination "black-player resigns"]' in pgn
+        assert '[Termination "normal"]' in pgn
         assert "{black-player resigns} 1-0" in pgn
 
     def test_resign_clears_pending_draw_offer(self, tmp_path: Path) -> None:
@@ -329,7 +329,7 @@ class TestDrawOffer:
         state.agree_draw(by="black")
         pgn = state.raw_pgn()
         assert '[Result "1/2-1/2"]' in pgn
-        assert '[Termination "draw agreed"]' in pgn
+        assert '[Termination "normal"]' in pgn
         assert "{draw agreed} 1/2-1/2" in pgn
         assert "DrawOffer" not in pgn  # cleared on agree
 

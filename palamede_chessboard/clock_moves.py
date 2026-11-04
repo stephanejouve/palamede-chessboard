@@ -96,6 +96,7 @@ def _end_on_time(state: GameState, clock: ClockState, board: chess.Board | None 
     """``board`` : the position when the flag fell, ``state.board`` by default."""
     if clock.flag_fall is not None and state.metadata.result == "*":
         state.metadata.result = result_on_time(board or state.board, clock.flag_fall)
+        state.metadata.termination = "time forfeit"
         state.save()
 
 
