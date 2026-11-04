@@ -38,8 +38,10 @@ from palamede_chessboard.chessboard_engine import (
     get_my_mistakes,
 )
 from palamede_chessboard.chessboard_state import ChessboardError, GameState
+from palamede_chessboard.coach import CALLER
+from palamede_chessboard.coach.exercises import exercises_of
 from palamede_chessboard.coach.motifs import HEURISTIC_MOTIFS, motif_of
-from palamede_chessboard.coach.store import game_key, read_report, write_report
+from palamede_chessboard.coach.store import add_exercises, game_key, read_report, write_report
 from palamede_chessboard.paths import resolve_games_dir
 from palamede_chessboard.players import registry
 
@@ -49,7 +51,6 @@ log = logging.getLogger(__name__)
 MIN_CLASSIFICATION = "mistake"
 #: How the coach's calls appear in the engine log.
 ENGINE_TOOL = "chess_get_my_mistakes"
-CALLER = "coach"
 
 
 def human_sides(state: GameState, players: dict) -> dict[str, str]:
@@ -131,17 +132,42 @@ def diagnose(
     }
 
 
+def _diagnose_one(
+    state: GameState,
+    sides: dict[str, str],
+    games_dir: Path,
+    *,
+    depth: int,
+    engine_path: str | None,
+) -> int | None:
+    """Report and exercises of one game ; how many exercises, ``None`` to wait.
+
+    The report is written last : until it is, the game is diagnosed again
+    on the next round, and the exercises already added are not added twice.
+    """
+    report = diagnose(state, sides, games_dir, depth=depth, engine_path=engine_path)
+    if report is None:
+        return None
+    found = exercises_of(report, games_dir, depth=depth, engine_path=engine_path)
+    if found is None:
+        return None
+    added = sum(add_exercises(games_dir, pid, exos) for pid, exos in found.items() if exos)
+    write_report(games_dir, state.metadata.game_id, report)
+    return added
+
+
 def run_once(
     games_dir: Path, *, depth: int = DEFAULT_DEPTH, engine_path: str | None = None
 ) -> dict:
-    """Diagnose every finished game of a human that has no report for its key.
+    """Diagnose every finished game of a human that has no report for its key,
+    and draw its exercises.
 
     Idempotent : a game already reported under the same key is skipped.
     An unreadable registry stops the round (fail closed) ; a game that
     cannot be read or analysed is logged and left for the next round.
     """
     players = registry.load(games_dir)["players"]
-    summary: dict[str, list[str]] = {"diagnosed": [], "waiting": [], "failed": []}
+    summary: dict = {"diagnosed": [], "waiting": [], "failed": [], "exercises": 0}
     for pgn in sorted(games_dir.glob("*.pgn")):
         game_id = pgn.stem
         try:
@@ -158,16 +184,16 @@ def run_once(
         if existing is not None and existing.get("key") == game_key(state):
             continue
         try:
-            report = diagnose(state, sides, games_dir, depth=depth, engine_path=engine_path)
+            added = _diagnose_one(state, sides, games_dir, depth=depth, engine_path=engine_path)
         except Exception as exc:  # noqa: BLE001 — one game never stops the round
             log.warning("coach: %s not diagnosed (%s)", game_id, exc)
             summary["failed"].append(game_id)
             continue
-        if report is None:
+        if added is None:
             summary["waiting"].append(game_id)
             continue
-        write_report(games_dir, game_id, report)
         summary["diagnosed"].append(game_id)
+        summary["exercises"] += added
     return summary
 
 
@@ -175,7 +201,7 @@ def main(argv: list[str] | None = None) -> int:
     """``palamede-coach once`` : one round over the games directory."""
     parser = argparse.ArgumentParser(prog="palamede-coach", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    once = sub.add_parser("once", help="diagnose the finished games once, then exit")
+    once = sub.add_parser("once", help="diagnose the finished games and draw exercises once")
     once.add_argument("--games-dir", type=Path, default=None)
     once.add_argument("--depth", type=int, default=DEFAULT_DEPTH)
     args = parser.parse_args(argv)
