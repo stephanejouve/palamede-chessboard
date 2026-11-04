@@ -168,6 +168,11 @@ def _score_to_normalized_cp(score: chess.engine.PovScore) -> int | None:
     if white_pov.is_mate():
         mate_in = white_pov.mate()
         assert mate_in is not None, "is_mate() true but mate() returned None"
+        if mate_in == 0:
+            # The side to move is mated : python-chess gives ``Mate(-0)`` when
+            # it is white, ``MateGiven`` when it is black, both ``mate() == 0``.
+            # Read as a mate against white, white's mating move lost 59999 (#100).
+            return MATE_SCORE_CP if white_pov == chess.engine.MateGiven else -MATE_SCORE_CP
         if mate_in > 0:
             return MATE_SCORE_CP - mate_in
         return -MATE_SCORE_CP - mate_in
@@ -231,6 +236,9 @@ class GameWalkEntry:
     score_cp_after: int | None
     cp_loss: int | None  # mover-POV centipawn loss
     classification: str  # blunder / mistake / inaccuracy / good / unknown
+    #: The forced mate in N moves the mover had and lost, else ``None`` (#100) :
+    #: « mat en N manqué » rather than a loss of 29000 centipawns.
+    missed_mate: int | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -243,6 +251,7 @@ class GameWalkEntry:
             "score_cp_after": self.score_cp_after,
             "cp_loss": self.cp_loss,
             "classification": self.classification,
+            "missed_mate": self.missed_mate,
         }
 
 
@@ -277,10 +286,10 @@ def analyze_game(
             info_before = engine.analyse(board, limit)
             score_before = info_before.get("score")
             if score_before is not None:
-                cp_before_white, _mate_before = _score_to_cp(score_before)
+                cp_before_white, mate_before = _score_to_cp(score_before)
                 normalized_before = _score_to_normalized_cp(score_before)
             else:
-                cp_before_white, normalized_before = None, None
+                cp_before_white, normalized_before, mate_before = None, None, None
 
             move = board.parse_san(san)
             board.push(move)
@@ -289,10 +298,10 @@ def analyze_game(
             info_after = engine.analyse(board, limit)
             score_after = info_after.get("score")
             if score_after is not None:
-                cp_after_white, _mate_after = _score_to_cp(score_after)
+                cp_after_white, mate_after = _score_to_cp(score_after)
                 normalized_after = _score_to_normalized_cp(score_after)
             else:
-                cp_after_white, normalized_after = None, None
+                cp_after_white, normalized_after, mate_after = None, None, None
 
             # Classification uses normalized scores so mate transitions
             # produce meaningful cp_loss / classification (fix #245).
@@ -304,6 +313,9 @@ def analyze_game(
             else:
                 cp_loss = mover_before - mover_after
                 classification = classify_loss(max(0, cp_loss))
+            # A forced mate the mover had is kept by mating, or by a mate still theirs.
+            had = _mover_cp(mate_before, mover)
+            kept = board.is_checkmate() or (_mover_cp(mate_after, mover) or 0) > 0
 
             entries.append(
                 GameWalkEntry(
@@ -316,6 +328,7 @@ def analyze_game(
                     score_cp_after=cp_after_white,
                     cp_loss=cp_loss,
                     classification=classification,
+                    missed_mate=had if had is not None and had > 0 and not kept else None,
                 )
             )
     return entries
