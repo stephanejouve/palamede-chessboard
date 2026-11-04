@@ -23,7 +23,7 @@ import pytest
 from palamede_chessboard.chessboard_state import GameMetadata, GameState, TimeControl
 from palamede_chessboard.coach import diagnosis
 from palamede_chessboard.coach.diagnosis import run_forever, run_once
-from palamede_chessboard.coach.rounds import RETRY_SECONDS, RoundMemory
+from palamede_chessboard.coach.rounds import RETRY_SECONDS, RoundMemory, Wait
 from palamede_chessboard.coach.store import read_report
 from palamede_chessboard.players import registry
 from tests.coach.test_diagnosis import SCHOLAR, FakeEngine, _scholar_table
@@ -198,15 +198,114 @@ def test_a_failed_game_is_deferred_then_retried(gdir: Path, popen, monkeypatch) 
     assert read_report(gdir, "g1") is not None
 
 
-def test_a_waiting_game_is_deferred_too(gdir: Path, popen) -> None:
+# --- waiting on a live game -----------------------------------------------------------
+
+
+def _refused(engine_log: Path) -> int:
+    if not engine_log.exists():
+        return 0
+    lines = [json.loads(x) for x in engine_log.read_text(encoding="utf-8").splitlines()]
+    return sum(line["decision"] == "refused" for line in lines)
+
+
+def test_a_waiting_game_waits_for_its_live_game_not_for_a_delay(
+    gdir: Path, popen, engine_log: Path
+) -> None:
     _game(gdir, "g1", SCHOLAR)
     live = _game(gdir, "live", [], fen=_fen(SCHOLAR[:3]))
     memory = RoundMemory()
     assert run_once(gdir, engine_path="/fake", memory=memory, now=NOW)["waiting"] == ["g1"]
-    live.resign(by="white")  # the live game ends
-    assert run_once(gdir, engine_path="/fake", memory=memory, now=NOW + 30)["deferred"] == ["g1"]
-    later = run_once(gdir, engine_path="/fake", memory=memory, now=NOW + RETRY_SECONDS)
-    assert later["diagnosed"] == ["g1"]
+    assert _refused(engine_log) == 1
+    # Long after the retry delay, the live game unchanged : not tried, nothing logged.
+    for later in (NOW + RETRY_SECONDS, NOW + 100 * RETRY_SECONDS):
+        summary = run_once(gdir, engine_path="/fake", memory=memory, now=later)
+        assert summary["deferred"] == ["g1"]
+    assert _refused(engine_log) == 1
+    live.resign(by="white")  # the live game ends : tried at the next round
+    summary = run_once(gdir, engine_path="/fake", memory=memory, now=NOW + 30)
+    assert summary["diagnosed"] == ["g1", "live"] and memory.blocked == {}
+
+
+def test_a_move_in_the_live_game_tries_again(gdir: Path, popen, engine_log: Path) -> None:
+    _game(gdir, "g1", SCHOLAR)
+    live = _game(gdir, "live", [], fen=_fen(SCHOLAR[:3]))
+    memory = RoundMemory()
+    run_once(gdir, engine_path="/fake", memory=memory, now=NOW)
+    live.play_move("Nc6")  # still in play, still on g1's positions
+    assert run_once(gdir, engine_path="/fake", memory=memory, now=NOW + 30)["waiting"] == ["g1"]
+    assert _refused(engine_log) == 2
+    assert run_once(gdir, engine_path="/fake", memory=memory, now=NOW + 60)["deferred"] == ["g1"]
+
+
+def test_its_own_pgn_changing_tries_again(gdir: Path, popen) -> None:
+    _game(gdir, "g1", SCHOLAR)
+    _game(gdir, "live", [], fen=_fen(SCHOLAR[:3]))
+    memory = RoundMemory()
+    run_once(gdir, engine_path="/fake", memory=memory, now=NOW)
+    GameState.load("g1", games_dir=gdir).save()
+    assert run_once(gdir, engine_path="/fake", memory=memory, now=NOW + 30)["waiting"] == ["g1"]
+
+
+def test_a_change_of_the_registry_forgets_the_waits(gdir: Path, popen) -> None:
+    _game(gdir, "g1", SCHOLAR)
+    _game(gdir, "live", [], fen=_fen(SCHOLAR[:3]))
+    memory = RoundMemory()
+    run_once(gdir, engine_path="/fake", memory=memory, now=NOW)
+    registry.add_player(gdir, "new-human", kind="human")
+    assert run_once(gdir, engine_path="/fake", memory=memory, now=NOW + 30)["waiting"] == ["g1"]
+
+
+def test_a_game_masked_after_the_engine_waits_for_its_live_game(
+    gdir: Path, popen, monkeypatch
+) -> None:
+    # A live game got there while the engine ran : the masked plies name it.
+    _game(gdir, "g1", SCHOLAR)
+    _game(gdir, "live", ["d4"])
+    monkeypatch.setattr(diagnosis, "game_in_play", lambda *a: None)
+    monkeypatch.setattr(
+        diagnosis,
+        "mask_walk_entries",
+        lambda walk, games_dir: (walk, 1, [{"ply": 3, "matched_game_id": "live"}]),
+    )
+    memory = RoundMemory()
+    assert run_once(gdir, engine_path="/fake", memory=memory, now=NOW)["waiting"] == ["g1"]
+    assert set(memory.blocked["g1"]) == {gdir / "g1.pgn", gdir / "live.pgn"}
+
+
+def test_a_live_game_ending_while_the_game_is_read_is_seen(gdir: Path, popen, monkeypatch) -> None:
+    _game(gdir, "g1", SCHOLAR)
+    _game(gdir, "live", [], fen=_fen(SCHOLAR[:3]))
+    real = diagnosis._one_game
+
+    def one_game(pgn, *args, **kwargs):
+        outcome = real(pgn, *args, **kwargs)
+        if pgn.stem == "g1":  # refused, then the live game ends before the wait is noted
+            GameState.load("live", games_dir=gdir).resign(by="white")
+        return outcome
+
+    monkeypatch.setattr(diagnosis, "_one_game", one_game)
+    memory = RoundMemory()
+    assert run_once(gdir, engine_path="/fake", memory=memory, now=NOW)["waiting"] == ["g1"]
+    monkeypatch.setattr(diagnosis, "_one_game", real)
+    later = run_once(gdir, engine_path="/fake", memory=memory, now=NOW + 30)
+    assert "g1" in later["diagnosed"]
+
+
+def test_a_wait_on_no_known_game_falls_back_on_the_delay(gdir: Path) -> None:
+    _game(gdir, "g1", SCHOLAR)
+    memory = RoundMemory()
+    pgn = gdir / "g1.pgn"
+    memory.wait_for(pgn, Wait.on(None), {pgn: pgn.stat().st_mtime_ns}, NOW)
+    assert memory.blocked == {} and memory.deferred("g1", NOW + RETRY_SECONDS - 1)
+    assert not memory.deferred("g1", NOW + RETRY_SECONDS)
+
+
+def test_a_blocking_game_gone_falls_back_on_the_delay(gdir: Path) -> None:
+    _game(gdir, "g1", SCHOLAR)
+    memory = RoundMemory()
+    pgn = gdir / "g1.pgn"
+    memory.wait_for(pgn, Wait.on("vanished"), {pgn: pgn.stat().st_mtime_ns}, NOW)
+    assert memory.blocked == {} and memory.deferred("g1", NOW + 1)
 
 
 def test_without_memory_nothing_is_deferred(gdir: Path, popen, monkeypatch) -> None:

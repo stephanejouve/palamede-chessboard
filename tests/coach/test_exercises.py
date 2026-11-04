@@ -29,6 +29,7 @@ from palamede_chessboard.coach.exercises import (
     exercises_of,
 )
 from palamede_chessboard.coach.motifs import HEURISTIC_MOTIFS
+from palamede_chessboard.coach.rounds import Wait
 from palamede_chessboard.coach.store import (
     CoachStoreError,
     add_exercises,
@@ -262,7 +263,7 @@ def test_a_position_refused_by_the_guard_waits(
         return refused
 
     monkeypatch.setattr(exercises, "check_engine_call", guard)
-    assert exercises_of(_report("ignored_threat"), gdir, engine_path="/fake") is None
+    assert exercises_of(_report("ignored_threat"), gdir, engine_path="/fake") == Wait.on("live")
     popen.assert_not_called()
     assert seen == [(gdir, {"tool": "chess_analyze_position", "fen": BEFORE_H6})]
     [line] = _log(engine_log)

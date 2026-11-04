@@ -52,7 +52,7 @@ from palamede_chessboard.chessboard_state import ChessboardError, GameState
 from palamede_chessboard.coach import CALLER
 from palamede_chessboard.coach.exercises import exercises_of
 from palamede_chessboard.coach.motifs import HEURISTIC_MOTIFS, motif_of
-from palamede_chessboard.coach.rounds import DEFAULT_INTERVAL, RoundMemory, mtime_ns
+from palamede_chessboard.coach.rounds import DEFAULT_INTERVAL, RoundMemory, Wait, mtime_ns
 from palamede_chessboard.coach.store import add_exercises, game_key, read_report, write_report
 from palamede_chessboard.paths import resolve_games_dir
 from palamede_chessboard.players import registry
@@ -99,8 +99,9 @@ def diagnose(
     *,
     depth: int = DEFAULT_DEPTH,
     engine_path: str | None = None,
-) -> dict | None:
-    """The report of a finished game, or ``None`` when it must wait a round.
+) -> dict | Wait:
+    """The report of a finished game, or the :class:`Wait` for the live
+    games that reached its positions.
 
     Raises :class:`ValueError` on a game in progress : the engine never
     looks at one.
@@ -114,7 +115,7 @@ def diagnose(
         decision = {"allowed": False, "matched_game_id": match, "reason": reason}
     if not decision["allowed"]:
         log_engine_call(tool=ENGINE_TOOL, decision=decision, game_id=game_id, caller=CALLER)
-        return None  # refused by the guard : later
+        return Wait.on(decision.get("matched_game_id"))  # refused by the guard : later
     walk = analyze_game(state, depth=depth, engine_path=engine_path, reuse_after=True)
     _walk, masked, details = mask_walk_entries(walk, games_dir)
     log_engine_call(
@@ -124,8 +125,8 @@ def diagnose(
         caller=CALLER,
         extra={"masked_plies": details} if details else None,
     )
-    if masked:
-        return None  # a live game reached one of its positions : later
+    if masked:  # a live game reached one of its positions : later
+        return Wait.on(*(detail["matched_game_id"] for detail in details))
     report_sides = {}
     for side, player_id in sides.items():
         mistakes = [
@@ -154,18 +155,18 @@ def _diagnose_one(
     *,
     depth: int,
     engine_path: str | None,
-) -> int | None:
-    """Report and exercises of one game ; how many exercises, ``None`` to wait.
+) -> int | Wait:
+    """Report and exercises of one game ; how many exercises, or its :class:`Wait`.
 
     The report is written last : until it is, the game is diagnosed again
     on the next round, and the exercises already added are not added twice.
     """
     report = diagnose(state, sides, games_dir, depth=depth, engine_path=engine_path)
-    if report is None:
-        return None
+    if isinstance(report, Wait):
+        return report
     found = exercises_of(report, games_dir, depth=depth, engine_path=engine_path)
-    if found is None:
-        return None
+    if isinstance(found, Wait):
+        return found
     added = sum(add_exercises(games_dir, pid, exos) for pid, exos in found.items() if exos)
     write_report(games_dir, state.metadata.game_id, report)
     return added
@@ -173,9 +174,10 @@ def _diagnose_one(
 
 def _one_game(
     pgn: Path, games_dir: Path, players: dict, *, depth: int, engine_path: str | None
-) -> tuple[str, int]:
+) -> tuple[str, int | Wait]:
     """``(outcome, exercises added)`` ; outcome ``settled``, ``diagnosed``,
-    ``waiting`` or ``failed``. Settled : nothing to do until the PGN changes."""
+    ``waiting`` (with its :class:`Wait`) or ``failed``. Settled : nothing to do
+    until the PGN changes."""
     game_id = pgn.stem
     try:
         state = GameState.load(game_id, games_dir=games_dir)
@@ -195,8 +197,8 @@ def _one_game(
     except Exception as exc:  # noqa: BLE001 — one game never stops the round
         log.warning("coach: %s not diagnosed (%s)", game_id, exc)
         return "failed", 0
-    if added is None:
-        return "waiting", 0
+    if isinstance(added, Wait):
+        return "waiting", added
     return "diagnosed", added
 
 
@@ -226,7 +228,9 @@ def run_once(
         memory.start_round(games_dir)
     now = time.time() if now is None else now
     summary: dict = {"diagnosed": [], "waiting": [], "failed": [], "deferred": [], "exercises": 0}
-    for pgn in sorted(games_dir.glob("*.pgn")):
+    pgns = sorted(games_dir.glob("*.pgn"))
+    mtimes = {pgn: mtime_ns(pgn) for pgn in pgns}  # before any game is read
+    for pgn in pgns:
         if stop is not None and stop.is_set():
             break
         game_id = pgn.stem
@@ -237,14 +241,18 @@ def run_once(
             continue
         if memory is not None and memory.unchanged(pgn):
             continue
-        mtime = mtime_ns(pgn)  # before reading : a move meanwhile is seen next round
+        mtime = mtimes[pgn]  # before reading : a move meanwhile is seen next round
         outcome, added = _one_game(pgn, games_dir, players, depth=depth, engine_path=engine_path)
-        summary["exercises"] += added
         if outcome != "settled":
             summary[outcome].append(game_id)
+        if isinstance(added, Wait):
+            if memory is not None:
+                memory.wait_for(pgn, added, mtimes, now)
+            continue
+        summary["exercises"] += added
         if memory is None:
             continue
-        if outcome in ("waiting", "failed"):
+        if outcome == "failed":
             memory.retry_later(game_id, now)
         else:
             memory.settle(game_id, mtime)
