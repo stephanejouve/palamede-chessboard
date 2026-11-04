@@ -157,6 +157,7 @@ def test_the_coach_does_not_diagnose_its_exercises(tmp_path: Path) -> None:
         "diagnosed": [],
         "waiting": [],
         "failed": [],
+        "deferred": [],
         "exercises": 0,
     }
 

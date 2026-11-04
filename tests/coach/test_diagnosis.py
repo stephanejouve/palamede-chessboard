@@ -136,6 +136,7 @@ def test_a_game_in_progress_is_never_analysed(gdir: Path, popen) -> None:
         "diagnosed": [],
         "waiting": [],
         "failed": [],
+        "deferred": [],
         "exercises": 0,
     }
     popen.assert_not_called()

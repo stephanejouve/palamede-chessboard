@@ -219,6 +219,19 @@ def _in_progress_positions(games_dir: Path) -> dict[str, set[str]]:
     }
 
 
+def game_in_play(state: GameState, games_dir: Path) -> str | None:
+    """The live game that reached a position of ``state`` : checked before
+    the engine, as :func:`mask_walk_entries` checks after it (#95)."""
+    in_progress = _in_progress_positions(games_dir)
+    board = state.board.root()
+    fens = [board.fen()]
+    for move in state.board.move_stack:
+        board.push(move)
+        fens.append(board.fen())
+    matches = (_match_against_in_progress(fen, in_progress) for fen in fens)
+    return next((m for m in matches if m is not None), None)
+
+
 def live_game_through(fen: str, games_dir: Path) -> str | None:
     """The live game, not an exercise, that went through ``fen`` (or its mirror).
 
