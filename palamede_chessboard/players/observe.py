@@ -13,6 +13,13 @@ is kept for the audit and compared to the token's identity.
 
 The token itself is never written anywhere. An error while observing
 is logged and swallowed : observation must never break a game.
+
+The journal stays small (#65) : an allowed read (a tool without a rule
+of #34 §2, called with a valid token) is not written, since agents call
+them in a loop during a game and strict mode is decided on the
+refusals and the ``by`` mismatches ; and past :data:`MAX_JOURNAL_BYTES`
+the journal is moved to ``auth_observations.jsonl.1``, the previous one
+dropped.
 """
 
 from __future__ import annotations
@@ -32,6 +39,8 @@ log = logging.getLogger(__name__)
 
 AUTH_MODE_ENV = "PALAMEDE_AUTH_MODE"
 OBSERVATIONS_FILENAME = "auth_observations.jsonl"
+#: Size past which the journal is rotated : one previous file kept (#65).
+MAX_JOURNAL_BYTES = 10 * 1024 * 1024
 
 #: Tool → who may call it, per #34 §2. Tools not listed are reads :
 #: any authenticated caller.
@@ -179,8 +188,10 @@ def observe(
 ) -> dict | None:
     """Record what strict mode would decide for this call ; never raises.
 
-    Returns the journal entry (for tests), or ``None`` when the mode is
-    ``off`` or the observation itself failed.
+    Returns the verdict (for tests), written to the journal unless it is an
+    allowed read (#65), or ``None`` when the mode is ``off`` or the
+    observation itself failed. Synchronous disk accesses : the MCP server
+    runs it in a thread (#65).
     """
     if auth_mode() != "observe":
         return None
@@ -203,6 +214,8 @@ def observe(
             "verdict": "would_refuse" if code else "allow",
             "code": code,
         }
+        if code is None and tool not in RULES and entry["by_matches"] is not False:
+            return entry  # an allowed read : not journaled (#65)
         _append(registry.registry_path(games_dir).parent / OBSERVATIONS_FILENAME, entry)
         return entry
     except Exception as exc:  # noqa: BLE001 — observing must never break a call
@@ -213,6 +226,8 @@ def observe(
 def _append(path: Path, entry: dict) -> None:
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     with _atomic.locked(path):
+        if path.exists() and path.stat().st_size >= MAX_JOURNAL_BYTES:
+            os.replace(path, path.with_name(path.name + ".1"))
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
         with os.fdopen(fd, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
