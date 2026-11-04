@@ -106,6 +106,11 @@ class GameMetadata:
     #: path (resign, draw agreed). E.g. ``"white resigns"``, ``"draw agreed"``.
     #: Rendered as a PGN ``{...}`` comment before the result marker.
     termination_note: str | None = None
+    #: The PGN ``Termination`` header (#151) : ``"normal"`` for a game ended
+    #: on the board, by resignation or agreement, ``"time forfeit"`` when a
+    #: flag fell. ``None`` while the game is on, and for the games ended
+    #: before #151 without a note.
+    termination: str | None = None
     #: Whether this game counts for Elo rating. Server games default to
     #: ``True`` ; imports (lichess, GM databases, …) carry no ``Rated``
     #: header and are filtered out by :func:`palamede_chessboard.chess_elo.pgn_scan._parse_rated_game`.
@@ -147,8 +152,8 @@ class GameMetadata:
             headers["TimeControl"] = self.time_control.format
         if self.draw_offer:
             headers["DrawOffer"] = f"{self.draw_offer['by']}:{self.draw_offer['ply']}"
-        if self.termination_note:
-            headers["Termination"] = self.termination_note
+        if self.termination:
+            headers["Termination"] = self.termination
         if self.rated:
             # Elo perimeter marker (Stéphane arbitrage 2026-10-03). Only
             # written when True so an imported PGN that happens to pass

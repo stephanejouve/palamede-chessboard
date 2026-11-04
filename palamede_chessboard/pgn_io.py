@@ -58,8 +58,48 @@ def time_control_from_headers(headers: dict[str, str]) -> TimeControl:
     return TimeControl(format=raw, start_seconds=base, increment_seconds=increment)
 
 
-def metadata_from_headers(game_id: str, headers: dict[str, str]) -> GameMetadata:
-    """Build the :class:`GameMetadata` of ``game_id`` from its PGN headers."""
+#: The ``Termination`` values of the PGN standard. Any other value is the
+#: readable note the games written before #151 kept in that header.
+TERMINATIONS = frozenset(
+    {
+        "abandoned",
+        "adjudication",
+        "death",
+        "emergency",
+        "normal",
+        "rules infraction",
+        "time forfeit",
+        "unterminated",
+    }
+)
+
+
+def termination_from_pgn(
+    headers: dict[str, str], final_comment: str
+) -> tuple[str | None, str | None]:
+    """``(termination, termination_note)`` of a game (#151).
+
+    The note is the comment before the result. A game written before #151
+    holds it in ``Termination`` instead : read back as a ``normal`` end,
+    the only kind that carried a note (resignation, draw agreed).
+    """
+    raw = headers.get("Termination")
+    if raw is None:
+        return None, None
+    if raw.lower() in TERMINATIONS:
+        return raw, final_comment or None
+    return "normal", raw
+
+
+def metadata_from_headers(
+    game_id: str, headers: dict[str, str], final_comment: str = ""
+) -> GameMetadata:
+    """Build the :class:`GameMetadata` of ``game_id`` from its PGN headers.
+
+    ``final_comment`` : the comment before the result, where the
+    termination note lives (#151).
+    """
+    termination, termination_note = termination_from_pgn(headers, final_comment)
     draw_offer_raw = headers.get("DrawOffer") or ""
     draw_offer: dict | None = None
     if ":" in draw_offer_raw:
@@ -83,7 +123,8 @@ def metadata_from_headers(game_id: str, headers: dict[str, str]) -> GameMetadata
         opening=headers.get("Opening") or None,
         eco=headers.get("ECO") or None,
         draw_offer=draw_offer,
-        termination_note=headers.get("Termination") or None,
+        termination_note=termination_note,
+        termination=termination,
         # Preserve the Rated header as-read : an imported PGN with no
         # Rated header stays rated=False after a round-trip, so loading
         # then saving it will NOT suddenly stamp it as rated.

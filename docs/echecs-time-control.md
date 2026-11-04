@@ -67,6 +67,16 @@ minutes comme avant. Pas de migration des fichiers : une partie
 ancienne passe au format en secondes à sa prochaine écriture. Sans
 en-tête ou avec `-`, la partie est `unrated`.
 
+Un PGN importé à la main dont la cadence est en secondes (format
+standard, `600+0`) doit porter `[TimeControlUnit "seconds"]`. Sans le
+marqueur, il est lu en minutes, et sa prochaine écriture le fausse
+(`600+0` devient `36000+0`).
+
+Une partie terminée porte aussi `[Termination]` (#151) : `normal` pour un
+mat, une nulle sur l'échiquier, un abandon ou une nulle acceptée, et
+`time forfeit` quand un drapeau tombe. La note lisible (« admin
+resigns ») reste dans le commentaire avant le résultat.
+
 ## Impact Elo
 
 Le header `TimeControl` est **indépendant** du header `Rated`. Le

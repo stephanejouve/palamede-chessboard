@@ -129,5 +129,5 @@ async def test_resign_rewrites_pgn_with_termination(games_dir: Path) -> None:
     body = _decode(await call_tool("chess_get_raw_pgn", {"game_id": "pgnres"}))
     assert body["status"] == "ok"
     assert '[Result "0-1"]' in body["pgn"]
-    assert '[Termination "admin resigns"]' in body["pgn"]
+    assert '[Termination "normal"]' in body["pgn"]
     assert "{admin resigns} 0-1" in body["pgn"]
