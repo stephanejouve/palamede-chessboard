@@ -28,6 +28,7 @@ from pathlib import Path
 
 from palamede_chessboard.chess_engine_guard import (
     check_engine_call,
+    is_exercise_game,
     log_engine_call,
     mask_walk_entries,
 )
@@ -170,6 +171,8 @@ def run_once(
     summary: dict = {"diagnosed": [], "waiting": [], "failed": [], "exercises": 0}
     for pgn in sorted(games_dir.glob("*.pgn")):
         game_id = pgn.stem
+        if is_exercise_game(game_id):
+            continue  # one move from a position : no game to learn from
         try:
             state = GameState.load(game_id, games_dir=games_dir)
         except ChessboardError as exc:

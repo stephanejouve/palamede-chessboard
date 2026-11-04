@@ -34,6 +34,7 @@ from palamede_chessboard.chessboard_state import (
     GameState,
     TimeControl,
 )
+from palamede_chessboard.paths import refuse_reserved_game_id
 
 
 def _infer_next_round(games_dir: Path | None) -> int:
@@ -114,6 +115,7 @@ def _cmd_create(args: argparse.Namespace) -> int:
     created: list[dict] = []
     for m in schedule.matches:
         game_id = _default_game_id(m.white, m.black, round_num)
+        refuse_reserved_game_id(game_id)  # never a server-given id (Admin, #95)
         meta = GameMetadata(
             game_id=game_id,
             event=args.event,

@@ -237,6 +237,14 @@ def test_a_missed_mate_asks_no_question_on_attacks(gdir: Path, popen) -> None:
     assert exercise["kind"] == "find_move"
 
 
+def test_the_slower_mates_are_kept(gdir: Path, popen, engine) -> None:
+    # Black to move mates in 1 with Nd5 (stands for it), in 3 with Ng4.
+    engine.lines[BEFORE_H6] = [("f6d5", _pov(mate=-1)), ("f6g4", _pov(mate=-3))]
+    [exercise] = exercises_of(_report("missed_mate"), gdir, engine_path="/fake")[HUMAN]
+    assert exercise["solution_uci"] == "f6d5"
+    assert exercise["slower_mates"] == ["f6g4"]
+
+
 def test_no_find_move_without_a_clear_solution(gdir: Path, popen, engine) -> None:
     engine.lines[BEFORE_H6] = [("f6d5", _pov(0)), ("f6g4", _pov(100))]
     [exercise] = exercises_of(_report("ignored_threat"), gdir, engine_path="/fake")[HUMAN]

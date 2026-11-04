@@ -31,6 +31,7 @@ from palamede_chessboard.viewer.models import (
     VIEWER_ROLES,
 )
 from palamede_chessboard.viewer.routers import (
+    build_coach_router,
     build_elo_router,
     build_games_router,
     build_players_router,
@@ -164,6 +165,7 @@ def build_app() -> FastAPI:
     app.include_router(build_realtime_router())
     app.include_router(build_elo_router())
     app.include_router(build_players_router())
+    app.include_router(build_coach_router())
     return app
 
 

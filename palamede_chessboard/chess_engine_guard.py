@@ -32,8 +32,12 @@ Decision rules
 * Free-form ``fen`` matching an in-progress position (after the opening)
   → refused.
 
-The first :data:`OPENING_PLIES_IGNORED` half-moves of every game are
-excluded from the match set so opening-theory analysis stays available.
+The first :data:`OPENING_PLIES_IGNORED` half-moves of a game played from
+the initial position are excluded from the match set so opening-theory
+analysis stays available. A game that starts from a position — every
+``exo.*`` exercise of the coach, any game set up from a FEN — has no
+opening : all its positions count, its starting one first, whatever the
+move number its FEN says (review Leader #204).
 
 FEN comparison strips halfmove / fullmove counters and castling rights,
 and also compares against the mirror of each in-progress position (color
@@ -62,6 +66,7 @@ from pathlib import Path
 import chess
 
 from palamede_chessboard.chessboard_state import GameNotFoundError, GameState, list_games
+from palamede_chessboard.paths import EXERCISE_PREFIX
 
 log = logging.getLogger(__name__)
 
@@ -148,16 +153,33 @@ def _fingerprint_pair(fen: str) -> set[str]:
     return out
 
 
-def _game_position_fingerprints(state: GameState) -> set[str]:
-    """Return the set of fingerprints (incl. mirrors) past the opening.
+def is_exercise_game(game_id: object) -> bool:
+    """``exo.*``, whatever its case : an exercise of the coach (#95)."""
+    return str(game_id or "").lower().startswith(EXERCISE_PREFIX)
 
-    Only positions reached from ply :data:`OPENING_PLIES_IGNORED` onwards
-    are collected. For each such position we also include its mirrored
-    fingerprint so a flipped-board attempt still matches. Malformed PGN
-    bails out silently and leaves whatever was already collected intact.
+
+def _starts_from_a_position(state: GameState) -> bool:
+    """No opening to ignore : an exercise, or a game set up from a FEN."""
+    return is_exercise_game(state.metadata.game_id) or (
+        state.board.root().fen() != chess.STARTING_FEN
+    )
+
+
+def _game_position_fingerprints(state: GameState, *, whole: bool = False) -> set[str]:
+    """Return the set of fingerprints (incl. mirrors) the guard compares to.
+
+    For a game from the initial position, only positions reached from
+    ply :data:`OPENING_PLIES_IGNORED` onwards ; for a game that starts
+    from a position, or with ``whole``, every position, its starting one
+    included. For each position we also include its mirrored fingerprint
+    so a flipped-board attempt still matches. Malformed PGN bails out
+    silently and leaves whatever was already collected intact.
     """
+    whole = whole or _starts_from_a_position(state)
     fingerprints: set[str] = set()
     board = state.board.root()
+    if whole:
+        fingerprints.update(_fingerprint_pair(board.fen()))
     for san in state.san_history:
         try:
             move = board.parse_san(san)
@@ -165,27 +187,52 @@ def _game_position_fingerprints(state: GameState) -> set[str]:
             log.warning("engine_guard: cannot replay %s in %s", san, state.metadata.game_id)
             break
         board.push(move)
-        if board.ply() < OPENING_PLIES_IGNORED:
+        if not whole and board.ply() < OPENING_PLIES_IGNORED:
             continue
         fingerprints.update(_fingerprint_pair(board.fen()))
     # Also include ``state.board.fen()`` directly in case the replay bailed
     # out before reaching the current position.
-    if state.board.ply() >= OPENING_PLIES_IGNORED:
+    if whole or state.board.ply() >= OPENING_PLIES_IGNORED:
         fingerprints.update(_fingerprint_pair(state.board.fen()))
     return fingerprints
 
 
-def _in_progress_positions(games_dir: Path) -> dict[str, set[str]]:
-    """Map each in-progress ``game_id`` to its set of post-opening fingerprints."""
-    out: dict[str, set[str]] = {}
+def _live_games(games_dir: Path) -> list[GameState]:
+    states = []
     for summary in list_games(games_dir, active_only=True):
-        game_id = summary["game_id"]
         try:
-            state = GameState.load(game_id, games_dir=games_dir)
+            states.append(GameState.load(summary["game_id"], games_dir=games_dir))
         except GameNotFoundError:
             continue
-        out[game_id] = _game_position_fingerprints(state)
-    return out
+    return states
+
+
+def _in_progress_positions(games_dir: Path) -> dict[str, set[str]]:
+    """Map each in-progress ``game_id`` to the fingerprints the guard compares to.
+
+    The opening of a game from the initial position is left out here, at
+    the source : any position, of any ply, is compared to these sets.
+    """
+    return {
+        state.metadata.game_id: _game_position_fingerprints(state)
+        for state in _live_games(games_dir)
+    }
+
+
+def live_game_through(fen: str, games_dir: Path) -> str | None:
+    """The live game, not an exercise, that went through ``fen`` (or its mirror).
+
+    Every position counts, the opening too : an exercise of the coach is
+    an oracle for its solution, so it is refused while a game that
+    reached its position is still played (review Admin #204). The
+    exercise games themselves are left out, or one would refuse itself.
+    """
+    live = {
+        state.metadata.game_id: _game_position_fingerprints(state, whole=True)
+        for state in _live_games(games_dir)
+        if not is_exercise_game(state.metadata.game_id)
+    }
+    return _match_against_in_progress(fen, live)
 
 
 def _match_against_in_progress(fen: str, in_progress: dict[str, set[str]]) -> str | None:
@@ -285,8 +332,6 @@ def _check_against_game_id(
     if tool != "chess_analyze_position":
         return None
     target_ply = ply if ply is not None else state.board.ply()
-    if target_ply < OPENING_PLIES_IGNORED:
-        return None
     target_fen = _position_fen_at_ply(state, target_ply)
     if target_fen is None:
         return None
@@ -320,9 +365,10 @@ def check_engine_call(
     * For ``chess_analyze_position`` with ``game_id`` + ``ply`` on a
       **finished** game : the single target position (and its mirror) is
       compared to in-progress fingerprints — refused on match. The
-      opening threshold is applied at the collection step (in-progress
-      fingerprints are only kept past :data:`OPENING_PLIES_IGNORED`), so
-      opening theory stays accessible.
+      opening threshold is applied at the collection step only (a game
+      from the initial position keeps its fingerprints past
+      :data:`OPENING_PLIES_IGNORED`), so opening theory stays accessible
+      and a target of any ply is compared — an exercise's position too.
     * For ``chess_analyze_game`` / ``chess_get_my_mistakes`` on a
       finished game : **always allowed** here ; per-ply masking happens
       in the MCP handler via :func:`mask_walk_entries`. A global refusal
@@ -353,13 +399,13 @@ def check_engine_call(
 
 
 def mask_walk_entries(walk: list, games_dir: Path) -> tuple[list, int, list[dict]]:
-    """Mask the walk entries whose position matches a live game, past opening.
+    """Mask the walk entries whose position matches a live game.
 
     ``walk`` is the list of ``GameWalkEntry`` returned by
     :func:`palamede_chessboard.chessboard_engine.analyze_game` (BT-002,
-    Leader). For each entry at
-    ``ply >= OPENING_PLIES_IGNORED`` whose ``fen_after`` (or mirror)
-    appears in an in-progress game's fingerprint set, the entry's
+    Leader). For each entry whose ``fen_after`` or ``fen_before`` (or
+    mirror) appears in an in-progress game's fingerprint set — which
+    leaves out the opening of a game from the initial position — the entry's
     numeric scores and classification are replaced with ``None`` and
     :data:`MASKED_CLASSIFICATION` respectively.
 
@@ -373,9 +419,6 @@ def mask_walk_entries(walk: list, games_dir: Path) -> tuple[list, int, list[dict
     masked_walk = []
     details: list[dict] = []
     for entry in walk:
-        if entry.ply < OPENING_PLIES_IGNORED:
-            masked_walk.append(entry)
-            continue
         match = _match_against_in_progress(entry.fen_after, in_progress)
         if match is None and entry.fen_before:
             match = _match_against_in_progress(entry.fen_before, in_progress)
