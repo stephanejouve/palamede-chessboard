@@ -27,7 +27,23 @@
     <div id="board"></div>
     <!-- The promotion, as on lichess (#150) : four pieces on the square reached. -->
     <div id="promo" class="cg-wrap" role="dialog" aria-label="Promotion" hidden></div>
-    <section id="tray" aria-label="Mise en place" hidden>
+    <!-- Without a game, the knight's squares say their value (smoke of
+         Stéphane, 04/11) : the gesture seen on the board, not read in a sentence. -->
+    <div id="tips" aria-hidden="true" hidden></div>
+    <!-- Under the board : the setup, or without a game what the board's
+         gestures do (smoke of Stéphane, 03/11), where the notes will come. -->
+    <section id="tray" aria-label="Sous l'échiquier" hidden>
+      <p id="lobby" role="status" hidden></p>
+      <!-- Needed while the gestures are learnt, then folded by the player
+           (smoke of Stéphane, 04/11) : open at launch, folded for the run. -->
+      <details id="gestures" open hidden>
+        <summary>Gestes de l'échiquier</summary>
+        <ul>
+          <li><b>Temps</b> : un cavalier blanc sur la rangée 3, de a3 (3 min) à f3 (90 min), 2 s.</li>
+          <li><b>Incrément</b> : un cavalier blanc sur la rangée 4, de a4 (0 s) à f4 (30 s), 2 s.</li>
+          <li><b>Nouvelle partie</b> : cavaliers rentrés, pièces en place, levez a1+h1 (Blancs) ou a8+h8 (Noirs) 5 s.</li>
+        </ul>
+      </details>
       <p id="differing"></p>
     </section>
   </div>

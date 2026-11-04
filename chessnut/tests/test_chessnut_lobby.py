@@ -13,14 +13,16 @@ import pytest
 from palamede_chessnut import config, leds, lobby, viewer
 from palamede_chessnut.bridge import Bridge
 from palamede_chessnut.cli import bridge_from_args
-from palamede_chessnut.games import NO_GAME, Session
+from palamede_chessnut.games import NO_GAME, Session, successor
 from palamede_chessnut.lobby import (
+    CHOICE_SECONDS,
     GESTURE_SECONDS,
     NO_SERVER,
     Lobby,
+    choices,
+    chosen,
     gesture_side,
-    notch_part,
-    stepped,
+    on_the_way,
 )
 from palamede_chessnut.page import PageServer
 from palamede_chessnut.status import snapshot, sync_light
@@ -139,7 +141,7 @@ async def test_the_rooks_back_before_5_s_cancel(monkeypatch) -> None:
     held(board, chess.BaseBoard(), 10)
     await board.tick(write)
     assert server.posts == [] and board.leds == frozenset()
-    assert board.lobby_text() == "Aucune partie, cadence 15+10 : " + lobby.HINT
+    assert board.lobby_text() == "Aucune partie, cadence 15+10."
 
 
 async def test_pieces_set_up_with_the_rooks_last_open_nothing(monkeypatch) -> None:
@@ -263,118 +265,319 @@ async def test_a_refusal_is_not_tried_again_until_the_rooks_move(monkeypatch) ->
     assert len(server.posts) == 2
 
 
-# ---- the clock's notches (#186) -----------------------------------------------
+# ---- the clock chosen by a knight (#186) ---------------------------------------
+
+
+def knight(home: chess.Square, square: chess.Square | None) -> chess.BaseBoard:
+    """The starting position, the knight of ``home`` lifted or put on ``square``."""
+    board = lifted(home)
+    if square is not None:
+        board.set_piece_at(square, chess.Piece(chess.KNIGHT, chess.WHITE))
+    return board
 
 
 @pytest.mark.parametrize(
-    ("placement", "part"),
+    ("placement", "picked"),
     [
-        (lifted(chess.G1, chess.F1), 0),
-        (lifted(chess.B1, chess.C1), 1),
-        (lifted(chess.B1, chess.G1), None),  # the two knights : the lesson, not yet
-        (lifted(chess.C1, chess.F1), None),  # the two bishops : the problem, not yet
-        (lifted(chess.G8, chess.F8), None),  # Black's pieces open nothing here
-        (lifted(chess.G1, chess.F1, chess.B1), None),
-        (lifted(chess.G1), None),
-        (chess.BaseBoard(), None),
+        (knight(chess.G1, chess.A3), ((0, 3, chess.A3),)),
+        (knight(chess.G1, chess.F3), ((0, 90, chess.F3),)),
+        (knight(chess.G1, chess.E3), ((0, 25, chess.E3),)),
+        (knight(chess.B1, chess.A4), ((1, 0, chess.A4),)),
+        (knight(chess.B1, chess.F4), ((1, 30, chess.F4),)),
+        (knight(chess.B1, chess.D4), ((1, 5, chess.D4),)),
+        # Either knight, the rank says the part (smoke of Stéphane, 04/11).
+        (knight(chess.G1, chess.A4), ((1, 0, chess.A4),)),
+        (knight(chess.B1, chess.C3), ((0, 10, chess.C3),)),
+        (knight(chess.G1, chess.G3), ()),  # beyond the six values
+        (knight(chess.G1, chess.H3), ()),
+        (knight(chess.G1, chess.D5), ()),  # rank 5 says nothing
+        (knight(chess.G1, None), ()),  # lifted : on its way
+        (chess.BaseBoard(), ()),
     ],
 )
-def test_two_white_pieces_off_the_start_step_one_part(placement, part) -> None:
-    assert notch_part(placement) == part
+def test_the_knight_s_square_says_the_part_and_the_value(placement, picked) -> None:
+    assert choices(placement) == picked
     assert gesture_side(placement) is None
 
 
+def test_both_knights_off_say_both_parts() -> None:
+    """The b1 knight left on b4 while the g1 one goes to f3 (smoke of Stéphane, 04/11)."""
+    placement = knight(chess.B1, chess.B4)
+    placement.remove_piece_at(chess.G1)
+    placement.set_piece_at(chess.F3, chess.Piece(chess.KNIGHT, chess.WHITE))
+    assert set(choices(placement)) == {(1, 2, chess.B4), (0, 90, chess.F3)}
+    assert on_the_way(placement)
+
+
 @pytest.mark.parametrize(
-    ("clock", "part", "after"),
+    "placement",
     [
-        ("15+10", 0, "25+10"),
-        ("90+10", 0, "3+10"),  # after the last, the first
-        ("15+10", 1, "15+30"),
-        ("15+30", 1, "15+0"),
-        ("7+1", 0, "10+1"),  # from the settings, between two notches : the next one
-        ("7+1", 1, "7+2"),
-        ("120+45", 0, "3+45"),
-        ("unrated", 0, "25+10"),  # no clock : from the default one
-        ("unrated", 1, "15+30"),
+        knight(chess.G1, chess.D3),
+        knight(chess.G1, None),
+        knight(chess.G1, chess.H5),  # off its rank : still on its way, chooses nothing
+        knight(chess.B1, chess.C3),
+        lifted(chess.G1, chess.B1),  # both lifted
     ],
 )
-def test_one_notch_further(clock, part, after) -> None:
-    assert stepped(clock, part) == after
+def test_a_choosing_knight_off_keeps_the_lobby_armed(placement) -> None:
+    assert on_the_way(placement)
 
 
-async def test_the_base_gesture_held_steps_the_clock_without_a_game(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "placement",
+    [
+        lifted(chess.C1, chess.F1),  # the two bishops : the problem, later
+        lifted(chess.G1, chess.F1),  # the notches of #189 are gone
+        lifted(chess.G8),  # a black knight
+    ],
+)
+def test_other_pieces_off_choose_nothing(placement) -> None:
+    assert choices(placement) == () and gesture_side(placement) is None
+    assert not on_the_way(placement)
+
+
+def spare(
+    piece: chess.Piece, square: chess.Square, home: chess.Square = chess.G1
+) -> chess.BaseBoard:
+    """``home`` emptied, ``piece`` put on ``square`` : not the knight that left."""
+    board = lifted(home)
+    board.set_piece_at(square, piece)
+    return board
+
+
+@pytest.mark.parametrize(
+    "placement",
+    [
+        # The board comes with spare queens (review Junior #191).
+        spare(chess.Piece(chess.QUEEN, chess.WHITE), chess.D3),
+        spare(chess.Piece(chess.KNIGHT, chess.BLACK), chess.D3),
+        # The knight on a pawn's square : not a square of its own.
+        spare(chess.Piece(chess.KNIGHT, chess.WHITE), chess.E2),
+        # A third white knight : both homes still full, or one left for two knights out.
+        chess.BaseBoard("rnbqkbnr/pppppppp/8/8/8/3N4/PPPPPPPP/RNBQKBNR"),
+        chess.BaseBoard("rnbqkbnr/pppppppp/8/8/3N4/N7/PPPPPPPP/R1BQKBNR"),
+    ],
+)
+def test_only_the_knight_itself_on_an_empty_square_chooses(placement) -> None:
+    assert choices(placement) == () and not on_the_way(placement)
+
+
+@pytest.mark.parametrize(
+    ("clock", "part", "value", "after"),
+    [
+        ("15+10", 0, 90, "90+10"),
+        ("15+10", 1, 0, "15+0"),
+        ("7+1", 0, 3, "3+1"),
+        ("unrated", 0, 25, "25+10"),  # no clock : from the default one
+        ("unrated", 1, 2, "15+2"),
+    ],
+)
+def test_the_value_replaces_its_part(clock, part, value, after) -> None:
+    assert chosen(clock, ((part, value, chess.A3),)) == after
+
+
+async def test_the_knight_still_2_s_chooses_the_base_without_a_game(monkeypatch) -> None:
     server = Server(monkeypatch)
     board = new_lobby()
-    held(board, lifted(chess.G1, chess.F1), GESTURE_SECONDS)
+    held(board, knight(chess.G1, chess.F3), CHOICE_SECONDS)
     await board.tick(Board())
     assert server.posts == []
-    assert board.new_game["time_control"] == "25+10"
-    assert board.animation == leds.notch(2, 5)  # 25 min : the fifth notch, on rank 3
-    assert board.lobby_text() == "Aucune partie, cadence 25+10 : " + lobby.HINT
+    assert board.new_game["time_control"] == "90+10"
+    assert board.animation == leds.chosen(frozenset({chess.F3}))
+    assert leds.chosen(frozenset({chess.F3}))[0] == frozenset({chess.F3})
+    assert board.lobby_text() == "Aucune partie, cadence 90+10."
 
 
-async def test_the_increment_notch_is_counted_on_rank_4(monkeypatch) -> None:
+async def test_the_b1_knight_on_a4_chooses_no_increment(monkeypatch) -> None:
     Server(monkeypatch)
     board = new_lobby()
-    held(board, lifted(chess.B1, chess.C1), GESTURE_SECONDS)
+    held(board, knight(chess.B1, chess.A4), CHOICE_SECONDS + 0.5)
     await board.tick(Board())
-    assert board.new_game["time_control"] == "15+30"
-    assert board.animation == leds.notch(3, 6)
-    assert leds.notch(3, 6)[0] == frozenset(chess.square(f, 3) for f in range(6))
+    assert board.new_game["time_control"] == "15+0"
 
 
-async def test_before_5_s_the_two_pieces_blink_and_the_window_says_the_next_clock(
-    monkeypatch,
-) -> None:
+async def test_before_2_s_the_square_blinks_and_the_window_says_the_clock(monkeypatch) -> None:
     Server(monkeypatch)
     board = new_lobby()
-    held(board, lifted(chess.B1, chess.C1), 2.1)
+    held(board, knight(chess.G1, chess.B3), 0.6)
     await board.tick(Board())
     assert board.new_game["time_control"] == "15+10"
-    assert board.leds in (frozenset({chess.B1, chess.C1}), frozenset())
-    assert board.lobby_text() == "Cadence 15+30 dans 3 s…"
+    assert board.leds in (frozenset({chess.B3}), frozenset())
+    assert board.lobby_text() == "Cadence 5+10 dans 1 s…"
 
 
-async def test_one_notch_per_gesture_the_pieces_put_back_in_between(monkeypatch) -> None:
+async def test_a_square_crossed_on_the_way_chooses_nothing(monkeypatch) -> None:
     Server(monkeypatch)
     board, write = new_lobby(), Board()
-    held(board, lifted(chess.G1, chess.F1), GESTURE_SECONDS)
+    held(board, knight(chess.G1, chess.C3), 0.5)  # passing by c3
+    await board.tick(write)
+    held(board, knight(chess.G1, chess.E3), CHOICE_SECONDS)
+    await board.tick(write)
+    assert board.new_game["time_control"] == "25+10"
+
+
+async def test_one_choice_per_placement_another_square_another_choice(monkeypatch) -> None:
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, knight(chess.G1, chess.A3), CHOICE_SECONDS)
     await board.tick(write)
     board.animation = []
-    await board.tick(write)  # still held : no second notch
-    assert board.new_game["time_control"] == "25+10"
-    held(board, chess.BaseBoard(), 1)
+    await board.tick(write)  # still there : chosen once
+    assert board.new_game["time_control"] == "3+10"
+    held(board, knight(chess.G1, chess.D3), CHOICE_SECONDS)
     await board.tick(write)
-    held(board, lifted(chess.G1, chess.F1), GESTURE_SECONDS)
+    assert board.new_game["time_control"] == "15+10"
+
+
+def two_knights(b1_on: chess.Square, g1_on: chess.Square | None) -> chess.BaseBoard:
+    """The b1 knight on ``b1_on``, the g1 one lifted or on ``g1_on``."""
+    board = knight(chess.B1, b1_on)
+    board.remove_piece_at(chess.G1)
+    if g1_on is not None:
+        board.set_piece_at(g1_on, chess.Piece(chess.KNIGHT, chess.WHITE))
+    return board
+
+
+async def test_a_knight_left_out_does_not_stop_the_other(monkeypatch, caplog) -> None:
+    """Smoke of Stéphane, 04/11 : b1 left on b4, the g1 knight on f3 did nothing."""
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, knight(chess.B1, chess.B4), CHOICE_SECONDS)
     await board.tick(write)
+    board.animation = []
+    held(board, two_knights(chess.B4, None), 1)
+    await board.tick(write)
+    assert board.armed
+    with caplog.at_level("INFO", logger="palamede_chessnut.lobby"):
+        held(board, two_knights(chess.B4, chess.F3), CHOICE_SECONDS)
+        await board.tick(write)
+    assert board.new_game["time_control"] == "90+2"
+    assert board.animation == leds.chosen(frozenset({chess.F3}))  # b4, taken, does not blink
+    assert "clock chosen at f3 : 15+2 → 90+2" in caplog.text
+
+
+async def test_the_knight_put_last_wins_its_rank_and_a_crossing_retakes_nothing(
+    monkeypatch,
+) -> None:
+    """Review Admin #191 : b1 on c3 then g1 on f3, both on rank 3."""
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, knight(chess.B1, chess.C3), CHOICE_SECONDS)
+    await board.tick(write)
+    board.animation = []
+    assert board.new_game["time_control"] == "10+10"
+    held(board, two_knights(chess.C3, chess.F3), CHOICE_SECONDS)
+    await board.tick(write)
+    board.animation = []
     assert board.new_game["time_control"] == "90+10"
+    # The g1 knight goes home : c3, still standing, is not taken again.
+    held(board, knight(chess.B1, chess.C3), CHOICE_SECONDS)
+    await board.tick(write)
+    assert board.new_game["time_control"] == "90+10" and board.animation == []
 
 
-async def test_the_stepped_clock_is_the_next_game_s(monkeypatch) -> None:
+async def test_a_knight_back_on_its_square_chooses_again(monkeypatch) -> None:
+    """Gone, the square is forgotten : the same knight put back there is taken again."""
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, knight(chess.B1, chess.C3), CHOICE_SECONDS)
+    await board.tick(write)
+    board.animation = []
+    held(board, knight(chess.B1, None), 1)
+    await board.tick(write)
+    held(board, knight(chess.B1, chess.C3), CHOICE_SECONDS)
+    await board.tick(write)
+    assert board.animation == leds.chosen(frozenset({chess.C3}))
+
+
+async def test_the_log_tells_a_knight_without_value_and_a_disarmed_lobby(
+    monkeypatch, caplog
+) -> None:
+    """Smoke of Stéphane, 04/11 : the log must tell a gesture not seen from one not made."""
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    with caplog.at_level("INFO", logger="palamede_chessnut.lobby"):
+        held(board, knight(chess.G1, chess.H3), CHOICE_SECONDS)
+        await board.tick(write)
+        await board.tick(write)  # once per placement
+        held(board, lifted(chess.E2), 1)
+        await board.tick(write)
+    assert caplog.text.count("knight on h3 : no value there") == 1
+    assert "gestures disarmed until the starting position : " in caplog.text
+    assert not board.armed
+
+
+async def test_two_knights_put_together_on_one_rank_choose_nothing_and_say_so(
+    monkeypatch,
+) -> None:
+    """Review Junior #191 : b1 on c3 and g1 on f3 within the same 2 s."""
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, two_knights(chess.C3, chess.F3), CHOICE_SECONDS)
+    await board.tick(write)
+    assert board.new_game["time_control"] == "15+10" and board.animation == []
+    assert board.lobby_text() == "Deux cavaliers sur la rangée 3 : retirez-en un."
+    held(board, knight(chess.B1, chess.C3), CHOICE_SECONDS)
+    await board.tick(write)
+    assert board.new_game["time_control"] == "10+10" and board.clash == []
+
+
+async def test_the_value_already_in_place_is_said(monkeypatch) -> None:
+    """Stéphane, 04/11 : « 15+2 → 15+2 » showed nothing, as if the gesture failed."""
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, knight(chess.B1, chess.F4), 1)
+    await board.tick(write)
+    assert board.lobby_text() == "Cadence 15+30 dans 1 s…"
+    held(board, knight(chess.B1, chess.E4), 1)
+    board.new_game["time_control"] = "15+10"
+    await board.tick(write)
+    assert board.lobby_text() == "Cadence 15+10 (déjà en place) dans 1 s…"
+
+
+async def test_the_chosen_clock_is_the_next_game_s(monkeypatch) -> None:
     server = Server(monkeypatch)
     board, write = new_lobby(), Board()
-    held(board, lifted(chess.B1, chess.C1), GESTURE_SECONDS)
-    await board.tick(write)
-    board.animation = []
-    held(board, chess.BaseBoard(), 1)
-    await board.tick(write)
+    for placement in (knight(chess.G1, chess.A3), knight(chess.B1, chess.B4)):
+        held(board, placement, CHOICE_SECONDS)
+        await board.tick(write)
+        board.animation = []
+        held(board, chess.BaseBoard(), 1)
+        await board.tick(write)
     held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS)
     await board.tick(write)
-    assert server.posts[0][2]["time_control"] == {"format": "15+30"}
+    assert server.posts[0][2]["time_control"] == {"format": "3+2"}
 
 
-async def test_pieces_set_up_with_g1_f1_last_step_nothing(monkeypatch) -> None:
+async def test_pieces_set_up_with_a_knight_on_rank_3_choose_nothing(monkeypatch) -> None:
     Server(monkeypatch)
     board = new_lobby(armed=False)
-    held(board, lifted(chess.G1, chess.F1), GESTURE_SECONDS + 1)
+    held(board, knight(chess.G1, chess.C3), CHOICE_SECONDS + 1)
     await board.tick(Board())
-    assert board.new_game["time_control"] == "15+10" and board.stepping is None
+    assert board.new_game["time_control"] == "15+10" and board.choosing == ()
 
 
 def test_without_a_clock_the_window_says_so() -> None:
     board = new_lobby(new_game={"opponent": "bot-maia-1100", "time_control": "unrated"})
     held(board, chess.BaseBoard(), 1)
-    assert board.lobby_text() == "Aucune partie, cadence sans pendule : " + lobby.HINT
+    assert board.lobby_text() == "Aucune partie, cadence sans pendule."
+
+
+def test_the_chosen_clock_outlives_the_game_it_opened() -> None:
+    """Lobby → its game → the next lobby : the clock chosen stays (mutant of Junior, #189)."""
+    first = new_lobby()
+    first.new_game["time_control"] = "3+2"
+    game = successor(first, NEW, with_board=True)
+    assert game.new_game == {"opponent": "bot-maia-1100", "time_control": "3+2"}
+    game.finished = True
+    session = Session(game, lambda _bridge: None)
+    session._idle(game)
+    try:
+        assert isinstance(session.bridge, Lobby)
+        assert session.bridge.new_game["time_control"] == "3+2"
+        assert config.NEW_GAME["time_control"] == "15+10"  # the default untouched
+    finally:
+        session.close()
 
 
 # ---- the page --------------------------------------------------------------
@@ -392,7 +595,8 @@ def test_the_page_says_how_to_open_a_game() -> None:
     board = new_lobby()
     held(board, chess.BaseBoard(), 1)
     state = snapshot(board)
-    assert state["lobby"] == "Aucune partie, cadence 15+10 : " + lobby.HINT
+    assert state["lobby"] == "Aucune partie, cadence 15+10."
+    assert state["tips"]["f3"] == "90′" and state["tips"]["a4"] == "+0"
     assert state["game_id"] == "" and state["fen"] is None
     assert state["setup"] is None and state["differing"] == []
     assert state["lights"]["sync"] == "waiting"
@@ -404,7 +608,7 @@ def test_a_finished_game_stays_on_screen_its_board_no_longer_compared() -> None:
     state = snapshot(board)
     assert state["game_id"] == "009" and state["history"] == ["Qh1#"]
     assert state["finished"] and state["account"] == "stephane"
-    assert state["lobby"] == "Partie terminée, cadence 15+10 : " + lobby.HINT
+    assert state["lobby"] == "Partie terminée, cadence 15+10."
     assert state["setup"] is None and state["differing"] == []
     assert sync_light(board) == "waiting"
 
@@ -417,7 +621,20 @@ def test_the_window_title_without_a_game() -> None:
 
 
 def test_a_game_s_bridge_has_no_lobby_text() -> None:
-    assert snapshot(finished_bridge())["lobby"] is None
+    state = snapshot(finished_bridge())
+    assert state["lobby"] is None and state["tips"] == {}
+
+
+def test_the_screen_s_board_says_what_each_knight_square_chooses() -> None:
+    """Smoke of Stéphane, 04/11 : the knight's gesture was not found from the text alone."""
+    assert lobby.tips() == {
+        "a3": "3′", "b3": "5′", "c3": "10′", "d3": "15′", "e3": "25′", "f3": "90′",
+        "a4": "+0", "b4": "+2", "c4": "+3", "d4": "+5", "e4": "+10", "f4": "+30",
+    }  # fmt: skip
+    for square, value in lobby.tips().items():
+        for home in lobby.KNIGHT_HOMES:
+            (picked,) = choices(knight(home, chess.parse_square(square)))
+            assert str(picked[1]) == value.strip("+′"), square
 
 
 def test_no_clock_is_read_without_a_game() -> None:
