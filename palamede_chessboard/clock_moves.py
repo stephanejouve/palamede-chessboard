@@ -61,7 +61,7 @@ def check_game(game_id: str, games_dir: Path) -> Path:
     _validate_game_id(game_id)
     path = _pgn_path(games_dir, game_id)
     if not path.exists():
-        raise GameNotFoundError(str(path))
+        raise GameNotFoundError(f"game not found: {game_id}")  # never the path (#107)
     return path
 
 

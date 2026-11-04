@@ -144,9 +144,11 @@ def _read_for_update(path: Path) -> dict:
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise PlayerPrefsError(f"{path} is unreadable ({exc}) : nothing written") from exc
+        log.warning("player prefs at %s unreadable : %s", path, exc)  # the path stays here (#107)
+        raise PlayerPrefsError("player preferences file is unreadable : nothing written") from exc
     if not isinstance(raw, dict) or not isinstance(raw.get("players"), dict):
-        raise PlayerPrefsError(f"{path} has no 'players' object : nothing written")
+        log.warning("player prefs at %s has no 'players' object", path)
+        raise PlayerPrefsError("player preferences file has no 'players' object : nothing written")
     raw["players"] = _normalize_players(raw["players"], path)
     return raw
 

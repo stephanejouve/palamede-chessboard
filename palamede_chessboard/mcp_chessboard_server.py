@@ -132,8 +132,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         return _mcp_response({"status": "error", "code": "CHESSBOARD_ERROR", "reason": str(exc)})
     except EngineUnavailableError as exc:
         return _mcp_response({"status": "error", "code": "ENGINE_UNAVAILABLE", "reason": str(exc)})
-    except Exception as exc:  # noqa: BLE001
-        return _mcp_response({"status": "error", "code": "INTERNAL", "reason": str(exc)})
+    except Exception:  # noqa: BLE001
+        # Its text may hold a path or a detail of the server (#107) : the log only.
+        logger.exception("%s : internal error", name)
+        return _mcp_response({"status": "error", "code": "INTERNAL", "reason": "internal error"})
 
 
 async def _run_stdio() -> None:
