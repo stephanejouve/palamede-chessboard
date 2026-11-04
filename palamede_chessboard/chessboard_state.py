@@ -53,6 +53,7 @@ from palamede_chessboard.paths import (
     _pgn_path,
     _validate_game_id,
 )
+from palamede_chessboard.pgn_io import metadata_from_headers, pgn_text
 
 __all__ = [
     "COMMENTARY_DIR_NAME",
@@ -76,26 +77,6 @@ __all__ = [
 ]
 
 log = logging.getLogger(__name__)
-
-
-def _movetext(san_history: list[str], root: chess.Board) -> str:
-    """Number ``san_history`` from the root position (issue #36).
-
-    A standard game gives ``1. e4 e5 2. Nf3``. A game started from a FEN
-    keeps its own move number, and opens with ``N...`` when Black moves
-    first, so the PGN stays valid for the viewer and external tools.
-    """
-    number = root.fullmove_number
-    white_to_move = root.turn == chess.WHITE
-    tokens: list[str] = []
-    for san in san_history:
-        if white_to_move:
-            tokens.append(f"{number}. {san}")
-        else:
-            tokens.append(f"{number}... {san}" if not tokens else san)
-            number += 1
-        white_to_move = not white_to_move
-    return " ".join(tokens)
 
 
 @dataclass
@@ -151,36 +132,7 @@ class GameState:
         if game is None:
             log.warning("PGN at %s is unreadable", path)  # the path for the server log only
             raise ChessboardError(f"PGN of {game_id} is unreadable")
-        headers = dict(game.headers)
-        draw_offer_raw = headers.get("DrawOffer") or ""
-        draw_offer: dict | None = None
-        if ":" in draw_offer_raw:
-            side, _, ply_str = draw_offer_raw.partition(":")
-            if side in ("white", "black") and ply_str.isdigit():
-                draw_offer = {"by": side, "ply": int(ply_str)}
-        rated_raw = headers.get("Rated", "").strip().lower()
-        metadata = GameMetadata(
-            game_id=game_id,
-            event=headers.get("Event", ""),
-            site=headers.get("Site", ""),
-            date=headers.get("Date", ""),
-            round=headers.get("Round", "1"),
-            white=headers.get("White", ""),
-            black=headers.get("Black", ""),
-            arbiter=headers.get("Arbiter") or None,
-            spectators=([s for s in headers.get("Spectators", "").split(",") if s]),
-            time_control=TimeControl(format=headers.get("TimeControl", "unrated")),
-            result=headers.get("Result", "*"),
-            annotator=headers.get("Annotator") or None,
-            opening=headers.get("Opening") or None,
-            eco=headers.get("ECO") or None,
-            draw_offer=draw_offer,
-            termination_note=headers.get("Termination") or None,
-            # Preserve the Rated header as-read : an imported PGN with no
-            # Rated header stays rated=False after a round-trip, so loading
-            # then saving it will NOT suddenly stamp it as rated.
-            rated=rated_raw == "true",
-        )
+        metadata = metadata_from_headers(game_id, dict(game.headers))
         board = game.board()
         san_history: list[str] = []
         for move in game.mainline_moves():
@@ -377,26 +329,10 @@ class GameState:
         self.games_dir.mkdir(parents=True, exist_ok=True)
         path = _pgn_path(self.games_dir, self.metadata.game_id)
         tmp = path.with_suffix(".pgn.tmp")
-        root = self.board.root()
-        headers = self.metadata.pgn_headers_to_write()  # refused before the tmp file (#128)
+        # Refused before the tmp file (#128).
+        text = pgn_text(self.metadata, self.board.root(), self.san_history)
         with tmp.open("w", encoding="utf-8") as f:
-            for tag, value in headers.items():
-                f.write(f'[{tag} "{value}"]\n')
-            # Issue #36 : a game created from ``starting_fen`` must keep
-            # its root position, or ``load`` (``game.board()``) restarts
-            # from the initial position on the next MCP call.
-            if root.fen() != chess.STARTING_FEN:
-                f.write('[SetUp "1"]\n')
-                f.write(f'[FEN "{root.fen()}"]\n')
-            f.write("\n")
-            tail = self.metadata.result
-            if self.metadata.termination_note:
-                tail = f"{{{self.metadata.termination_note}}} {tail}"
-            if self.san_history:
-                f.write(_movetext(self.san_history, root))
-                f.write(f" {tail}\n")
-            else:
-                f.write(f"{tail}\n")
+            f.write(text)
             f.flush()
             os.fsync(f.fileno())  # durable before the swap (#46)
         tmp.replace(path)
