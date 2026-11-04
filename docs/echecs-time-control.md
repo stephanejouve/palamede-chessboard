@@ -77,6 +77,13 @@ mat, une nulle sur l'échiquier, un abandon ou une nulle acceptée, et
 `time forfeit` quand un drapeau tombe. La note lisible (« admin
 resigns ») reste dans le commentaire avant le résultat.
 
+Quand la partie a une pendule en marche, chaque coup est suivi du temps
+restant au camp qui vient de jouer, au format du supplément PGN :
+`1. d4 { [%clk 0:15:00] } 1... d5 { [%clk 0:14:58] }`. Le temps est
+celui de la pendule après le coup, incrément compris, tronqué à la seconde
+(61,99 s s'écrit `0:01:01`). Le `[%clk]` du dernier coup partage son commentaire avec la
+note de fin ; la note est relue sans les commandes `[%…]`.
+
 ## Impact Elo
 
 Le header `TimeControl` est **indépendant** du header `Rated`. Le

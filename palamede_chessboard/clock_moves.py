@@ -127,6 +127,9 @@ def clock_after_move(state: GameState, mover: str, games_dir: Path) -> ClockStat
         clock.active = None  # game over : the clock stops
     clock.hold_for_relay()
     save_clock(clock, games_dir=games_dir)
+    # The mover's time left, written after the move as [%clk] (#151).
+    state.clocks[len(state.san_history) - 1] = getattr(clock, f"{mover}_seconds")
+    state.save()
     return clock
 
 

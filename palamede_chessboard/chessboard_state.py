@@ -92,6 +92,9 @@ class GameState:
     board: chess.Board
     games_dir: Path = GAMES_DIR
     san_history: list[str] = field(default_factory=list)
+    #: The time left to the side that played each move, ``[%clk]`` in the
+    #: PGN (#151) ; ``None`` when the game has no clock running.
+    clocks: list[float | None] = field(default_factory=list)
 
     # ---- factories ------------------------------------------------------
 
@@ -135,14 +138,17 @@ class GameState:
         metadata = metadata_from_headers(game_id, dict(game.headers), game.end().comment)
         board = game.board()
         san_history: list[str] = []
-        for move in game.mainline_moves():
-            san_history.append(board.san(move))
-            board.push(move)
+        clocks: list[float | None] = []
+        for node in game.mainline():
+            san_history.append(board.san(node.move))
+            clocks.append(node.clock())
+            board.push(node.move)
         return cls(
             metadata=metadata,
             board=board,
             games_dir=games_dir,
             san_history=san_history,
+            clocks=clocks,
         )
 
     # ---- mutation -------------------------------------------------------
@@ -179,6 +185,7 @@ class GameState:
         san_normalised = self.board.san(move)
         self.board.push(move)
         self.san_history.append(san_normalised)
+        self.clocks.append(None)  # set by the clock, when the game has one
         # Playing a move implicitly declines the opponent's pending draw offer.
         if self.metadata.draw_offer and self.metadata.draw_offer["by"] != mover_side:
             self.metadata.draw_offer = None
@@ -334,7 +341,7 @@ class GameState:
         path = _pgn_path(self.games_dir, self.metadata.game_id)
         tmp = path.with_suffix(".pgn.tmp")
         # Refused before the tmp file (#128).
-        text = pgn_text(self.metadata, self.board.root(), self.san_history)
+        text = pgn_text(self.metadata, self.board.root(), self.san_history, self.clocks)
         with tmp.open("w", encoding="utf-8") as f:
             f.write(text)
             f.flush()
