@@ -52,6 +52,28 @@ COMMENTARY_DIR_NAME = "commentary"
 GAME_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-][a-zA-Z0-9_.-]{0,63}$")
 
 
+#: Prefixes only the server gives, and who gives them. ``tablier.`` : the bots
+#: trust that only a human's token opens these games (review Leader #131).
+#: ``exo.`` : an exercise of the coach, judged against a solution (#95) ; the
+#: older ``exo-…`` games (a dash) are not reserved.
+RESERVED_GAME_ID_PREFIXES = {
+    "tablier.": "games opened from Tablier",
+    "exo.": "exercises of the coach",
+}
+
+
+def refuse_reserved_game_id(game_id: object) -> None:
+    """:class:`ChessboardError` for an id with a reserved prefix, whatever its case.
+
+    For every creation whose id comes from outside the server : the MCP
+    tool ``chess_create_game`` and ``chess-matchmaking create``.
+    """
+    lowered = str(game_id or "").lower()
+    for prefix, owner in RESERVED_GAME_ID_PREFIXES.items():
+        if lowered.startswith(prefix):
+            raise ChessboardError(f"game_id prefix {prefix!r} is reserved for {owner}")
+
+
 def _validate_game_id(game_id: str) -> None:
     if not GAME_ID_PATTERN.match(game_id):
         raise ChessboardError(f"Invalid game_id {game_id!r}: must match {GAME_ID_PATTERN.pattern}")

@@ -41,6 +41,7 @@ from palamede_chessboard.chessboard_state import ChessboardError, GameState
 from palamede_chessboard.coach import CALLER
 from palamede_chessboard.coach.exercises import exercises_of
 from palamede_chessboard.coach.motifs import HEURISTIC_MOTIFS, motif_of
+from palamede_chessboard.coach.play import is_exercise_game
 from palamede_chessboard.coach.store import add_exercises, game_key, read_report, write_report
 from palamede_chessboard.paths import resolve_games_dir
 from palamede_chessboard.players import registry
@@ -170,6 +171,8 @@ def run_once(
     summary: dict = {"diagnosed": [], "waiting": [], "failed": [], "exercises": 0}
     for pgn in sorted(games_dir.glob("*.pgn")):
         game_id = pgn.stem
+        if is_exercise_game(game_id):
+            continue  # one move from a position : no game to learn from
         try:
             state = GameState.load(game_id, games_dir=games_dir)
         except ChessboardError as exc:

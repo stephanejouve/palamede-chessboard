@@ -37,6 +37,8 @@ from palamede_chessboard.clock_moves import (
     game_lock,
     release_on_sync,
 )
+from palamede_chessboard.coach import play as exercise_play
+from palamede_chessboard.coach.store import CoachStoreError
 from palamede_chessboard.players import registry
 from palamede_chessboard.players.observe import authorize_move, roles_of
 from palamede_chessboard.viewer.games_query import (
@@ -253,7 +255,7 @@ def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> di
         mover = "white" if state.board.turn else "black"
 
         try:
-            move_result = state.play_move(san_to_play, by=who)
+            move_result = _play(state, who, san_to_play, gdir)
         except IllegalMoveError as exc:
             raise HTTPException(422, str(exc)) from exc
         # Same clock as chess_play_move (#135) : the board, the mouse and Maia
@@ -266,6 +268,23 @@ def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> di
         "state": state.to_state_dict(),
         "clock": clock.to_dict() if clock is not None else None,
     }
+
+
+def _play(state: GameState, who: str, san: str, gdir) -> dict:
+    """The move of ``who`` ; judged first in an exercise game (#95).
+
+    A refused exercise move is a 409 whose ``detail`` the Tablier's bridge
+    shows as is (« Ce n'est pas le coup »), the board left unchanged.
+    """
+    if not exercise_play.is_exercise_game(state.metadata.game_id):
+        return state.play_move(san, by=who)
+    try:
+        return exercise_play.play_move(state, who, san, gdir)
+    except exercise_play.ExerciseError as exc:
+        raise HTTPException(exc.status, exc.message) from exc
+    except CoachStoreError as exc:
+        log.warning("viewer : exercise store of %s unreadable (%s)", who, exc)
+        raise HTTPException(503, "Exercices illisibles : coup refusé") from exc
 
 
 #: Refusal code → (HTTP status, message shown in the viewer).

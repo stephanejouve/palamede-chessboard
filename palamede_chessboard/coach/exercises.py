@@ -180,6 +180,9 @@ def exercises_of(
                     solution_uci=line.uci,
                     solution_san=board.san(chess.Move.from_uci(line.uci)),
                     gap_cp=gap,
+                    # Mates the engine saw, slower than the solution : said
+                    # « there is faster » when played, not « not the move ».
+                    slower_mates=[other.uci for other in lines[1:] if other.mates],
                 )
             )
     return found

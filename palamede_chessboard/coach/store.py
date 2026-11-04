@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 from palamede_chessboard._atomic import locked, write_json
@@ -106,6 +107,24 @@ def _exercises_in(path: Path) -> list[dict]:
 def read_exercises(games_dir: Path, player_id: str) -> list[dict]:
     """The exercises of ``player_id`` ; :class:`CoachStoreError` if unreadable."""
     return _exercises_in(player_path(games_dir, player_id))
+
+
+def update_exercise(
+    games_dir: Path, player_id: str, exercise_id: str, change: Callable[[dict], None]
+) -> dict:
+    """Apply ``change`` to one exercise of ``player_id`` under the lock ; the exercise.
+
+    :class:`KeyError` when the player has no such exercise.
+    """
+    path = player_path(games_dir, player_id)
+    with locked(path):
+        current = _exercises_in(path)
+        exercise = next((e for e in current if e.get("id") == exercise_id), None)
+        if exercise is None:
+            raise KeyError(exercise_id)
+        change(exercise)
+        write_json(path, {"exercises": current}, mode=FILE_MODE)
+    return exercise
 
 
 def add_exercises(games_dir: Path, player_id: str, exercises: list[dict]) -> int:
