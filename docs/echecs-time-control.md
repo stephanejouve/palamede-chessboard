@@ -48,6 +48,25 @@ Reconnues par le parser `M+S` dans `chessboard_clock.py` :
 Les formats non reconnus (`"unlimited"`, `"40/7200:0+10"`, etc.)
 désactivent le clock (fallback dans `ClockState.init_from_time_control`).
 
+## En-tête PGN (#151)
+
+Le format interne reste `M+S` en minutes. Le PGN, lui, suit la norme et
+compte en **secondes** :
+
+| Partie                    | En-têtes écrits                                          |
+|---------------------------|----------------------------------------------------------|
+| `15+30`                   | `[TimeControl "900+30"]` `[TimeControlUnit "seconds"]`   |
+| `unrated`                 | `[TimeControl "-"]`                                      |
+| `40/7200:0+10` (import)   | `[TimeControl "40/7200:0+10"]`, recopié tel quel         |
+
+`TimeControlUnit "seconds"` est le marqueur : les parties écrites avant
+#151 portent des minutes (`15+30`), et `60+0` vaut une minute dans une
+forme, une heure dans l'autre. À la lecture, seul un `TimeControl`
+accompagné du marqueur est lu en secondes ; sans lui, il est lu en
+minutes comme avant. Pas de migration des fichiers : une partie
+ancienne passe au format en secondes à sa prochaine écriture. Sans
+en-tête ou avec `-`, la partie est `unrated`.
+
 ## Impact Elo
 
 Le header `TimeControl` est **indépendant** du header `Rated`. Le
