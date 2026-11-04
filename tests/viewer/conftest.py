@@ -22,6 +22,14 @@ from palamede_chessboard.chessboard_state import GameMetadata, GameState, TimeCo
 from palamede_chessboard.chessboard_viewer import build_app
 
 
+@pytest.fixture(autouse=True)
+def engine_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """The engine log of the test, never the real one of ``~/.local/share`` (#206)."""
+    path = tmp_path / "engine_calls_log.jsonl"
+    monkeypatch.setenv("OUTILLAGES_ENGINE_CALLS_LOG", str(path))
+    return path
+
+
 @pytest.fixture
 def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("MCP_CHESSBOARD_GAMES_DIR", str(tmp_path))
