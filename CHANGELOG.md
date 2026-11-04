@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.18.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.17.0...v0.18.0) (2026-11-04)
+
+
+### Features
+
+* **coach:** diagnose the finished games of humans, mistakes by motif ([#202](https://github.com/stephanejouve/palamede-chessboard/issues/202)) ([88a376d](https://github.com/stephanejouve/palamede-chessboard/commit/88a376d0bd6d65086325d5c62071531f39bb58db))
+* **coach:** draw exercises from the diagnosed mistakes ([#203](https://github.com/stephanejouve/palamede-chessboard/issues/203)) ([887a5dd](https://github.com/stephanejouve/palamede-chessboard/commit/887a5dd1329cebad0d0c820d82267ea5e4164b89))
+* **coach:** palamede-coach run, a round every interval ([#205](https://github.com/stephanejouve/palamede-chessboard/issues/205)) ([7435b0b](https://github.com/stephanejouve/palamede-chessboard/commit/7435b0bf63dec5ec2eacb6b3a9e2b8d91b047dcc))
+* **coach:** play the exercises in the viewer, exo. reserved ([#204](https://github.com/stephanejouve/palamede-chessboard/issues/204)) ([e2d6f5b](https://github.com/stephanejouve/palamede-chessboard/commit/e2d6f5b1e4d7ddf01c1b013e64e783fae7b234d7))
+
+
+### Bug Fixes
+
+* **chessnut:** a coordinate takes the colour opposite to its square ([#184](https://github.com/stephanejouve/palamede-chessboard/issues/184)) ([03eeed5](https://github.com/stephanejouve/palamede-chessboard/commit/03eeed5ae357d8f6e941a8171863d81a40ba35c9))
+* **chessnut:** a king held up while setting up again is not a resignation ([#179](https://github.com/stephanejouve/palamede-chessboard/issues/179)) ([#181](https://github.com/stephanejouve/palamede-chessboard/issues/181)) ([c3798c0](https://github.com/stephanejouve/palamede-chessboard/commit/c3798c0e6fe28f6b923a247022a963b8b38b63ce))
+* **engine:** a move that mates is no mistake, a forced mate missed is said in moves ([#197](https://github.com/stephanejouve/palamede-chessboard/issues/197)) ([6969b49](https://github.com/stephanejouve/palamede-chessboard/commit/6969b49c95e7f86340f961bf54926de14a9a7a5f))
+* **mcp:** refuse player names that cannot be player ids ([#196](https://github.com/stephanejouve/palamede-chessboard/issues/196)) ([a2adf3c](https://github.com/stephanejouve/palamede-chessboard/commit/a2adf3c1709b99e2d83ece0af41ae48057ccd70f))
+* **pgn:** Termination says normal or time forfeit, the note stays a comment ([#200](https://github.com/stephanejouve/palamede-chessboard/issues/200)) ([35f5445](https://github.com/stephanejouve/palamede-chessboard/commit/35f544539aa826a830e0fa34b8338bd64a46f387))
+* **pgn:** the time left after each move is written as [%clk] ([#201](https://github.com/stephanejouve/palamede-chessboard/issues/201)) ([7d0500d](https://github.com/stephanejouve/palamede-chessboard/commit/7d0500d616cd081e55eedf2e7bb51e2fbb74e95d))
+* **pgn:** TimeControl in seconds, with a marker the reader trusts ([#199](https://github.com/stephanejouve/palamede-chessboard/issues/199)) ([49b57bd](https://github.com/stephanejouve/palamede-chessboard/commit/49b57bdc73c640829cdd6fd0e3776040fb3b2114))
+* **players:** a bounded auth journal, observed off the event loop ([#65](https://github.com/stephanejouve/palamede-chessboard/issues/65)) ([#192](https://github.com/stephanejouve/palamede-chessboard/issues/192)) ([3639955](https://github.com/stephanejouve/palamede-chessboard/commit/3639955322555b96de530067d5dda4dd22f2ede8))
+* **server:** no error said to a client carries a path of the server ([#107](https://github.com/stephanejouve/palamede-chessboard/issues/107)) ([#194](https://github.com/stephanejouve/palamede-chessboard/issues/194)) ([52ecb17](https://github.com/stephanejouve/palamede-chessboard/commit/52ecb174ca252b3c1923ded016ef914d2282311f))
+* **state:** a PGN header value cannot forge other headers ([#128](https://github.com/stephanejouve/palamede-chessboard/issues/128)) ([#193](https://github.com/stephanejouve/palamede-chessboard/issues/193)) ([c6c0cc4](https://github.com/stephanejouve/palamede-chessboard/commit/c6c0cc4287e2530680d67459ea4a9c57ec03aa3d))
+
+
+### Refactor
+
+* **state:** move the PGN text out of chessboard_state into pgn_io ([#198](https://github.com/stephanejouve/palamede-chessboard/issues/198)) ([630c8f9](https://github.com/stephanejouve/palamede-chessboard/commit/630c8f90933c9ab522dfa26843b5f048b332542c))
+
 ## [0.17.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.16.0...v0.17.0) (2026-11-02)
 
 
