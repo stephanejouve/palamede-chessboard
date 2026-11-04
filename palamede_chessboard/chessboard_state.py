@@ -127,7 +127,7 @@ class GameState:
         games_dir = games_dir or GAMES_DIR
         path = _pgn_path(games_dir, metadata.game_id)
         if path.exists():
-            raise GameAlreadyExistsError(str(path))
+            raise GameAlreadyExistsError(f"game already exists: {metadata.game_id}")
         board = chess.Board(starting_fen) if starting_fen else chess.Board()
         state = cls(metadata=metadata, board=board, games_dir=games_dir)
         state.save()
@@ -145,11 +145,12 @@ class GameState:
         games_dir = games_dir or GAMES_DIR
         path = _pgn_path(games_dir, game_id)
         if not path.exists():
-            raise GameNotFoundError(str(path))
+            raise GameNotFoundError(f"game not found: {game_id}")  # never the path (#107)
         with path.open("r", encoding="utf-8") as f:
             game = chess.pgn.read_game(f)
         if game is None:
-            raise ChessboardError(f"PGN at {path} is unreadable")
+            log.warning("PGN at %s is unreadable", path)  # the path for the server log only
+            raise ChessboardError(f"PGN of {game_id} is unreadable")
         headers = dict(game.headers)
         draw_offer_raw = headers.get("DrawOffer") or ""
         draw_offer: dict | None = None

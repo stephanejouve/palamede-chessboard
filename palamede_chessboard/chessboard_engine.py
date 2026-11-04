@@ -78,8 +78,10 @@ def get_engine_path() -> str:
     if override:
         if Path(override).is_file():
             return override
+        logger.warning("MCP_CHESSBOARD_STOCKFISH points at %r which does not exist", override)
+        # Said to MCP and viewer clients : the binary's path stays in the log (#107).
         raise EngineUnavailableError(
-            f"MCP_CHESSBOARD_STOCKFISH points at {override!r} which does not exist"
+            "MCP_CHESSBOARD_STOCKFISH points at a file that does not exist"
         )
 
     on_path = shutil.which("stockfish")
