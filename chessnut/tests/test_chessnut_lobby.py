@@ -522,6 +522,21 @@ async def test_two_knights_put_together_on_one_rank_choose_nothing_and_say_so(
     assert board.new_game["time_control"] == "10+10" and board.clash == []
 
 
+async def test_arming_and_disarming_are_logged_once_each(monkeypatch, caplog) -> None:
+    """Review Junior #191 : logged on the change only, not at every tick."""
+    Server(monkeypatch)
+    board, write = new_lobby(armed=False), Board()
+    with caplog.at_level("INFO", logger="palamede_chessnut.lobby"):
+        held(board, chess.BaseBoard(), 1)
+        await board.tick(write)
+        await board.tick(write)
+        held(board, lifted(chess.E2), 1)
+        await board.tick(write)
+        await board.tick(write)
+    assert caplog.text.count("gestures armed") == 1
+    assert caplog.text.count("gestures disarmed") == 1
+
+
 async def test_the_value_already_in_place_is_said(monkeypatch) -> None:
     """Stéphane, 04/11 : « 15+2 → 15+2 » showed nothing, as if the gesture failed."""
     Server(monkeypatch)
