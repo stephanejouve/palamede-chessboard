@@ -31,14 +31,13 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
 from palamede_chessboard.chessboard_state import GAMES_DIR, TimeControl, _validate_game_id
+from palamede_chessboard.metadata import parse_time_control
 
-CLOCK_FORMAT_RE = re.compile(r"^\s*(\d+)\s*\+\s*(\d+)\s*$")
 OUT_OF_TIME_RESULT_WHITE_LOSES = "0-1"
 OUT_OF_TIME_RESULT_BLACK_LOSES = "1-0"
 #: The longest a relay hold lasts (#164, owner 01/11) : a silent bridge, or a
@@ -49,27 +48,6 @@ HOLD_SECONDS = 20.0
 def _now() -> float:
     """Current wall-clock seconds (UTC). Mockable via monkeypatch."""
     return datetime.now(UTC).timestamp()
-
-
-def parse_time_control(tc: TimeControl) -> tuple[int, int] | None:
-    """Return ``(start_seconds, increment_seconds)`` or ``None`` if disabled.
-
-    Priority : explicit ``start_seconds`` / ``increment_seconds`` fields,
-    then ``format`` string ``"M+S"`` (minutes + seconds). ``unrated``
-    disables the clock.
-    """
-    if tc.format == "unrated" and tc.start_seconds is None:
-        return None
-    if tc.start_seconds is not None:
-        return (
-            int(tc.start_seconds),
-            int(tc.increment_seconds or 0),
-        )
-    match = CLOCK_FORMAT_RE.match(tc.format)
-    if not match:
-        return None
-    minutes, increment = match.groups()
-    return (int(minutes) * 60, int(increment))
 
 
 @dataclass

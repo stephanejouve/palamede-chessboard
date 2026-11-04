@@ -10,7 +10,12 @@ from __future__ import annotations
 
 import chess
 
-from palamede_chessboard.metadata import GameMetadata, TimeControl
+from palamede_chessboard.metadata import (
+    CLOCK_FORMAT_RE,
+    TIME_CONTROL_UNIT_TAG,
+    GameMetadata,
+    TimeControl,
+)
 
 
 def _movetext(san_history: list[str], root: chess.Board) -> str:
@@ -33,6 +38,26 @@ def _movetext(san_history: list[str], root: chess.Board) -> str:
     return " ".join(tokens)
 
 
+def time_control_from_headers(headers: dict[str, str]) -> TimeControl:
+    """The :class:`TimeControl` of a game, from its ``TimeControl`` header (#151).
+
+    Seconds when the header carries :data:`TIME_CONTROL_UNIT_TAG`, else
+    the minutes of the games written before. No header and ``-`` are
+    ``unrated`` ; a label no clock reads (``40/7200:0+10``) is kept as is.
+    """
+    raw = headers.get("TimeControl")
+    if raw is None or raw == "-":
+        return TimeControl(format="unrated")
+    match = CLOCK_FORMAT_RE.match(raw)
+    if match is None or headers.get(TIME_CONTROL_UNIT_TAG) != "seconds":
+        return TimeControl(format=raw)
+    base, increment = (int(g) for g in match.groups())
+    if base % 60 == 0:
+        return TimeControl(format=f"{base // 60}+{increment}")
+    # Not whole minutes : the seconds themselves, which the clock reads first.
+    return TimeControl(format=raw, start_seconds=base, increment_seconds=increment)
+
+
 def metadata_from_headers(game_id: str, headers: dict[str, str]) -> GameMetadata:
     """Build the :class:`GameMetadata` of ``game_id`` from its PGN headers."""
     draw_offer_raw = headers.get("DrawOffer") or ""
@@ -52,7 +77,7 @@ def metadata_from_headers(game_id: str, headers: dict[str, str]) -> GameMetadata
         black=headers.get("Black", ""),
         arbiter=headers.get("Arbiter") or None,
         spectators=([s for s in headers.get("Spectators", "").split(",") if s]),
-        time_control=TimeControl(format=headers.get("TimeControl", "unrated")),
+        time_control=time_control_from_headers(headers),
         result=headers.get("Result", "*"),
         annotator=headers.get("Annotator") or None,
         opening=headers.get("Opening") or None,

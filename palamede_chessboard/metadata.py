@@ -8,6 +8,7 @@ compat.
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -28,6 +29,16 @@ FORBIDDEN_IN_HEADER = frozenset('"\\{}')
 #: (``GameState.load``).
 DEFAULT_TIME_CONTROL_FORMAT = "30+30"
 
+#: ``M+S`` : the internal time-control format, minutes + seconds.
+CLOCK_FORMAT_RE = re.compile(r"^\s*(\d+)\s*\+\s*(\d+)\s*$")
+
+#: The PGN standard writes ``TimeControl`` in seconds (``900+30``), while
+#: games written before #151 hold minutes (``15+30``). Both read alike, and
+#: ``60+0`` is one minute in one form, an hour in the other : the writer
+#: puts this header beside a ``TimeControl`` in seconds, and only a
+#: ``TimeControl`` that carries it is read as seconds (#151).
+TIME_CONTROL_UNIT_TAG = "TimeControlUnit"
+
 
 @dataclass
 class TimeControl:
@@ -47,6 +58,27 @@ class TimeControl:
     format: str = DEFAULT_TIME_CONTROL_FORMAT
     start_seconds: int | None = None
     increment_seconds: int | None = None
+
+
+def parse_time_control(tc: TimeControl) -> tuple[int, int] | None:
+    """Return ``(start_seconds, increment_seconds)`` or ``None`` if disabled.
+
+    Priority : explicit ``start_seconds`` / ``increment_seconds`` fields,
+    then ``format`` string ``"M+S"`` (minutes + seconds). ``unrated``
+    disables the clock.
+    """
+    if tc.format == "unrated" and tc.start_seconds is None:
+        return None
+    if tc.start_seconds is not None:
+        return (
+            int(tc.start_seconds),
+            int(tc.increment_seconds or 0),
+        )
+    match = CLOCK_FORMAT_RE.match(tc.format)
+    if not match:
+        return None
+    minutes, increment = match.groups()
+    return (int(minutes) * 60, int(increment))
 
 
 @dataclass
@@ -102,7 +134,16 @@ class GameMetadata:
             headers["Arbiter"] = self.arbiter
         if self.spectators:
             headers["Spectators"] = ",".join(self.spectators)
-        if self.time_control.format != "unrated":
+        clock = parse_time_control(self.time_control)
+        if clock is not None:
+            # The PGN standard counts seconds (#151) ; the unit tag tells
+            # them from the minutes of the games written before.
+            headers["TimeControl"] = f"{clock[0]}+{clock[1]}"
+            headers[TIME_CONTROL_UNIT_TAG] = "seconds"
+        elif self.time_control.format == "unrated":
+            headers["TimeControl"] = "-"
+        else:
+            # A label no clock reads (``40/7200:0+10`` of an import) : kept.
             headers["TimeControl"] = self.time_control.format
         if self.draw_offer:
             headers["DrawOffer"] = f"{self.draw_offer['by']}:{self.draw_offer['ply']}"
