@@ -19,6 +19,7 @@ import chess
 from mcp.types import TextContent
 
 from palamede_chessboard.chessboard_state import GAMES_DIR, ChessboardError
+from palamede_chessboard.players import registry
 
 #: Headers of the HTTP request carrying the current MCP call ; ``None`` over
 #: stdio. Set by ``call_tool`` for the handlers that act on the caller's
@@ -378,3 +379,19 @@ def _refuse_reserved_game_id(game_id: object) -> None:
         raise ChessboardError(
             f"game_id prefix {RESERVED_GAME_ID_PREFIX!r} is reserved for games opened from Tablier"
         )
+
+
+def _refuse_unaccountable_players(white: object, black: object) -> None:
+    """:class:`ChessboardError` for a player name no account can carry (#62).
+
+    The viewer authorizes a move by comparing the token's ``player_id``
+    with the normalised ``White`` / ``Black`` : a name outside the
+    registry's format would make a game nobody can ever play.
+    """
+    for side, name in (("white", white), ("black", black)):
+        try:
+            registry.player_id_of(name)
+        except registry.RegistryError:
+            raise ChessboardError(
+                f"{side} {name!r} cannot be a player id (a-z, 0-9, _ and -, 32 max)"
+            ) from None
