@@ -49,8 +49,8 @@ def chaser(rank: int) -> list[Frame]:
     return run * 2 + [frozenset()]
 
 
-def chosen(square: chess.Square) -> list[Frame]:
-    """The clock chosen by a knight (#186) : its square blinks twice, slower than the wait, then dark."""
-    lit: Frame = frozenset({square})
+def chosen(squares: Frame) -> list[Frame]:
+    """The clock chosen by knights (#186) : their squares blink twice, slower than the wait, then dark."""
+    lit: Frame = squares
     dark: Frame = frozenset()
     return [lit] * 5 + [dark] * 3 + [lit] * 5 + [dark]

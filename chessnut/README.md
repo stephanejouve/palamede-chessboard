@@ -74,18 +74,20 @@ your back rank, and the window moves to the new game. A refusal (too many
 games open, opponent unknown, token refused) is said in the window ; put
 the rooks back before trying again.
 
-From the starting position too, a white knight chooses the clock of the
-games opened next (#186) : put the g1 knight on rank 3 for the base time,
-the b1 knight on rank 4 for the increment, the file giving the value.
+From the starting position too, the white knights choose the clock of the
+games opened next (#186) : either knight on rank 3 for the base time, on
+rank 4 for the increment, the file giving the value.
 
-| Knight | a | b | c | d | e | f |
+| Rank | a | b | c | d | e | f |
 |---|---|---|---|---|---|---|
-| g1 → rank 3, base | 3 min | 5 | 10 | 15 | 25 | 90 |
-| b1 → rank 4, increment | 0 s | 2 | 3 | 5 | 10 | 30 |
+| 3, base | 3 min | 5 | 10 | 15 | 25 | 90 |
+| 4, increment | 0 s | 2 | 3 | 5 | 10 | 30 |
 
 The value is taken once the knight has stood 2 seconds on its square (a
-square crossed on the way chooses nothing) ; the square blinks, then put
-the knight back home. Without a game, the screen's board writes each
+square crossed on the way chooses nothing) ; the square blinks, and the
+window says « déjà en place » when the clock does not change. Both knights
+may be off at once, the one put last winning its rank ; bring them home
+before lifting the rooks. Without a game, the screen's board writes each
 value in its square, and the tray under it says the clock, with the
 gestures in a short help that folds once learnt (open at each launch).
 The clock starts from `time_control` and lasts

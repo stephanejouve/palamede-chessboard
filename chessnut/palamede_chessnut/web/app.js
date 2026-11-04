@@ -56,15 +56,17 @@ function renderLeds(squares) {
 }
 
 // Without a game, each knight's square says its value (smoke of Stéphane,
-// 04/11), in the square's corner, the board's orientation followed. Rebuilt
-// only when the values or the orientation change.
+// 04/11), in the square's corner, the board's orientation followed ; not over
+// a piece of the finished game left on screen (review Admin #191). Rebuilt
+// only when the values, the free squares or the orientation change.
 let lastTips = null;
 function renderTips(tips) {
   const white = cg.state.orientation === 'white';
-  const key = `${white}:${JSON.stringify(tips)}`;
+  const free = Object.entries(tips).filter(([square]) => !cg.state.pieces.has(square));
+  const key = `${white}:${JSON.stringify(free)}`;
   if (key === lastTips) return;
   lastTips = key;
-  const nodes = Object.entries(tips).map(([square, value]) => {
+  const nodes = free.map(([square, value]) => {
     const file = square.charCodeAt(0) - 97;
     const rank = Number(square[1]) - 1;
     const span = document.createElement('span');

@@ -19,7 +19,7 @@ from palamede_chessnut.lobby import (
     GESTURE_SECONDS,
     NO_SERVER,
     Lobby,
-    choice,
+    choices,
     chosen,
     gesture_side,
     on_the_way,
@@ -279,23 +279,34 @@ def knight(home: chess.Square, square: chess.Square | None) -> chess.BaseBoard:
 @pytest.mark.parametrize(
     ("placement", "picked"),
     [
-        (knight(chess.G1, chess.A3), (0, 3, chess.A3)),
-        (knight(chess.G1, chess.F3), (0, 90, chess.F3)),
-        (knight(chess.G1, chess.E3), (0, 25, chess.E3)),
-        (knight(chess.B1, chess.A4), (1, 0, chess.A4)),
-        (knight(chess.B1, chess.F4), (1, 30, chess.F4)),
-        (knight(chess.B1, chess.D4), (1, 5, chess.D4)),
-        (knight(chess.G1, chess.G3), None),  # beyond the six values
-        (knight(chess.G1, chess.H3), None),
-        (knight(chess.G1, chess.A4), None),  # the g1 knight chooses the base only
-        (knight(chess.B1, chess.C3), None),  # the b1 knight, the increment only
-        (knight(chess.G1, None), None),  # lifted : on its way
-        (chess.BaseBoard(), None),
+        (knight(chess.G1, chess.A3), ((0, 3, chess.A3),)),
+        (knight(chess.G1, chess.F3), ((0, 90, chess.F3),)),
+        (knight(chess.G1, chess.E3), ((0, 25, chess.E3),)),
+        (knight(chess.B1, chess.A4), ((1, 0, chess.A4),)),
+        (knight(chess.B1, chess.F4), ((1, 30, chess.F4),)),
+        (knight(chess.B1, chess.D4), ((1, 5, chess.D4),)),
+        # Either knight, the rank says the part (smoke of Stéphane, 04/11).
+        (knight(chess.G1, chess.A4), ((1, 0, chess.A4),)),
+        (knight(chess.B1, chess.C3), ((0, 10, chess.C3),)),
+        (knight(chess.G1, chess.G3), ()),  # beyond the six values
+        (knight(chess.G1, chess.H3), ()),
+        (knight(chess.G1, chess.D5), ()),  # rank 5 says nothing
+        (knight(chess.G1, None), ()),  # lifted : on its way
+        (chess.BaseBoard(), ()),
     ],
 )
 def test_the_knight_s_square_says_the_part_and_the_value(placement, picked) -> None:
-    assert choice(placement) == picked
+    assert choices(placement) == picked
     assert gesture_side(placement) is None
+
+
+def test_both_knights_off_say_both_parts() -> None:
+    """The b1 knight left on b4 while the g1 one goes to f3 (smoke of Stéphane, 04/11)."""
+    placement = knight(chess.B1, chess.B4)
+    placement.remove_piece_at(chess.G1)
+    placement.set_piece_at(chess.F3, chess.Piece(chess.KNIGHT, chess.WHITE))
+    assert set(choices(placement)) == {(1, 2, chess.B4), (0, 90, chess.F3)}
+    assert on_the_way(placement)
 
 
 @pytest.mark.parametrize(
@@ -305,6 +316,7 @@ def test_the_knight_s_square_says_the_part_and_the_value(placement, picked) -> N
         knight(chess.G1, None),
         knight(chess.G1, chess.H5),  # off its rank : still on its way, chooses nothing
         knight(chess.B1, chess.C3),
+        lifted(chess.G1, chess.B1),  # both lifted
     ],
 )
 def test_a_choosing_knight_off_keeps_the_lobby_armed(placement) -> None:
@@ -314,14 +326,14 @@ def test_a_choosing_knight_off_keeps_the_lobby_armed(placement) -> None:
 @pytest.mark.parametrize(
     "placement",
     [
-        lifted(chess.G1, chess.B1),  # the two knights : the lesson, later
         lifted(chess.C1, chess.F1),  # the two bishops : the problem, later
         lifted(chess.G1, chess.F1),  # the notches of #189 are gone
         lifted(chess.G8),  # a black knight
     ],
 )
 def test_other_pieces_off_choose_nothing(placement) -> None:
-    assert choice(placement) is None and gesture_side(placement) is None
+    assert choices(placement) == () and gesture_side(placement) is None
+    assert not on_the_way(placement)
 
 
 def spare(
@@ -341,10 +353,13 @@ def spare(
         spare(chess.Piece(chess.KNIGHT, chess.BLACK), chess.D3),
         # The knight on a pawn's square : not a square of its own.
         spare(chess.Piece(chess.KNIGHT, chess.WHITE), chess.E2),
+        # A third white knight : both homes still full, or one left for two knights out.
+        chess.BaseBoard("rnbqkbnr/pppppppp/8/8/8/3N4/PPPPPPPP/RNBQKBNR"),
+        chess.BaseBoard("rnbqkbnr/pppppppp/8/8/3N4/N7/PPPPPPPP/R1BQKBNR"),
     ],
 )
 def test_only_the_knight_itself_on_an_empty_square_chooses(placement) -> None:
-    assert choice(placement) is None and not on_the_way(placement)
+    assert choices(placement) == () and not on_the_way(placement)
 
 
 @pytest.mark.parametrize(
@@ -358,7 +373,7 @@ def test_only_the_knight_itself_on_an_empty_square_chooses(placement) -> None:
     ],
 )
 def test_the_value_replaces_its_part(clock, part, value, after) -> None:
-    assert chosen(clock, part, value) == after
+    assert chosen(clock, ((part, value, chess.A3),)) == after
 
 
 async def test_the_knight_still_2_s_chooses_the_base_without_a_game(monkeypatch) -> None:
@@ -368,8 +383,8 @@ async def test_the_knight_still_2_s_chooses_the_base_without_a_game(monkeypatch)
     await board.tick(Board())
     assert server.posts == []
     assert board.new_game["time_control"] == "90+10"
-    assert board.animation == leds.chosen(chess.F3)
-    assert leds.chosen(chess.F3)[0] == frozenset({chess.F3})
+    assert board.animation == leds.chosen(frozenset({chess.F3}))
+    assert leds.chosen(frozenset({chess.F3}))[0] == frozenset({chess.F3})
     assert board.lobby_text() == "Aucune partie, cadence 90+10."
 
 
@@ -414,6 +429,80 @@ async def test_one_choice_per_placement_another_square_another_choice(monkeypatc
     assert board.new_game["time_control"] == "15+10"
 
 
+def two_knights(b1_on: chess.Square, g1_on: chess.Square | None) -> chess.BaseBoard:
+    """The b1 knight on ``b1_on``, the g1 one lifted or on ``g1_on``."""
+    board = knight(chess.B1, b1_on)
+    board.remove_piece_at(chess.G1)
+    if g1_on is not None:
+        board.set_piece_at(g1_on, chess.Piece(chess.KNIGHT, chess.WHITE))
+    return board
+
+
+async def test_a_knight_left_out_does_not_stop_the_other(monkeypatch, caplog) -> None:
+    """Smoke of Stéphane, 04/11 : b1 left on b4, the g1 knight on f3 did nothing."""
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, knight(chess.B1, chess.B4), CHOICE_SECONDS)
+    await board.tick(write)
+    board.animation = []
+    held(board, two_knights(chess.B4, None), 1)
+    await board.tick(write)
+    assert board.armed
+    with caplog.at_level("INFO", logger="palamede_chessnut.lobby"):
+        held(board, two_knights(chess.B4, chess.F3), CHOICE_SECONDS)
+        await board.tick(write)
+    assert board.new_game["time_control"] == "90+2"
+    assert board.animation == leds.chosen(frozenset({chess.F3}))  # b4, taken, does not blink
+    assert "clock chosen at f3 : 15+2 → 90+2" in caplog.text
+
+
+async def test_the_knight_put_last_wins_its_rank_and_a_crossing_retakes_nothing(
+    monkeypatch,
+) -> None:
+    """Review Admin #191 : b1 on c3 then g1 on f3, both on rank 3."""
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, knight(chess.B1, chess.C3), CHOICE_SECONDS)
+    await board.tick(write)
+    board.animation = []
+    assert board.new_game["time_control"] == "10+10"
+    held(board, two_knights(chess.C3, chess.F3), CHOICE_SECONDS)
+    await board.tick(write)
+    board.animation = []
+    assert board.new_game["time_control"] == "90+10"
+    # The g1 knight goes home : c3, still standing, is not taken again.
+    held(board, knight(chess.B1, chess.C3), CHOICE_SECONDS)
+    await board.tick(write)
+    assert board.new_game["time_control"] == "90+10" and board.animation == []
+
+
+async def test_a_knight_back_on_its_square_chooses_again(monkeypatch) -> None:
+    """Gone, the square is forgotten : the same knight put back there is taken again."""
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, knight(chess.B1, chess.C3), CHOICE_SECONDS)
+    await board.tick(write)
+    board.animation = []
+    held(board, knight(chess.B1, None), 1)
+    await board.tick(write)
+    held(board, knight(chess.B1, chess.C3), CHOICE_SECONDS)
+    await board.tick(write)
+    assert board.animation == leds.chosen(frozenset({chess.C3}))
+
+
+async def test_the_value_already_in_place_is_said(monkeypatch) -> None:
+    """Stéphane, 04/11 : « 15+2 → 15+2 » showed nothing, as if the gesture failed."""
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, knight(chess.B1, chess.F4), 1)
+    await board.tick(write)
+    assert board.lobby_text() == "Cadence 15+30 dans 1 s…"
+    held(board, knight(chess.B1, chess.E4), 1)
+    board.new_game["time_control"] = "15+10"
+    await board.tick(write)
+    assert board.lobby_text() == "Cadence 15+10 (déjà en place) dans 1 s…"
+
+
 async def test_the_chosen_clock_is_the_next_game_s(monkeypatch) -> None:
     server = Server(monkeypatch)
     board, write = new_lobby(), Board()
@@ -433,7 +522,7 @@ async def test_pieces_set_up_with_a_knight_on_rank_3_choose_nothing(monkeypatch)
     board = new_lobby(armed=False)
     held(board, knight(chess.G1, chess.C3), CHOICE_SECONDS + 1)
     await board.tick(Board())
-    assert board.new_game["time_control"] == "15+10" and board.choosing is None
+    assert board.new_game["time_control"] == "15+10" and board.choosing == ()
 
 
 def test_without_a_clock_the_window_says_so() -> None:
@@ -511,12 +600,9 @@ def test_the_screen_s_board_says_what_each_knight_square_chooses() -> None:
         "a4": "+0", "b4": "+2", "c4": "+3", "d4": "+5", "e4": "+10", "f4": "+30",
     }  # fmt: skip
     for square, value in lobby.tips().items():
-        knight = chess.G1 if value.endswith("′") else chess.B1
-        observed = chess.BaseBoard()
-        observed.remove_piece_at(knight)
-        observed.set_piece_at(chess.parse_square(square), chess.Piece(chess.KNIGHT, chess.WHITE))
-        picked = choice(observed)
-        assert picked is not None and str(picked[1]) == value.strip("+′"), square
+        for home in lobby.KNIGHT_HOMES:
+            (picked,) = choices(knight(home, chess.parse_square(square)))
+            assert str(picked[1]) == value.strip("+′"), square
 
 
 def test_no_clock_is_read_without_a_game() -> None:

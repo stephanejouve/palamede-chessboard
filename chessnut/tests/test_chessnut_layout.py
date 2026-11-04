@@ -122,7 +122,7 @@ def test_the_gestures_help_folds_and_says_the_knight_s_ends() -> None:
     assert parents.around["tips"][-1] == "stage"
     assert '<details id="gestures" open hidden>' in page
     help_text = page[page.index('<details id="gestures"') : page.index("</details>")]
-    minutes, increments = CHOICES[0][2], CHOICES[1][2]
+    minutes, increments = CHOICES[0][1], CHOICES[1][1]
     assert f"de a3 ({minutes[0]} min) à f3 ({minutes[-1]} min)" in help_text
     assert f"de a4 ({increments[0]} s) à f4 ({increments[-1]} s)" in help_text
     script = (PAGE / "app.js").read_text(encoding="utf-8")
