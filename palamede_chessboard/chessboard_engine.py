@@ -267,8 +267,12 @@ def analyze_game(
     depth: int = DEFAULT_DEPTH,
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
     engine_path: str | None = None,
+    reuse_after: bool = False,
 ) -> list[GameWalkEntry]:
     """Walk through every move in ``state`` and evaluate before/after.
+
+    ``reuse_after`` : the position after ply n is the one before ply n+1,
+    analysed once instead of twice (the coach, #95). Off by default.
 
     Returns one entry per ply. ``cp_loss`` is the mover-POV centipawn
     drop between the evaluation BEFORE their move and AFTER. ``mate_in``
@@ -279,11 +283,15 @@ def analyze_game(
     limit = chess.engine.Limit(depth=depth, time=timeout)
     entries: list[GameWalkEntry] = []
     board = state.board.root()
+    info_after: chess.engine.InfoDict | None = None
     with chess.engine.SimpleEngine.popen_uci(path) as engine:
         for ply_index, san in enumerate(state.san_history):
             mover = "white" if board.turn == chess.WHITE else "black"
             fen_before = board.fen()
-            info_before = engine.analyse(board, limit)
+            if reuse_after and info_after is not None:
+                info_before = info_after
+            else:
+                info_before = engine.analyse(board, limit)
             score_before = info_before.get("score")
             if score_before is not None:
                 cp_before_white, mate_before = _score_to_cp(score_before)

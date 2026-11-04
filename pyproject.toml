@@ -44,6 +44,7 @@ palamede-matchmaking = "palamede_chessboard.cli_matchmaking:main"
 palamede-chessboard-viewer = "palamede_chessboard.viewer.app:main"
 palamede-chessboard-server = "palamede_chessboard.mcp_chessboard_server:main"
 palamede-chess-arbiter-daemon = "palamede_chessboard.chess_arbiter_daemon:main"
+palamede-coach = "palamede_chessboard.coach.diagnosis:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
