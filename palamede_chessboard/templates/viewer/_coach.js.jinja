@@ -84,9 +84,10 @@ const STANDING_LABELS = {
 };
 function standing(e) {
   if (e.state === 'solved') return 'solved';
-  if (e.state !== 'failed') return 'todo';
-  const found = Array.isArray(e.attempts) && e.attempts.some(a => a && a.ok === true && !a.abandoned);
-  return found ? 'found' : 'never';
+  // Abandons only : the server keeps « proposed », yet it was tried (review Admin #242).
+  const tries = Array.isArray(e.attempts) ? e.attempts : [];
+  if (e.state !== 'failed' && !tries.length) return 'todo';
+  return tries.some(a => a && a.ok === true && !a.abandoned) ? 'found' : 'never';
 }
 function standingHtml(e) {
   const s = standing(e);
