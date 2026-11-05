@@ -71,7 +71,7 @@ def test_the_server_s_numbers_go_through_num() -> None:
         "String(m.per_100_moves)",
         "e.first_try.ok + '",
         "e ? e.abandoned_games",
-        "'>' + g.recent.games",
+        "\">' + g.recent.games",  # the double quote of the original (Leader, #221)
         "' + g.before.games + '",
     ):
         assert raw not in COACH_JS
