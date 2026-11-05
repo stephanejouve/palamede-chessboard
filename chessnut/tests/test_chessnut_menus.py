@@ -75,7 +75,16 @@ def test_the_menus_and_their_items(page) -> None:
         ("Fichier", ["Ouvrir une partie…", "Enregistrer le PGN…"]),
         ("Édition", ["Copier le nom de la partie", "Copier la FEN", "Copier le PGN"]),
         ("Présentation", ["Retourner l'échiquier", "Échiquier ou souris"]),
+        ("Aide", ["À propos du Tablier"]),
     ]
+
+
+def test_about_says_the_build_in_the_page(page, monkeypatch) -> None:
+    monkeypatch.setattr(
+        app_module, "build_info", lambda: "palamede-chessnut 9.9.9, branche b, commit abcdef0"
+    )
+    items(page)["À propos du Tablier"]()
+    assert state_of(page)["notice"]["text"] == "palamede-chessnut 9.9.9, branche b, commit abcdef0"
 
 
 @pytest.mark.parametrize(

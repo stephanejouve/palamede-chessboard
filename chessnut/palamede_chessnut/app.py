@@ -26,8 +26,8 @@ import logging
 import threading
 from typing import Any
 
-from palamede_chessnut import __version__
 from palamede_chessnut.bridge import Bridge
+from palamede_chessnut.build import build_info
 from palamede_chessnut.cli import bridge_from_args
 from palamede_chessnut.clipboard import Copy, system_copy
 from palamede_chessnut.export import AskPath
@@ -132,6 +132,8 @@ def menus(page: PageServer, menu: Any, action: Any, copy: Copy | None = None) ->
                 action("Échiquier ou souris", ask("board")),
             ],
         ),
+        # The build a smoke runs : release, branch and commit (Stéphane, 05/11).
+        menu("Aide", [action("À propos du Tablier", lambda: page.notify(build_info()))]),
     ]
 
 
@@ -148,7 +150,7 @@ def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     logging.getLogger().addHandler(recent)
     # In the journal : which release of the Tablier a smoke ran.
-    log.info("palamede-chessnut %s", __version__)
+    log.info("%s", build_info())
     page = PageServer(bridge, recent)
     page.start()
     session = Session(bridge, run_bridge)
