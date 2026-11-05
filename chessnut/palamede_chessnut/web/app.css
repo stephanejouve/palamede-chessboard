@@ -187,6 +187,8 @@ main {
 #differing .put { white-space: nowrap; }
 #differing .remove { color: var(--remove); font-weight: 600; }
 #lobby { margin: 0; }
+#refused { margin: 0 0 6px 0; font-weight: 600; font-size: 1.05em; color: var(--warn); }
+#refused[hidden] { display: none; }
 /* The gestures in a smaller type, under the lobby's line (smoke of Stéphane, 04/11). */
 #gestures { margin-top: 6px; font-size: 13px; }
 #gestures summary { cursor: pointer; color: var(--muted, inherit); }
@@ -275,7 +277,6 @@ main {
 .clock.active.low .time, .clock.active.flag .time { color: var(--clock-lit-red); }
 .clock.flag { border-color: var(--bad); }
 #relay { font-weight: 600; }
-#refused { font-weight: 600; color: var(--warn); }
 #move-error { color: var(--warn); }
 .chip {
   display: inline-block;

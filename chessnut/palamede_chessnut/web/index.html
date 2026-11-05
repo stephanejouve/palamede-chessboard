@@ -33,6 +33,8 @@
     <!-- Under the board : the setup, or without a game what the board's
          gestures do (smoke of Stéphane, 03/11), where the notes will come. -->
     <section id="tray" aria-label="Sous l'échiquier" hidden>
+      <!-- A refused move, right under the board where the eye is (smoke of Stéphane, 05/11). -->
+      <p id="refused" role="alert" hidden></p>
       <p id="lobby" role="status" hidden></p>
       <!-- Needed while the gestures are learnt, then folded by the player
            (smoke of Stéphane, 04/11) : open at launch, folded for the run. -->
@@ -57,7 +59,6 @@
     <p id="status">En attente du pont…</p>
     <p id="token-msg" role="alert" hidden></p>
     <p id="relay" hidden></p>
-    <p id="refused" hidden></p>
     <p id="move-error" role="alert" hidden></p>
     <!-- The clocks beside the moves (#173) : the opponent's on top, the
          player's below, as on a club table (#135), the captured pieces and the
