@@ -914,3 +914,12 @@ async def test_switch_off_survives_a_dead_link() -> None:
     board = Board()
     await bridge_module._switch_off(board.write)
     assert board.frames == [set()]
+
+
+async def test_another_move_accepted_forgets_the_refused_one() -> None:
+    # Played instead of putting the piece back : « Remettez la pièce » goes (review Junior #226).
+    bridge = ready_bridge()
+    bridge.refused = chess.Move.from_uci("e2e4")
+    bridge.post_move = lambda uci: (None, False)  # type: ignore[method-assign]
+    await bridge._play(chess.Move.from_uci("d2d4"))
+    assert bridge.refused is None

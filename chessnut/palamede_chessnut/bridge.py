@@ -351,6 +351,7 @@ class Bridge:
         error, refused = await asyncio.to_thread(self.post_move, move.uci())
         self.undelivered = None
         if error is None:
+            self.refused = None  # another move went through : nothing left to take back
             return
         self.pending = None
         if refused:

@@ -169,8 +169,11 @@ def refused_text(bridge: Bridge) -> str | None:
         detail = json.loads(body).get("detail")
     except (ValueError, AttributeError):
         detail = None
-    said = detail if isinstance(detail, str) and detail else "le serveur l'a refusé"
-    return f"Coup refusé : {said}. Remettez la pièce."
+    said = detail.strip().rstrip(".") if isinstance(detail, str) and detail.strip() else ""
+    # The viewer's default 403 starts with « Coup refusé » itself (review Junior #226).
+    if not said.lower().startswith("coup refusé"):
+        said = "Coup refusé : " + (said or "le serveur l'a refusé")
+    return f"{said}. Remettez la pièce."
 
 
 def relay_text(bridge: Bridge) -> str | None:

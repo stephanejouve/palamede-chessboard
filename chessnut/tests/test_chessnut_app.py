@@ -668,9 +668,17 @@ def test_a_window_that_cannot_open_stops_the_bridge(window_app) -> None:
             "Coup refusé : Ce n'est pas le coup. Remettez la pièce.",
         ),
         ("HTTP 403 NOT_YOUR_TURN", "Coup refusé : le serveur l'a refusé. Remettez la pièce."),
+        (
+            'HTTP 409 {"detail":"Cet exercice est terminé."}',
+            "Coup refusé : Cet exercice est terminé. Remettez la pièce.",
+        ),
+        (
+            'HTTP 403 {"detail":"Coup refusé (NOT_YOUR_TURN)"}',
+            "Coup refusé (NOT_YOUR_TURN). Remettez la pièce.",
+        ),
         (None, "Coup refusé : le serveur l'a refusé. Remettez la pièce."),
     ],
-    ids=["exercise", "not json", "no reason"],
+    ids=["exercise", "not json", "final dot", "default 403", "no reason"],
 )
 def test_a_refused_move_is_said_with_the_viewer_s_words(reason, text) -> None:
     bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
