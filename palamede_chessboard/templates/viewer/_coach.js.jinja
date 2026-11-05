@@ -198,7 +198,9 @@ function showExerciseBand(id, kind, motif, game) {
   if (!texts) return;
   exerciseBand.dataset.exercise = id;
   const context = EXERCISE_CONTEXTS[motif];
-  exerciseBand.innerHTML = '<div class="band-title">' + escapeHtml(motifLabel(motif) + ' · ' + texts.title) + '</div>'
+  // Without a known motif, the family alone — as the Tablier (exercise.py).
+  const title = context ? motifLabel(motif) + ' · ' + texts.title : texts.title;
+  exerciseBand.innerHTML = '<div class="band-title">' + escapeHtml(title) + '</div>'
     + (context ? '<div class="band-context">' + escapeHtml(context) + '</div>' : '')
     + '<div class="band-rule">' + escapeHtml(texts.rule) + '</div>'
     + (kind === 'attacked'
