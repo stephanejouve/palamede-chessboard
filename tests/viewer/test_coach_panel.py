@@ -104,7 +104,11 @@ def test_the_filter_is_kept_for_the_tab_and_checked_when_read_back() -> None:
     assert "sessionStorage.setItem(FILTER_KEY, JSON.stringify(f))" in COACH_JS
     assert "localStorage" not in COACH_JS
     # A stored value outside the known keys is dropped, never put in the page.
-    for name, labels in (("motif", "MOTIF_LABELS"), ("state", "STATE_LABELS"), ("kind", "KIND_LABELS")):
+    for name, labels in (
+        ("motif", "MOTIF_LABELS"),
+        ("state", "STATE_LABELS"),
+        ("kind", "KIND_LABELS"),
+    ):
         assert f"{name}: Object.hasOwn({labels}, f.{name}) ? f.{name} : ''," in COACH_JS
 
 
@@ -112,3 +116,14 @@ def test_a_filter_change_fetches_nothing() -> None:
     body = COACH_JS[COACH_JS.index("function onFilterChange(") :]
     body = body[: body.index("\n}\n")]
     assert "fetch(" not in body and "loadCoach" not in body
+
+
+def test_the_filter_applies_even_without_session_storage() -> None:
+    # Kept in COACH_FILTER and passed along, not read back from storage at
+    # each draw (review Admin #233).
+    assert "function filteredHtml(f) {" in COACH_JS
+    assert "const f = COACH_FILTER = savedFilter();" in COACH_JS
+    body = COACH_JS[COACH_JS.index("function onFilterChange(") :]
+    body = body[: body.index("\n}\n")]
+    assert "const f = COACH_FILTER;" in body and "savedFilter()" not in body
+    assert "box.innerHTML = filteredHtml(f);" in body

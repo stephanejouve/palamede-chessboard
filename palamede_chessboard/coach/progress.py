@@ -204,9 +204,10 @@ def queue(exercises: list[dict], games: dict) -> list[str]:
         return (rank.index(motif) if motif in rank else len(rank), exercise.get("created_at", ""))
 
     return [
-        e.get("id")
+        e["id"]
         for state in ("proposed", "failed")
         for e in sorted((e for e in exercises if e.get("state") == state), key=order)
+        if isinstance(e.get("id"), str)
     ]
 
 

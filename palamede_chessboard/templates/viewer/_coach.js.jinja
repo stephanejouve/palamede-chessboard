@@ -88,6 +88,9 @@ function exerciseItem(e, suggested) {
 const SHORT_LIST = 5;
 const FILTER_KEY = 'palamede-coach-filter';
 let COACH_WAITING = [];
+// The filter in use : read back at each load, then kept here, so that it
+// applies even where sessionStorage is refused (review Admin #233).
+let COACH_FILTER = { motif: '', state: '', kind: '' };
 
 function inQueueOrder(list, ids) {
   const waiting = list.filter(e => e.state !== 'solved');
@@ -112,8 +115,7 @@ function filterSelect(name, all, labels, chosen) {
       + escapeHtml(labels[k]) + '</option>').join('') + '</select>';
 }
 
-function filteredHtml() {
-  const f = savedFilter();
+function filteredHtml(f) {
   const shown = COACH_WAITING.filter(e => (!f.motif || e.motif === f.motif)
     && (!f.state || e.state === f.state) && (!f.kind || e.kind === f.kind));
   if (!shown.length) return '<div class="empty">Aucun exercice pour ce filtre.</div>';
@@ -123,23 +125,23 @@ function filteredHtml() {
 function exercisesHtml(list, progress) {
   COACH_WAITING = inQueueOrder(list, progress.queue);
   if (!COACH_WAITING.length) return '<div class="empty">Aucun exercice en attente.</div>';
-  const f = savedFilter();
+  const f = COACH_FILTER = savedFilter();
   return '<ul class="coach-list">' + COACH_WAITING.slice(0, SHORT_LIST).map((e, i) => exerciseItem(e, i === 0)).join('') + '</ul>'
     + '<details class="coach-all"><summary>Voir tous les exercices (' + num(COACH_WAITING.length) + ')</summary>'
     + '<div class="coach-filter">' + filterSelect('motif', 'tous les motifs', MOTIF_LABELS, f.motif)
     + filterSelect('state', 'tous les états', STATE_LABELS, f.state)
     + filterSelect('kind', 'toutes les formes', KIND_LABELS, f.kind) + '</div>'
-    + '<div id="coach-all-list">' + filteredHtml() + '</div></details>';
+    + '<div id="coach-all-list">' + filteredHtml(f) + '</div></details>';
 }
 
 // A filter change : kept for the tab (sessionStorage, like the token), and
 // the full list redrawn from what was read — nothing is fetched again.
 function onFilterChange(select) {
-  const f = savedFilter();
+  const f = COACH_FILTER;
   f[select.dataset.filter] = select.value;
-  try { sessionStorage.setItem(FILTER_KEY, JSON.stringify(f)); } catch (_) { /* kept for this draw only */ }
+  try { sessionStorage.setItem(FILTER_KEY, JSON.stringify(f)); } catch (_) { /* kept in COACH_FILTER for this load */ }
   const box = document.getElementById('coach-all-list');
-  if (box) box.innerHTML = filteredHtml();
+  if (box) box.innerHTML = filteredHtml(f);
 }
 
 async function loadCoach() {

@@ -24,8 +24,8 @@ from palamede_chessboard.coach.progress import (
     on_exercises,
     plies_of,
     progress,
-    reminder,
     queue,
+    reminder,
     suggestion,
 )
 from palamede_chessboard.coach.store import add_exercises, coach_dir, write_report
