@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.19.0...v0.19.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **state:** a draw only once it took place ([#223](https://github.com/stephanejouve/palamede-chessboard/issues/223)) ([6b0642a](https://github.com/stephanejouve/palamede-chessboard/commit/6b0642a154aead613facf53d5612fa70b3ba17de))
+
 ## [0.19.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.18.2...v0.19.0) (2026-11-05)
 
 
