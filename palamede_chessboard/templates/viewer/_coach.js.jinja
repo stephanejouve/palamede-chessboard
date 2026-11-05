@@ -71,14 +71,36 @@ const KIND_LABELS = {
   find_move: 'Trouvez le bon coup · Tablier ou souris',
   attacked: 'Cases attaquées · visionneuse seulement',
 };
-const STATE_LABELS = { proposed: 'à faire', failed: 'à reprendre' };
+// Where the player stands on an exercise (Stéphane, 05/11). The server's
+// state only judges the last game : missed then found in that game is
+// « failed », like never found. The attempts tell them apart ; an abandon
+// (ok false) finds nothing. A colour per standing, and always its words
+// beside it (review Admin : colour-blind readers, screen readers).
+const STANDING_LABELS = {
+  todo: 'à faire',
+  never: 'à reprendre · jamais trouvé',
+  found: 'à reprendre · déjà trouvé',
+  solved: 'résolu',
+};
+function standing(e) {
+  if (e.state === 'solved') return 'solved';
+  if (e.state !== 'failed') return 'todo';
+  const found = Array.isArray(e.attempts) && e.attempts.some(a => a && a.ok === true && !a.abandoned);
+  return found ? 'found' : 'never';
+}
+function standingHtml(e) {
+  const s = standing(e);
+  if (s === 'todo') return '';
+  return ' · <span class="standing st-' + s + '"><span class="dot" aria-hidden="true"></span>'
+    + escapeHtml(STANDING_LABELS[s]) + '</span>';
+}
 function kindLabel(k) { return KIND_LABELS[k] || k; }
 
 function exerciseItem(e, suggested) {
   return '<li' + (suggested ? ' class="suggested"' : '') + '><span>'
     + (suggested ? '<strong>Suggéré</strong> · ' : '')
     + escapeHtml(motifLabel(e.motif)) + ' · ' + escapeHtml(kindLabel(e.kind))
-    + (e.state === 'failed' ? ' · à reprendre' : '') + '</span>'
+    + standingHtml(e) + '</span>'
     + '<button type="button" data-start="' + escapeHtml(e.id) + '" data-side="' + escapeHtml(e.side) + '" data-kind="'
     + escapeHtml(e.kind) + '" data-motif="' + escapeHtml(e.motif) + '">Lancer</button></li>';
 }
@@ -88,6 +110,8 @@ function exerciseItem(e, suggested) {
 const SHORT_LIST = 5;
 const FILTER_KEY = 'palamede-coach-filter';
 let COACH_WAITING = [];
+// Every exercise, solved ones last : the full list, behind the filter.
+let COACH_ALL = [];
 // The filter in use : read back at each load, then kept here, so that it
 // applies even where sessionStorage is refused (review Admin #233).
 let COACH_FILTER = { motif: '', state: '', kind: '' };
@@ -104,7 +128,7 @@ function savedFilter() {
   try { f = JSON.parse(sessionStorage.getItem(FILTER_KEY) || '{}') || {}; } catch (_) { f = {}; }
   return {
     motif: Object.hasOwn(MOTIF_LABELS, f.motif) ? f.motif : '',
-    state: Object.hasOwn(STATE_LABELS, f.state) ? f.state : '',
+    state: Object.hasOwn(STANDING_LABELS, f.state) ? f.state : '',
     kind: Object.hasOwn(KIND_LABELS, f.kind) ? f.kind : '',
   };
 }
@@ -116,20 +140,24 @@ function filterSelect(name, all, labels, chosen) {
 }
 
 function filteredHtml(f) {
-  const shown = COACH_WAITING.filter(e => (!f.motif || e.motif === f.motif)
-    && (!f.state || e.state === f.state) && (!f.kind || e.kind === f.kind));
+  const shown = COACH_ALL.filter(e => (!f.motif || e.motif === f.motif)
+    && (!f.state || standing(e) === f.state) && (!f.kind || e.kind === f.kind));
   if (!shown.length) return '<div class="empty">Aucun exercice pour ce filtre.</div>';
   return '<ul class="coach-list">' + shown.map(e => exerciseItem(e, false)).join('') + '</ul>';
 }
 
 function exercisesHtml(list, progress) {
   COACH_WAITING = inQueueOrder(list, progress.queue);
-  if (!COACH_WAITING.length) return '<div class="empty">Aucun exercice en attente.</div>';
+  COACH_ALL = COACH_WAITING.concat(list.filter(e => e.state === 'solved'));
+  if (!COACH_ALL.length) return '<div class="empty">Aucun exercice en attente.</div>';
   const f = COACH_FILTER = savedFilter();
-  return '<ul class="coach-list">' + COACH_WAITING.slice(0, SHORT_LIST).map((e, i) => exerciseItem(e, i === 0)).join('') + '</ul>'
-    + '<details class="coach-all"><summary>Voir tous les exercices (' + num(COACH_WAITING.length) + ')</summary>'
+  const short = COACH_WAITING.length
+    ? '<ul class="coach-list">' + COACH_WAITING.slice(0, SHORT_LIST).map((e, i) => exerciseItem(e, i === 0)).join('') + '</ul>'
+    : '<div class="empty">Aucun exercice en attente.</div>';
+  return short
+    + '<details class="coach-all"><summary>Voir tous les exercices (' + num(COACH_ALL.length) + ')</summary>'
     + '<div class="coach-filter">' + filterSelect('motif', 'tous les motifs', MOTIF_LABELS, f.motif)
-    + filterSelect('state', 'tous les états', STATE_LABELS, f.state)
+    + filterSelect('state', 'tous les états', STANDING_LABELS, f.state)
     + filterSelect('kind', 'toutes les formes', KIND_LABELS, f.kind) + '</div>'
     + '<div id="coach-all-list">' + filteredHtml(f) + '</div></details>';
 }

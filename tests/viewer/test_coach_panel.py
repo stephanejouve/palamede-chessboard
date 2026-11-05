@@ -93,11 +93,23 @@ def test_each_line_says_its_form() -> None:
 
 
 def test_the_full_list_is_filtered_by_motif_state_and_form() -> None:
-    assert "Voir tous les exercices (' + num(COACH_WAITING.length) + ')" in COACH_JS
+    # Every exercise, the solved ones too (last) : green has its place (#05/11).
+    assert "COACH_ALL = COACH_WAITING.concat(list.filter(e => e.state === 'solved'));" in COACH_JS
+    assert "Voir tous les exercices (' + num(COACH_ALL.length) + ')" in COACH_JS
+    assert "const shown = COACH_ALL.filter(" in COACH_JS
+    # Only solved ones left : nothing waiting, but the full list still opens.
+    assert (
+        "  if (!COACH_ALL.length) return '<div class=\"empty\">Aucun exercice en attente.</div>';"
+        in COACH_JS
+    )
+    assert (
+        ": '<div class=\"empty\">Aucun exercice en attente.</div>';\n  return short\n" in COACH_JS
+    )
     for name in ("motif", "state", "kind"):
         assert f"filterSelect('{name}'," in COACH_JS
     assert "(!f.motif || e.motif === f.motif)" in COACH_JS
-    assert "(!f.state || e.state === f.state) && (!f.kind || e.kind === f.kind)" in COACH_JS
+    assert "(!f.state || standing(e) === f.state) && (!f.kind || e.kind === f.kind)" in COACH_JS
+    assert "filterSelect('state', 'tous les états', STANDING_LABELS, f.state)" in COACH_JS
 
 
 def test_the_filter_is_kept_for_the_tab_and_checked_when_read_back() -> None:
@@ -106,7 +118,7 @@ def test_the_filter_is_kept_for_the_tab_and_checked_when_read_back() -> None:
     # A stored value outside the known keys is dropped, never put in the page.
     for name, labels in (
         ("motif", "MOTIF_LABELS"),
-        ("state", "STATE_LABELS"),
+        ("state", "STANDING_LABELS"),
         ("kind", "KIND_LABELS"),
     ):
         assert f"{name}: Object.hasOwn({labels}, f.{name}) ? f.{name} : ''," in COACH_JS
@@ -197,3 +209,34 @@ def test_the_band_says_why_this_position_from_the_motif() -> None:
     )
     assert "'<div class=\"band-title\">' + escapeHtml(title)" in COACH_JS
     assert "(context ? '<div class=\"band-context\">' + escapeHtml(context)" in COACH_JS
+
+
+def test_each_line_says_where_the_player_stands_in_colour_and_words() -> None:
+    # Stéphane, 05/11 : missed then found in the same game stays « failed »,
+    # like never found ; the attempts tell them apart, an abandon finds nothing.
+    assert "if (e.state === 'solved') return 'solved';" in COACH_JS
+    assert "if (e.state !== 'failed') return 'todo';" in COACH_JS
+    assert "e.attempts.some(a => a && a.ok === true && !a.abandoned)" in COACH_JS
+    assert "return found ? 'found' : 'never';" in COACH_JS
+    for key, words in (
+        ("never", "à reprendre · jamais trouvé"),
+        ("found", "à reprendre · déjà trouvé"),
+        ("solved", "résolu"),
+    ):
+        assert f"  {key}: '{words}'," in COACH_JS
+    # The colour never alone : the dot is hidden from screen readers, the words stay.
+    assert (
+        '<span class="dot" aria-hidden="true"></span>\'\n    + escapeHtml(STANDING_LABELS[s])'
+        in COACH_JS
+    )
+    assert "    + standingHtml(e) + '</span>'" in COACH_JS
+    # A fresh exercise : no dot, no words, as before.
+    assert "  if (s === 'todo') return '';" in COACH_JS
+
+
+def test_the_colours_come_from_the_theme() -> None:
+    css = (TEMPLATES_DIR / "viewer" / "_styles.css.jinja").read_text(encoding="utf-8")
+    assert ".st-never .dot { background: var(--warning); }" in css
+    assert ".st-found .dot { background: var(--caution); }" in css
+    assert ".st-solved .dot { background: var(--ok); }" in css
+    assert "--caution: #" in css
