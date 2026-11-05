@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import chess
 import pytest
 from palamede_chessnut import exercise, viewer
 from palamede_chessnut.bridge import Bridge
@@ -92,3 +93,23 @@ def test_an_unknown_family_shows_nothing() -> None:
     bridge = exo_bridge("exo.p.1")
     bridge.exercise = {"kind": "fork", "motif": "missed_mate"}
     assert page_state(bridge)["exercise"] is None
+
+
+def test_the_bridge_reads_the_exercise_when_it_runs(monkeypatch) -> None:
+    # Review Junior #238 : without this call, no banner at all.
+    from palamede_chessnut import bridge as bridge_module
+    from palamede_chessnut import clock_hold, token_light
+
+    bridge = Bridge("https://viewer.test", "exo.p.1", chess.WHITE, token="t", with_board=False)
+    read: list[Bridge] = []
+    monkeypatch.setattr(bridge, "_follow_stream", lambda _loop: None)
+    monkeypatch.setattr(token_light, "check", lambda _b: None)
+    monkeypatch.setattr(clock_hold, "declare", lambda _b: True)
+    monkeypatch.setattr(exercise, "read", read.append)
+
+    async def watched() -> None:
+        bridge.stopped.set()
+
+    monkeypatch.setattr(bridge, "watch_game", watched)
+    bridge_module.asyncio.run(bridge.run())
+    assert read == [bridge]
