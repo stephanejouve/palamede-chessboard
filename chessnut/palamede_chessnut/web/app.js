@@ -458,6 +458,10 @@ function render(state) {
   // The viewer's reason for a refused move : the board only blinks (Stéphane, 05/11).
   el('refused').hidden = !state.refused_text;
   el('refused').textContent = state.refused_text || '';
+  // An exercise says its family and how to answer it, as the viewer does (#237).
+  el('exercise').hidden = !state.exercise;
+  el('exercise-title').textContent = state.exercise ? state.exercise.title : '';
+  el('exercise-text').textContent = state.exercise ? state.exercise.text : '';
   const fixing = state.lights.sync === 'fixing' && state.differing.length > 0;
   renderSetup(fixing ? state.setup : null);
   // The captures and the balance stay in the panel during the setup, which
@@ -470,7 +474,8 @@ function render(state) {
   el('lobby').hidden = !state.lobby;
   el('lobby').textContent = state.lobby || '';
   el('gestures').hidden = !state.lobby;
-  el('tray').hidden = !fixing && !state.lobby && !state.refused_text && el('move-error').hidden;
+  el('tray').hidden = !fixing && !state.lobby && !state.refused_text && !state.exercise
+    && el('move-error').hidden;
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
   canSave = Boolean(state.can_save);
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');

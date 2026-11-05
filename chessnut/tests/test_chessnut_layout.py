@@ -105,8 +105,8 @@ def test_without_a_game_the_gestures_are_said_under_the_board() -> None:
     assert parents.around["lobby"][-2:] == ["stage", "tray"]
     script = (PAGE / "app.js").read_text(encoding="utf-8")
     assert (
-        "el('tray').hidden = !fixing && !state.lobby && !state.refused_text && el('move-error').hidden;"
-        in script
+        "el('tray').hidden = !fixing && !state.lobby && !state.refused_text && !state.exercise\n"
+        "    && el('move-error').hidden;" in script
     )
     assert "el('lobby').textContent = state.lobby || '';" in script
     assert (
@@ -145,3 +145,13 @@ def test_a_refused_move_is_said_under_the_board() -> None:
     assert '<p id="move-error" role="alert" hidden></p>' in tray  # the mouse's too
     side = html[html.index('<section id="side">') :]
     assert 'id="refused"' not in side and 'id="move-error"' not in side
+
+
+def test_an_exercise_is_said_under_the_board() -> None:
+    # Its family and how to answer it, where the viewer says them (#237).
+    parents = Parents()
+    parents.feed((PAGE / "index.html").read_text(encoding="utf-8"))
+    assert parents.around["exercise"][-2:] == ["stage", "tray"]
+    script = (PAGE / "app.js").read_text(encoding="utf-8")
+    assert "el('exercise').hidden = !state.exercise;" in script
+    assert "el('exercise-text').textContent = state.exercise ? state.exercise.text : '';" in script

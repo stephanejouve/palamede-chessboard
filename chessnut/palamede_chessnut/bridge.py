@@ -34,7 +34,7 @@ from urllib.parse import quote
 
 import chess
 
-from palamede_chessnut import clock_hold, config, leds, token_light, transport, viewer
+from palamede_chessnut import clock_hold, config, exercise, leds, token_light, transport, viewer
 from palamede_chessnut.decide import decide
 from palamede_chessnut.moves import only_king_lifted, relayed
 from palamede_chessnut.protocol import UnknownPieceCode, decode_board, led_frame
@@ -110,6 +110,8 @@ class Bridge:
         self.stream_link = "connecting"
         #: The game the two rooks lifted open (#167), see :mod:`.lobby`.
         self.new_game = dict(config.NEW_GAME)
+        #: ``"find_move"``, ``"attacked"``… : the coach's family of an ``exo.*`` game (#237).
+        self.exercise_kind: str | None = None
 
     def lobby_text(self) -> str | None:
         """What the page says instead of the game's status : only a lobby has something (#167)."""
@@ -422,6 +424,7 @@ class Bridge:
         threading.Thread(target=self._follow_stream, args=(loop,), daemon=True).start()
         await asyncio.to_thread(token_light.check, self)
         await asyncio.to_thread(clock_hold.declare, self)
+        await asyncio.to_thread(exercise.read, self)
         await (self.run_board() if self.with_board else self.watch_game())
 
     async def watch_game(self) -> None:
