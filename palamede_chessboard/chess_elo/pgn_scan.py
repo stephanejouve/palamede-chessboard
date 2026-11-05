@@ -35,17 +35,18 @@ def _parse_rated_game(pgn_path: Path) -> RatedGame | None:
 
     * ``Rated`` header equals ``"true"`` (case-insensitive). Imports
       (lichess, GM databases, …) never carry it, so they are excluded
-      by construction. Server games get the header posted by the
-      outillages ``GameState.save`` (outillages#295) ; historical ones
-      get stamped via the outillages ``scripts.stamp_rated_history`` CLI.
+      by construction. Server games get the header posted at save
+      time (:mod:`palamede_chessboard.metadata`, first done in
+      outillages#295) ; historical ones were stamped by the outillages
+      ``scripts.stamp_rated_history`` CLI, removed with outillages#456.
     * ``Result`` header in :data:`RESULT_TO_WHITE_SCORE` (so ``*`` /
       in-progress games don't contribute).
     * ``White`` and ``Black`` both normalise (via
       :func:`normalize_identity`) to non-empty strings. At parse time
       this normalisation is **read-only** — this function does not touch
-      the file. The dedicated outillages ``scripts.stamp_rated_history``
-      tool is the one explicit path that rewrites ``White`` / ``Black``
-      on disk (with backup + atomic write), typically run once post-deploy.
+      the file. Rewriting ``White`` / ``Black`` on disk was the job of
+      the outillages ``scripts.stamp_rated_history`` tool (with backup +
+      atomic write, run once post-deploy), removed with outillages#456.
     """
     try:
         with pgn_path.open("r", encoding="utf-8") as f:
