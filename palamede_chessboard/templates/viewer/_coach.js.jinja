@@ -10,6 +10,12 @@ const MOTIF_LABELS = {
   other: 'Autre',
 };
 function motifLabel(m) { return MOTIF_LABELS[m] || m; }
+// A count or a rate from the server, as a number or « — » : never raw text
+// in the HTML, even if the server sent one (review Admin #218).
+function num(v) {
+  const n = Number(v);
+  return v !== null && v !== undefined && v !== '' && Number.isFinite(n) ? String(n) : '—';
+}
 const coachBox = document.getElementById('coach');
 const coachBody = document.getElementById('coach-body');
 
@@ -28,15 +34,15 @@ function coachRefusal(status) {
 function reminderHtml(p) {
   const r = p.reminder || {};
   if (!r.due) return '';
-  let text = r.waiting + (r.waiting > 1 ? ' exercices t\'attendent' : ' exercice t\'attend');
+  let text = num(r.waiting) + (r.waiting > 1 ? ' exercices t\'attendent' : ' exercice t\'attend');
   if (r.days_since_last_attempt !== null && r.days_since_last_attempt !== undefined) {
-    text += ', dernier exercice il y a ' + r.days_since_last_attempt + ' jour' + (r.days_since_last_attempt > 1 ? 's' : '');
+    text += ', dernier exercice il y a ' + num(r.days_since_last_attempt) + ' jour' + (r.days_since_last_attempt > 1 ? 's' : '');
   }
   if (p.suggestion) text += '. Suggestion : ' + motifLabel(p.suggestion.motif);
   return '<div class="coach-reminder">' + escapeHtml(text) + '.</div>';
 }
 
-function rate(m) { return m.per_100_moves === null ? '—' : String(m.per_100_moves); }
+function rate(m) { return num(m.per_100_moves); }
 
 // Per motif : mistakes per 100 moves, last 10 games against the 10 before
 // (Stéphane, 05/11), with the counts ; the first try and the abandons apart.
@@ -49,12 +55,12 @@ function progressHtml(p) {
     const e = ex[m];
     const recent = g.recent.motifs[m], before = g.before.motifs[m];
     if (!recent.mistakes && !before.mistakes && !e) return;
-    const first = e ? e.first_try.ok + ' / ' + e.first_try.tried : '—';
+    const first = e ? num(e.first_try.ok) + ' / ' + num(e.first_try.tried) : '—';
     html += '<tr><td>' + escapeHtml(motifLabel(m)) + '</td><td class="num">' + rate(recent) + '</td><td class="num">'
-      + rate(before) + '</td><td class="num">' + first + '</td><td class="num">' + (e ? e.abandoned_games : 0) + '</td></tr>';
+      + rate(before) + '</td><td class="num">' + first + '</td><td class="num">' + (e ? num(e.abandoned_games) : '0') + '</td></tr>';
   });
   html += '</tbody></table>';
-  html += '<div class="coach-counts">' + g.recent.games + ' parties récentes, ' + g.before.games + ' avant';
+  html += '<div class="coach-counts">' + num(g.recent.games) + ' parties récentes, ' + num(g.before.games) + ' avant';
   if (!g.enough) html += ' : pas assez de parties pour comparer';
   return html + '.</div>';
 }
