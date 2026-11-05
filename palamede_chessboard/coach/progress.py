@@ -12,6 +12,8 @@
 * **The suggestion** — the oldest proposed exercise of the motif with the
   most mistakes in the last games, else the oldest failed one : its id,
   motif and kind, never its position nor its solution (Admin, #95).
+  **The queue** is every waiting exercise's id in that same order, for the
+  viewer's short list (#230).
 * **The reminder** — exercises waiting for :data:`REMIND_DAYS` days or
   more while none was tried for as long ; in the app only (Stéphane).
 
@@ -188,8 +190,12 @@ def on_exercises(exercises: list[dict]) -> dict:
     return counts
 
 
-def suggestion(exercises: list[dict], games: dict) -> dict | None:
-    """The exercise to play next : ``{id, motif, kind}`` only."""
+def queue(exercises: list[dict], games: dict) -> list[str]:
+    """The waiting exercises' ids, in the order to play them (#230).
+
+    The proposed ones first, then the failed ones ; within each, the motif
+    with the most mistakes in the last games first, then the oldest.
+    """
     recent = games["recent"]["motifs"]
     rank = sorted(MOTIFS, key=lambda m: (-recent[m]["mistakes"], MOTIFS.index(m)))
 
@@ -197,12 +203,20 @@ def suggestion(exercises: list[dict], games: dict) -> dict | None:
         motif = exercise.get("motif")
         return (rank.index(motif) if motif in rank else len(rank), exercise.get("created_at", ""))
 
-    for state in ("proposed", "failed"):
-        waiting = sorted((e for e in exercises if e.get("state") == state), key=order)
-        if waiting:
-            chosen = waiting[0]
-            return {k: chosen.get(k) for k in ("id", "motif", "kind")}
-    return None
+    return [
+        e.get("id")
+        for state in ("proposed", "failed")
+        for e in sorted((e for e in exercises if e.get("state") == state), key=order)
+    ]
+
+
+def suggestion(exercises: list[dict], games: dict) -> dict | None:
+    """The exercise to play next, the head of :func:`queue` : ``{id, motif, kind}`` only."""
+    ids = queue(exercises, games)
+    if not ids:
+        return None
+    chosen = next(e for e in exercises if e.get("id") == ids[0])
+    return {k: chosen.get(k) for k in ("id", "motif", "kind")}
 
 
 def _day(stamp: str | None) -> date | None:
@@ -245,5 +259,6 @@ def progress(games_dir: Path, player_id: str, now: datetime) -> dict:
         "games": games,
         "exercises": on_exercises(exercises),
         "suggestion": suggestion(exercises, games),
+        "queue": queue(exercises, games),
         "reminder": reminder(exercises, now),
     }
