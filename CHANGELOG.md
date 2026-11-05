@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.20.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.19.1...v0.20.0) (2026-11-05)
+
+
+### Features
+
+* **viewer:** « Mes exercices » shows a short list, the rest behind a filter ([#233](https://github.com/stephanejouve/palamede-chessboard/issues/233)) ([bc8fd11](https://github.com/stephanejouve/palamede-chessboard/commit/bc8fd1142f5141d8efa0c332475030ad201fe7a7))
+* **viewer:** an exercise band under the board says its motif, family, rule, and takes the squares ([#239](https://github.com/stephanejouve/palamede-chessboard/issues/239)) ([4830395](https://github.com/stephanejouve/palamede-chessboard/commit/4830395da7d3cbc0fc82cc3cc5680edfa3084b06))
+* **viewer:** each exercise says where the player stands, in colour and words ([#242](https://github.com/stephanejouve/palamede-chessboard/issues/242)) ([c39c430](https://github.com/stephanejouve/palamede-chessboard/commit/c39c430c1567c6d42d325448fd9fb0250574704e))
+* **viewer:** the 🔑 button says whose token is held ([#231](https://github.com/stephanejouve/palamede-chessboard/issues/231)) ([115c472](https://github.com/stephanejouve/palamede-chessboard/commit/115c472eafed7b0e799ce44cfe92c99f27315087))
+
+
+### Bug Fixes
+
+* **board-facts:** a defended piece attacked by the king is not hanging ([#236](https://github.com/stephanejouve/palamede-chessboard/issues/236)) ([8a49016](https://github.com/stephanejouve/palamede-chessboard/commit/8a49016966057e9689cc38a9d1cdf466fff4faf0))
+* **viewer:** a read of the game shown before is dropped when it comes back ([#241](https://github.com/stephanejouve/palamede-chessboard/issues/241)) ([14ddf7b](https://github.com/stephanejouve/palamede-chessboard/commit/14ddf7b881e864a62aad03f8bded62786b2ece8e))
+* **viewer:** the coach answer box shows first in the panel and takes the focus ([#235](https://github.com/stephanejouve/palamede-chessboard/issues/235)) ([a77192c](https://github.com/stephanejouve/palamede-chessboard/commit/a77192c080169db5342c48443099c8a73243b6d5))
+* **viewer:** without a known motif, the exercise band shows the family alone ([#240](https://github.com/stephanejouve/palamede-chessboard/issues/240)) ([a0ece4e](https://github.com/stephanejouve/palamede-chessboard/commit/a0ece4e0581c2e99d1e277e339a84ddbf9c1d374))
+
 ## [0.19.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.19.0...v0.19.1) (2026-11-05)
 
 
