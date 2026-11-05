@@ -26,7 +26,8 @@ EXERCISE_PREFIX = "exo."
 BANNERS: dict[str, tuple[str, str]] = {
     "find_move": (
         "Trouvez le bon coup",
-        "Trouvez le meilleur coup dans cette position, au Tablier ou à la souris. "
+        "Trouvez le meilleur coup dans cette position, dans l'app Tablier "
+        "ou à la souris dans la visionneuse. "
         "Un coup faux est refusé et la position reste en place : réessayez.",
     ),
     "attacked": (

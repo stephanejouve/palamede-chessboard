@@ -58,7 +58,10 @@ def test_a_find_move_says_to_play_on_the_board(gets) -> None:
     exercise.read(bridge)
     shown = page_state(bridge)["exercise"]
     assert shown["title"] == "Mat manqué · Trouvez le bon coup"
-    assert shown["text"].startswith("Trouvez le meilleur coup dans cette position, au Tablier")
+    assert shown["text"].startswith(
+        "Trouvez le meilleur coup dans cette position, dans l'app Tablier "
+        "ou à la souris dans la visionneuse."
+    )
 
 
 def test_without_a_motif_the_family_alone(gets) -> None:
