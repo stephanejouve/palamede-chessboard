@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from importlib import metadata
+from pathlib import Path
 
 from palamede_chessnut import __version__
 
@@ -31,7 +32,10 @@ def origin() -> dict[str, str]:
         return {"branch": branch if isinstance(branch, str) else "", "commit": vcs["commit_id"]}
     url = found.get("url")
     if isinstance(url, str) and url.startswith("file://"):
-        return {"path": url.removeprefix("file://")}
+        # The code loaded, not the install's origin : an editable install may
+        # point to a copy since moved (review Admin #228), and the URL is not
+        # decoded (%20, /C:/, review Junior #228).
+        return {"path": str(Path(__file__).resolve().parent.parent)}
     return {}
 
 

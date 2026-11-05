@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from importlib import metadata
+from pathlib import Path
 
 import pytest
 from palamede_chessnut import __version__, build
@@ -48,9 +49,12 @@ def test_an_install_of_the_default_branch(monkeypatch) -> None:
     assert build.build_info().endswith("branche par défaut, commit bb7f45e")
 
 
-def test_a_local_copy(monkeypatch) -> None:
-    installed(monkeypatch, {"url": "file:///Users/x/palamede-chessboard/chessnut", "dir_info": {}})
-    assert build.build_info().endswith("copie locale /Users/x/palamede-chessboard/chessnut")
+def test_a_local_copy_says_the_code_loaded(monkeypatch) -> None:
+    # Not the install's origin, which may be stale or %-encoded (reviews #228).
+    installed(monkeypatch, {"url": "file:///tmp/gone%20away/chessnut", "dir_info": {}})
+    loaded = Path(build.__file__).resolve().parent.parent
+    assert build.build_info().endswith(f"copie locale {loaded}")
+    assert "%20" not in build.build_info()
 
 
 @pytest.mark.parametrize("direct_url", [None, "{not json", ["a list"], {"url": "https://pypi"}])
