@@ -11,6 +11,8 @@ registry cannot be read) :
   answered with squares.
 * ``GET /api/coach/reports/{game_id}`` — the report of a game, for its
   players and its arbiter only (403 otherwise).
+* ``GET /api/coach/progress`` — the token's own progress : counts and
+  series, the exercise to play next, the reminder ; no solution.
 
 The identity comes from the token only, never from a parameter, and is
 compared on normalised ids (Admin, #95). No MCP tool yet : the MCP does
@@ -20,12 +22,13 @@ not authenticate.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from palamede_chessboard.chessboard_state import ChessboardError, GameNotFoundError, GameState
-from palamede_chessboard.coach import play
+from palamede_chessboard.coach import play, progress
 from palamede_chessboard.coach.store import (
     EXERCISE_STATES,
     CoachStoreError,
@@ -73,6 +76,15 @@ def build_coach_router() -> APIRouter:
         who = player_of_token(request)["player"]
         exercise = _run(lambda: play.answer(_games_dir(), who, exercise_id, payload.squares))
         return {"status": "ok", "exercise": exercise}
+
+    @router.get("/api/coach/progress")
+    def own_progress(request: Request, response: Response) -> dict:
+        response.headers["Cache-Control"] = "no-store"
+        who = player_of_token(request)["player"]
+        try:
+            return progress.progress(_games_dir(), who, datetime.now(UTC))
+        except CoachStoreError as exc:
+            raise _store_error(exc) from exc
 
     @router.get("/api/coach/reports/{game_id}")
     def report(game_id: str, request: Request, response: Response) -> dict:

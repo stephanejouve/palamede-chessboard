@@ -19,7 +19,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from palamede_chessboard._atomic import locked, write_json
-from palamede_chessboard.chessboard_state import GameState
+from palamede_chessboard.chessboard_state import ChessboardError, GameState
 from palamede_chessboard.paths import _validate_game_id
 from palamede_chessboard.players import registry
 
@@ -76,6 +76,19 @@ def read_report(games_dir: Path, game_id: str) -> dict | None:
         log.warning("coach: report of %s unreadable (%s), diagnosed again", game_id, exc)
         return None
     return report if isinstance(report, dict) else None
+
+
+def read_reports(games_dir: Path) -> list[dict]:
+    """Every readable report ; an unreadable one is left out, and logged."""
+    reports = []
+    for path in sorted((coach_dir(games_dir) / "reports").glob("*.json")):
+        try:
+            found = read_report(games_dir, path.stem)
+        except ChessboardError:  # no game id : not a report the coach wrote
+            continue
+        if found is not None:
+            reports.append(found)
+    return reports
 
 
 def _private_dirs(path: Path) -> None:

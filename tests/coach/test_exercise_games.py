@@ -124,6 +124,22 @@ async def test_the_mcp_changes_no_exercise_game(mcp_dir: Path, tool: str) -> Non
 
 
 @pytest.mark.asyncio
+async def test_the_mcp_records_no_abandon(mcp_dir: Path) -> None:
+    game_id = "exo.human-player.20261104-200000-abcd"
+    _game(mcp_dir, game_id, white=play.OPPONENT, black="human-player")
+    add_exercises(mcp_dir, "human-player", [{"id": "e1", "game_ids": [game_id], "attempts": []}])
+    body = _decode(await call_tool("chess_resign", {"game_id": game_id, "by": "black"}))
+    assert body["code"] == "EXERCISE_VIEWER_ONLY"
+    assert read_exercises(mcp_dir, "human-player")[0]["attempts"] == []
+
+
+def test_an_abandon_of_no_exercise_records_nothing(tmp_path: Path) -> None:
+    add_exercises(tmp_path, "human-player", [{"id": "e1", "game_ids": ["g1"], "attempts": []}])
+    play.record_abandon(tmp_path, "human-player", "g2")
+    assert read_exercises(tmp_path, "human-player")[0]["attempts"] == []
+
+
+@pytest.mark.asyncio
 async def test_the_mcp_still_reads_an_exercise_game(mcp_dir: Path) -> None:
     game_id = "Exo.human-player.x"
     _game(mcp_dir, game_id)
