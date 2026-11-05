@@ -195,7 +195,11 @@ class GameState:
         elif (
             self.board.is_stalemate()
             or self.board.is_insufficient_material()
-            or self.board.can_claim_draw()
+            # Only a draw that took place : the third occurrence on the board,
+            # fifty real moves. Not ``can_claim_draw()``, also true when the
+            # side to move *could* repeat : the server drew for it (#222).
+            or self.board.is_repetition(3)
+            or self.board.halfmove_clock >= 100
         ):
             self.metadata.result = "1/2-1/2"
             self.metadata.termination = "normal"
@@ -206,7 +210,9 @@ class GameState:
             "fen": self.board.fen(),
             "is_check": self.board.is_check(),
             "is_checkmate": self.board.is_checkmate(),
-            "is_game_over": self.board.is_game_over(),
+            # The result just set, not only what the board alone ends : a
+            # threefold or fifty moves is no ``is_game_over()`` of python-chess.
+            "is_game_over": self.board.is_game_over() or self.metadata.result != "*",
             "result": self.metadata.result,
             "by": by,
         }
