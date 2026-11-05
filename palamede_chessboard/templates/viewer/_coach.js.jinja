@@ -1,0 +1,135 @@
+// « Mes exercices » (#95 step 2) : the token's own progress and exercises.
+// Read when the panel is opened, never polled (Admin, #95) ; nothing shows
+// without a token. The progress is counts only : no solution reaches here.
+const MOTIF_LABELS = {
+  missed_mate: 'Mat manqué',
+  hanging_piece: 'Pièce laissée en prise',
+  ignored_threat: 'Menace ignorée',
+  lone_queen: 'Dame partie seule',
+  weakened_king: 'Roi affaibli',
+  other: 'Autre',
+};
+function motifLabel(m) { return MOTIF_LABELS[m] || m; }
+const coachBox = document.getElementById('coach');
+const coachBody = document.getElementById('coach-body');
+
+function coachHeaders() {
+  const token = playerToken();
+  return token ? { 'Authorization': 'Bearer ' + token } : {};
+}
+
+function coachRefusal(status) {
+  if (status === 401) return 'Jeton refusé : vérifiez-le avec 🔑.';
+  if (status === 503) return 'Exercices illisibles pour le moment, réessayez plus tard.';
+  return 'Exercices indisponibles (HTTP ' + status + ').';
+}
+
+// The reminder : only when exercises wait and none was tried lately (Stéphane, 05/11).
+function reminderHtml(p) {
+  const r = p.reminder || {};
+  if (!r.due) return '';
+  let text = r.waiting + (r.waiting > 1 ? ' exercices t\'attendent' : ' exercice t\'attend');
+  if (r.days_since_last_attempt !== null && r.days_since_last_attempt !== undefined) {
+    text += ', dernier exercice il y a ' + r.days_since_last_attempt + ' jour' + (r.days_since_last_attempt > 1 ? 's' : '');
+  }
+  if (p.suggestion) text += '. Suggestion : ' + motifLabel(p.suggestion.motif);
+  return '<div class="coach-reminder">' + escapeHtml(text) + '.</div>';
+}
+
+function rate(m) { return m.per_100_moves === null ? '—' : String(m.per_100_moves); }
+
+// Per motif : mistakes per 100 moves, last 10 games against the 10 before
+// (Stéphane, 05/11), with the counts ; the first try and the abandons apart.
+function progressHtml(p) {
+  const g = p.games, ex = p.exercises || {};
+  let html = '<table><thead><tr><th>motif</th><th class="num" title="erreurs pour 100 coups, 10 dernières parties">récent</th>'
+    + '<th class="num" title="erreurs pour 100 coups, les 10 parties d\'avant">avant</th>'
+    + '<th class="num" title="réussis du premier coup / tentés">1er essai</th><th class="num">abandons</th></tr></thead><tbody>';
+  Object.keys(MOTIF_LABELS).forEach(m => {
+    const e = ex[m];
+    const recent = g.recent.motifs[m], before = g.before.motifs[m];
+    if (!recent.mistakes && !before.mistakes && !e) return;
+    const first = e ? e.first_try.ok + ' / ' + e.first_try.tried : '—';
+    html += '<tr><td>' + escapeHtml(motifLabel(m)) + '</td><td class="num">' + rate(recent) + '</td><td class="num">'
+      + rate(before) + '</td><td class="num">' + first + '</td><td class="num">' + (e ? e.abandoned_games : 0) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  html += '<div class="coach-counts">' + g.recent.games + ' parties récentes, ' + g.before.games + ' avant';
+  if (!g.enough) html += ' : pas assez de parties pour comparer';
+  return html + '.</div>';
+}
+
+function exerciseItem(e) {
+  const label = e.kind === 'attacked' ? 'Qu\'est-ce qui est attaqué ?' : 'Trouve le bon coup';
+  return '<li><span>' + escapeHtml(motifLabel(e.motif)) + ' · ' + escapeHtml(label)
+    + (e.state === 'failed' ? ' · à reprendre' : '') + '</span>'
+    + '<button type="button" data-start="' + escapeHtml(e.id) + '" data-side="' + escapeHtml(e.side) + '" data-kind="'
+    + escapeHtml(e.kind) + '">Lancer</button></li>';
+}
+
+function exercisesHtml(list) {
+  const waiting = list.filter(e => e.state !== 'solved');
+  if (!waiting.length) return '<div class="empty">Aucun exercice en attente.</div>';
+  return '<ul class="coach-list">' + waiting.map(exerciseItem).join('') + '</ul>';
+}
+
+async function loadCoach() {
+  if (!playerToken()) {
+    coachBody.innerHTML = '<div class="empty">Collez votre jeton avec 🔑 pour voir vos exercices.</div>';
+    return;
+  }
+  coachBody.innerHTML = '<div class="empty">Chargement…</div>';
+  try {
+    const [rp, re] = await Promise.all([
+      fetch('/api/coach/progress', { cache: 'no-store', headers: coachHeaders() }),
+      fetch('/api/coach/exercises', { cache: 'no-store', headers: coachHeaders() }),
+    ]);
+    if (!rp.ok || !re.ok) { coachBody.innerHTML = '<div class="empty">' + escapeHtml(coachRefusal(rp.ok ? re.status : rp.status)) + '</div>'; return; }
+    const progress = await rp.json(), exercises = (await re.json()).exercises || [];
+    coachBody.innerHTML = reminderHtml(progress) + progressHtml(progress) + exercisesHtml(exercises)
+      + '<div class="coach-answer" id="coach-answer" hidden></div>';
+  } catch (_) {
+    coachBody.innerHTML = '<div class="empty">Exercices indisponibles (réseau).</div>';
+  }
+}
+
+// « Lancer » : the exercise's game opens in this page, the player's side at
+// the bottom. « What is attacked ? » is answered with squares, not a move.
+async function startExercise(id, side, kind) {
+  const r = await fetch('/api/coach/exercises/' + encodeURIComponent(id) + '/start', { method: 'POST', headers: coachHeaders() });
+  let body = {};
+  try { body = await r.json(); } catch (_) { /* no body */ }
+  if (!r.ok) { coachBody.insertAdjacentHTML('afterbegin', '<div class="coach-error">' + escapeHtml(body.detail || coachRefusal(r.status)) + '</div>'); return; }
+  ORIENT = side === 'black' ? 'black' : 'white';
+  selectGame(body.game_id);
+  applyOrientation();
+  const box = document.getElementById('coach-answer');
+  if (box && kind === 'attacked') {
+    box.hidden = false;
+    box.dataset.exercise = id;
+    box.innerHTML = '<label>Cases des pièces en prise (ex. f6 e4) : <input type="text" id="coach-squares" autocomplete="off"></label>'
+      + '<button type="button" id="coach-answer-btn">Répondre</button><div id="coach-answer-msg"></div>';
+  } else if (box) {
+    box.hidden = true;
+  }
+}
+
+async function answerExercise(id) {
+  const squares = (document.getElementById('coach-squares').value || '').split(/[\s,;]+/).filter(Boolean);
+  const r = await fetch('/api/coach/exercises/' + encodeURIComponent(id) + '/answer', {
+    method: 'POST', headers: { ...coachHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ squares }),
+  });
+  let body = {};
+  try { body = await r.json(); } catch (_) { /* no body */ }
+  const msg = document.getElementById('coach-answer-msg');
+  msg.textContent = r.ok ? 'Bonne réponse !' : (typeof body.detail === 'string' ? body.detail : coachRefusal(r.status));
+  if (r.ok) resetAndPoll();
+}
+
+coachBox.addEventListener('toggle', () => { if (coachBox.open) loadCoach(); });
+coachBody.addEventListener('click', ev => {
+  const start = ev.target.closest('[data-start]');
+  if (start) { startExercise(start.dataset.start, start.dataset.side, start.dataset.kind); return; }
+  if (ev.target.id === 'coach-answer-btn') answerExercise(document.getElementById('coach-answer').dataset.exercise);
+});
+document.getElementById('key-btn').addEventListener('click', () => { if (coachBox.open) loadCoach(); });
