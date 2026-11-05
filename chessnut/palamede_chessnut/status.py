@@ -11,6 +11,7 @@ import chess
 from palamede_chessnut.lobby import tips
 from palamede_chessnut.mouse import legal_targets
 from palamede_chessnut.moves import differing_squares
+from palamede_chessnut.refusal import refusal_said
 from palamede_chessnut.token_light import REFUSING
 from palamede_chessnut.token_light import message as token_message
 
@@ -152,6 +153,18 @@ def captured(history: list[str], start_fen: str | None) -> dict[str, Any] | None
     }
 
 
+def refused_text(bridge: Bridge) -> str | None:
+    """« Coup refusé : Ce n'est pas le coup. Remettez la pièce. », or ``None``.
+
+    The viewer's own words (its ``detail``, a 409 of an exercise or a 4xx of
+    the rules), shown under the board while the refused move stands on it :
+    the board alone only blinks its squares (Stéphane, 05/11).
+    """
+    if bridge.refused is None:
+        return None
+    return f"{refusal_said(bridge.refused_reason)}. Remettez la pièce."
+
+
 def relay_text(bridge: Bridge) -> str | None:
     """« Jouez le coup de l'adversaire : cavalier g8 → f6 », or ``None``.
 
@@ -220,6 +233,7 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
         "finished": bridge.finished,
         "to_relay": bridge.to_relay,
         "relay_text": relay_text(bridge),
+        "refused_text": refused_text(bridge),
         "differing": differing,
         "setup": (
             setup_steps(chess.BaseBoard(game.board_fen()), observed)

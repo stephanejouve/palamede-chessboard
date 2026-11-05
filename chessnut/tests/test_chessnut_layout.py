@@ -104,7 +104,10 @@ def test_without_a_game_the_gestures_are_said_under_the_board() -> None:
     parents.feed((PAGE / "index.html").read_text(encoding="utf-8"))
     assert parents.around["lobby"][-2:] == ["stage", "tray"]
     script = (PAGE / "app.js").read_text(encoding="utf-8")
-    assert "el('tray').hidden = !fixing && !state.lobby;" in script
+    assert (
+        "el('tray').hidden = !fixing && !state.lobby && !state.refused_text && el('move-error').hidden;"
+        in script
+    )
     assert "el('lobby').textContent = state.lobby || '';" in script
     assert (
         "if (state.lobby) return state.finished ? 'Partie terminée.' : 'Aucune partie.';" in script
@@ -128,3 +131,17 @@ def test_the_gestures_help_folds_and_says_the_knight_s_ends() -> None:
     script = (PAGE / "app.js").read_text(encoding="utf-8")
     assert "el('gestures').hidden = !state.lobby;" in script
     assert "renderTips(state.tips || {});" in script
+
+
+def test_a_refused_move_is_said_under_the_board() -> None:
+    # Under the board, where the eye is, not in the side column (smoke of Stéphane, 05/11).
+    html = (PAGE / "index.html").read_text(encoding="utf-8")
+    tray = html[
+        html.index('<section id="tray"') : html.index(
+            "</section>", html.index('<section id="tray"')
+        )
+    ]
+    assert '<p id="refused" role="alert" hidden></p>' in tray
+    assert '<p id="move-error" role="alert" hidden></p>' in tray  # the mouse's too
+    side = html[html.index('<section id="side">') :]
+    assert 'id="refused"' not in side and 'id="move-error"' not in side

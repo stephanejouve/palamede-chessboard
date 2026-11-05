@@ -658,3 +658,37 @@ def test_a_window_that_cannot_open_stops_the_bridge(window_app) -> None:
         app_module.main(argv)
     assert bridges[0].stopped.is_set()
     assert pages[0].closed
+
+
+@pytest.mark.parametrize(
+    ("reason", "text"),
+    [
+        (
+            'HTTP 409 {"detail":"Ce n\'est pas le coup"}',
+            "Coup refusé : Ce n'est pas le coup. Remettez la pièce.",
+        ),
+        ("HTTP 403 NOT_YOUR_TURN", "Coup refusé : le serveur l'a refusé. Remettez la pièce."),
+        (
+            'HTTP 409 {"detail":"Cet exercice est terminé."}',
+            "Coup refusé : Cet exercice est terminé. Remettez la pièce.",
+        ),
+        (
+            'HTTP 403 {"detail":"Coup refusé (NOT_YOUR_TURN)"}',
+            "Coup refusé (NOT_YOUR_TURN). Remettez la pièce.",
+        ),
+        (None, "Coup refusé : le serveur l'a refusé. Remettez la pièce."),
+    ],
+    ids=["exercise", "not json", "final dot", "default 403", "no reason"],
+)
+def test_a_refused_move_is_said_with_the_viewer_s_words(reason, text) -> None:
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
+    bridge.game = chess.Board()
+    bridge.refused, bridge.refused_reason = chess.Move.from_uci("e2e4"), reason
+    assert snapshot(bridge)["refused_text"] == text
+
+
+def test_nothing_is_said_once_the_refused_move_is_taken_back() -> None:
+    bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
+    bridge.game = chess.Board()
+    bridge.refused_reason = 'HTTP 409 {"detail":"Ce n\'est pas le coup"}'
+    assert snapshot(bridge)["refused_text"] is None

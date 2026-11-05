@@ -1,8 +1,8 @@
 """Bridge between a Chessnut Air+ and a game served by the viewer.
 
 The SSE stream of the game keeps the expected position. Each time the
-placement on the board has been still for :data:`SETTLE_SECONDS`,
-:func:`decide` compares it with that position :
+placement on the board has been still for :data:`.decide.SETTLE_SECONDS`,
+:func:`.decide.decide` compares it with that position :
 
 * same placement → LEDs off ;
 * the player is to move, the board had caught up with the game, and a
@@ -11,7 +11,7 @@ placement on the board has been still for :data:`SETTLE_SECONDS`,
 * otherwise → the squares that differ light up : the opponent's move to
   replicate, a piece to put back, the setup to finish before the start.
   Once the board has caught up with the game (``synced``), this guidance
-  waits :data:`GUIDE_SECONDS` on the player's own turn, so that holding a
+  waits :data:`.decide.GUIDE_SECONDS` on the player's own turn, so that holding a
   piece while thinking does not light its square.
 
 Around that loop : a sweep of the LEDs when the board first matches the
@@ -29,69 +29,24 @@ import signal
 import threading
 import time
 import urllib.request
-from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
 
 import chess
 
 from palamede_chessnut import clock_hold, config, leds, token_light, transport, viewer
-from palamede_chessnut.moves import differing_squares, find_move, only_king_lifted, relayed
+from palamede_chessnut.decide import decide
+from palamede_chessnut.moves import only_king_lifted, relayed
 from palamede_chessnut.protocol import UnknownPieceCode, decode_board, led_frame
 
 log = logging.getLogger(__name__)
 
-SETTLE_SECONDS = 0.6
-GUIDE_SECONDS = 2.0
 #: Long enough for a king held in hand while thinking (arbitration of Stéphane, #75).
 RESIGN_SECONDS = 5.0
 TICK_SECONDS = 0.1
 #: Above the viewer's 15 s SSE keepalive : a silent stream is a dead one.
 SSE_READ_TIMEOUT = 45.0
 RETRY_SECONDS = 3.0
-
-
-@dataclass(frozen=True)
-class Decision:
-    """LEDs to show, and the move to post if the player just played one."""
-
-    leds: frozenset[chess.Square]
-    move: chess.Move | None = None
-
-
-def decide(
-    game: chess.Board,
-    player: chess.Color,
-    observed: chess.BaseBoard,
-    settled_for: float,
-    *,
-    live: bool = True,
-    synced: bool = True,
-    pending: bool = False,
-    refused: chess.Move | None = None,
-) -> Decision | None:
-    """What to do with a placement still for ``settled_for`` seconds (``None`` : wait).
-
-    ``synced`` : the board has matched the game since its last change ;
-    until then the squares to fix light up without delay, and no move is
-    read : a placement that happens to equal « position + one legal move »
-    while the pieces are being set up is not a move.
-    ``pending`` : a move was posted and the stream has not confirmed it yet.
-    ``refused`` : the viewer rejected that move from this position ; it is
-    not posted again, its squares light up so that it can be taken back.
-    """
-    if settled_for < SETTLE_SECONDS:
-        return None
-    expected = chess.BaseBoard(game.board_fen())
-    if observed.board_fen() == expected.board_fen() or pending:
-        return Decision(frozenset())
-    if live and synced and game.turn == player:
-        move = find_move(game, observed)
-        if move is not None and move != refused:
-            return Decision(frozenset(), move)
-        if move is None and settled_for < GUIDE_SECONDS:
-            return Decision(frozenset())
-    return Decision(frozenset(differing_squares(expected, observed)))
 
 
 class Bridge:
@@ -131,6 +86,8 @@ class Bridge:
         self.settled_since = 0.0
         self.pending: chess.Move | None = None
         self.refused: chess.Move | None = None
+        #: What the viewer said of the refused move, shown under the board.
+        self.refused_reason: str | None = None
         self.retry_at = 0.0
         #: Move received from the viewer (``g8f6 (Nf6)``), still to be played on the board.
         self.to_relay: str | None = None
@@ -394,11 +351,12 @@ class Bridge:
         error, refused = await asyncio.to_thread(self.post_move, move.uci())
         self.undelivered = None
         if error is None:
+            self.refused = None  # another move went through : nothing left to take back
             return
         self.pending = None
         if refused:
             log.warning("move %s refused : %s", move.uci(), error)
-            self.refused = move
+            self.refused, self.refused_reason = move, error
         else:
             log.warning("move %s not delivered (%s), trying again", move.uci(), error)
             self.undelivered = move
