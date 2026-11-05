@@ -48,3 +48,30 @@ def test_every_motif_has_a_label() -> None:
 
     for motif in MOTIFS:
         assert f"  {motif}: '" in COACH_JS
+
+
+def test_the_server_s_numbers_go_through_num() -> None:
+    # Counts and rates are numbers or « — », never raw text in the HTML (review Admin #218).
+    assert "Number.isFinite(n) ? String(n) : '—'" in COACH_JS
+    for field in (
+        "r.waiting",
+        "r.days_since_last_attempt",
+        "m.per_100_moves",
+        "e.first_try.ok",
+        "e.first_try.tried",
+        "e.abandoned_games",
+        "g.recent.games",
+        "g.before.games",
+    ):
+        assert f"num({field})" in COACH_JS
+    # The raw forms are gone.
+    for raw in (
+        "r.waiting + (",
+        "' + r.days_since_last_attempt + '",
+        "String(m.per_100_moves)",
+        "e.first_try.ok + '",
+        "e ? e.abandoned_games",
+        "'>' + g.recent.games",
+        "' + g.before.games + '",
+    ):
+        assert raw not in COACH_JS
