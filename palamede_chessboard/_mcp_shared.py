@@ -164,10 +164,15 @@ def _compute_pieces_and_hanging(board: chess.Board) -> tuple[list[dict], list[di
         if piece.piece_type == chess.KING or not attackers:
             continue
         my_value = _PIECE_VALUES[piece.piece_type]
-        min_attacker_value = min(
-            _PIECE_VALUES[board.piece_at(chess.parse_square(a["square"])).piece_type]  # type: ignore[union-attr]
+        # The king takes only an undefended piece : it never counts as a
+        # lower-value attacker, though it is worth 0 in the material count.
+        attacker_values = [
+            _PIECE_VALUES[attacker_type]
             for a in attackers
-        )
+            if (attacker_type := board.piece_at(chess.parse_square(a["square"])).piece_type)  # type: ignore[union-attr]
+            != chess.KING
+        ]
+        min_attacker_value = min(attacker_values, default=my_value)
         undefended = not defenders
         lower_value_attacker = min_attacker_value < my_value
         if not (undefended or lower_value_attacker):

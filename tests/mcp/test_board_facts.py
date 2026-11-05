@@ -243,6 +243,29 @@ async def test_board_facts_hanging_lower_value_attacker_but_defended(games_dir: 
     assert "undefended" not in reason
 
 
+@pytest.mark.asyncio
+async def test_board_facts_a_defended_piece_attacked_by_the_king_is_not_hanging(
+    games_dir: Path,
+) -> None:
+    """The king (worth 0) is not a lower-value attacker : it cannot take a
+    defended piece (Junior, 05/11). Undefended, the piece still hangs."""
+    # White d4 defended by e3, attacked only by the black king on c5.
+    defended = _decode(
+        await call_tool("chess_board_facts", {"fen": "8/8/8/2k5/3P4/4P3/8/4K3 w - - 0 1"})
+    )
+    assert [h for h in defended["facts"]["hanging"] if h["square"] == "d4"] == []
+    # With a black knight on b5 too : the lowest real attacker (3) is worth more.
+    with_knight = _decode(
+        await call_tool("chess_board_facts", {"fen": "8/8/8/1nk5/3P4/4P3/8/4K3 w - - 0 1"})
+    )
+    assert [h for h in with_knight["facts"]["hanging"] if h["square"] == "d4"] == []
+    alone = _decode(
+        await call_tool("chess_board_facts", {"fen": "8/8/8/2k5/3P4/8/8/4K3 w - - 0 1"})
+    )
+    [hanging_d4] = [h for h in alone["facts"]["hanging"] if h["square"] == "d4"]
+    assert hanging_d4["reason"] == "undefended"
+
+
 def test_journal_board_facts_gap_appends(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Deux appels → deux lignes JSONL (append, pas overwrite)."""
     import chess as _chess
