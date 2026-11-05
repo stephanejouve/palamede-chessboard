@@ -191,5 +191,9 @@ def test_the_band_says_why_this_position_from_the_motif() -> None:
     assert "start.dataset.kind, start.dataset.motif);" in COACH_JS
     for motif in ("missed_mate", "hanging_piece", "ignored_threat"):
         assert f"  {motif}: " in COACH_JS[COACH_JS.index("const EXERCISE_CONTEXTS") :]
-    assert "escapeHtml(motifLabel(motif) + ' · ' + texts.title)" in COACH_JS
+    # Without a known motif, no « undefined · … » : the family alone (Leader, #239).
+    assert (
+        "const title = context ? motifLabel(motif) + ' · ' + texts.title : texts.title;" in COACH_JS
+    )
+    assert "'<div class=\"band-title\">' + escapeHtml(title)" in COACH_JS
     assert "(context ? '<div class=\"band-context\">' + escapeHtml(context)" in COACH_JS
