@@ -14,13 +14,20 @@ function resetAndPoll() {
   startEventStream();
 }
 
+// A read sent for the game shown before (the 5 s timer, the stream) may come
+// back after another game opened : it is dropped. Kept, it drew the old
+// position, and the new game's read, as long, drew nothing — « Lancer »
+// needed two clicks (Stéphane, 05/11).
 async function pollPositions() {
-  if (!gameId()) return;
+  const game = gameId();
+  if (!game) return;
   try {
     const r = await fetch('/api/positions' + qs(), { cache: 'no-store' });
+    if (gameId() !== game) return;
     if (r.status === 404) { setOffline('Partie inconnue: ' + gameId()); return; }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
+    if (gameId() !== game) return;
     const wasAtEnd = (POS.length === 0) || (idx === POS.length - 1);
     const oldLen = POS.length;
     POS = data.positions;
@@ -41,7 +48,8 @@ async function pollPositions() {
 }
 
 async function pollClock() {
-  if (!gameId()) return;
+  const game = gameId();
+  if (!game) return;
   try {
     // The player's token, when the tab has one : only a player's read (or the
     // arbiter's) ends the game on time (owner, 31/10, #135).
@@ -51,6 +59,7 @@ async function pollClock() {
     const r = await fetch('/api/clock' + qs('viewer=' + encodeURIComponent(viewerRole())), { cache: 'no-store', headers });
     if (!r.ok) return;
     const data = await r.json();
+    if (gameId() !== game) return;  // another game opened meanwhile
     CLOCK = data.clock;
     clockServerTs = (CLOCK && CLOCK.now_ts) ? CLOCK.now_ts : 0;
     clockClientTs = Date.now() / 1000;
@@ -162,11 +171,13 @@ function renderEngine(data) {
 }
 
 async function pollComments() {
-  if (!gameId()) return;
+  const game = gameId();
+  if (!game) return;
   try {
     const r = await fetch('/api/commentary' + qs(), { cache: 'no-store' });
     if (!r.ok) return;
     const data = await r.json();
+    if (gameId() !== game) return;  // another game opened meanwhile
     COMMENTS = data.entries || [];
     renderComments();
   } catch(e) { /* silent */ }
