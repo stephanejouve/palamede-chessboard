@@ -182,6 +182,38 @@ def test_an_older_report_reads_its_pgn(tmp_path: Path) -> None:
     ]
 
 
+def test_a_completed_report_without_date_stays_out(tmp_path: Path) -> None:
+    _report(tmp_path, "dated", "2026-11-04", {"white": (HUMAN, 10, {})})
+    write_report(
+        tmp_path,
+        "undated",
+        {
+            "game_id": "undated",
+            "game_date": None,
+            "game_date_source": None,
+            "sides": {"white": {"player": HUMAN, "plies": 12, "by_motif": {"other": 1}}},
+        },
+    )
+    assert [g["game_id"] for g in progress_module._games_of(tmp_path, HUMAN)] == ["dated"]
+
+
+def test_complete_report_adds_only_what_is_missing() -> None:
+    state = _state("2026.11.05", ["e4", "e5", "Nf3"])
+    old = {"sides": {"white": {"player": HUMAN}, "black": {"player": OTHER, "plies": 9}}}
+    assert progress_module.complete_report(old, state) is True
+    assert (old["game_date"], old["game_date_source"]) == ("2026-11-05", "header")
+    assert old["sides"]["white"]["plies"] == 2 and old["sides"]["black"]["plies"] == 9
+    assert progress_module.complete_report(old, state) is False
+    # Dated already, one side without its moves : still to write.
+    dated = {"game_date": "2026-11-05", "sides": {"white": {"player": HUMAN}}}
+    assert progress_module.complete_report(dated, state) is True
+    assert dated["sides"]["white"]["plies"] == 2 and dated["game_date"] == "2026-11-05"
+    # Every side's moves there, no date : still to write.
+    undated = {"sides": {"white": {"player": HUMAN, "plies": 2}}}
+    assert progress_module.complete_report(undated, state) is True
+    assert undated["game_date"] == "2026-11-05"
+
+
 def test_a_stray_file_among_the_reports_is_skipped(tmp_path: Path) -> None:
     _report(tmp_path, "g1", "2026-11-05", {"white": (HUMAN, 10, {})})
     (coach_dir(tmp_path) / "reports" / "bad name!.json").write_text("{}", encoding="utf-8")
