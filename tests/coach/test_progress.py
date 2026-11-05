@@ -24,6 +24,7 @@ from palamede_chessboard.coach.progress import (
     on_exercises,
     plies_of,
     progress,
+    queue,
     reminder,
     suggestion,
 )
@@ -322,6 +323,28 @@ def test_the_suggestion_falls_back_on_a_failed_one_and_shows_no_solution() -> No
     assert suggestion(exercises[:1], _with_mistakes()) is None
 
 
+def test_the_queue_puts_the_most_missed_motif_first_then_the_failed_ones() -> None:
+    exercises = [
+        _exercise("ko-threat", motif="ignored_threat", state="failed"),
+        _exercise("hang-old", created_at="2026-11-01T00:00:00+00:00"),
+        _exercise("done", motif="ignored_threat", state="solved"),
+        _exercise("threat-new", motif="ignored_threat", created_at="2026-11-09T00:00:00+00:00"),
+        _exercise("ko-hang", state="failed"),
+        _exercise("threat-old", motif="ignored_threat", created_at="2026-11-02T00:00:00+00:00"),
+    ]
+    games = _with_mistakes(ignored_threat=3, hanging_piece=1)
+    assert queue(exercises, games) == [
+        "threat-old",
+        "threat-new",
+        "hang-old",
+        "ko-threat",
+        "ko-hang",
+    ]
+    # The suggestion is the queue's head, always (#230).
+    assert suggestion(exercises, games)["id"] == queue(exercises, games)[0]
+    assert queue([_exercise("done", state="solved")], games) == []
+
+
 def test_the_reminder_when_exercises_wait_and_none_was_tried() -> None:
     waiting = _exercise("p", created_at="2026-11-10T00:00:00+00:00")
     tried = _exercise(
@@ -363,4 +386,5 @@ def test_progress_reads_the_player_s_store(tmp_path: Path) -> None:
     assert found["player"] == HUMAN
     assert list(found["exercises"]) == ["hanging_piece"]
     assert found["suggestion"] == {"id": "p1", "motif": "hanging_piece", "kind": "find_move"}
+    assert found["queue"] == ["p1"]  # the token's player's own, never the other's
     assert "solution_uci" not in repr(found)
