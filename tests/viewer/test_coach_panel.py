@@ -127,3 +127,12 @@ def test_the_filter_applies_even_without_session_storage() -> None:
     body = body[: body.index("\n}\n")]
     assert "const f = COACH_FILTER;" in body and "savedFilter()" not in body
     assert "box.innerHTML = filteredHtml(f);" in body
+
+
+def test_the_answer_box_comes_before_the_list_and_takes_the_focus() -> None:
+    # After a long list the box went unseen (smoke of 05/11).
+    assert (
+        'coachBody.innerHTML = \'<div class="coach-answer" id="coach-answer" hidden></div>\'\n      + reminderHtml(progress)'
+        in COACH_JS
+    )
+    assert "document.getElementById('coach-squares').focus();" in COACH_JS

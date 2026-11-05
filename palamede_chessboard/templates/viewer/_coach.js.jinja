@@ -157,8 +157,9 @@ async function loadCoach() {
     ]);
     if (!rp.ok || !re.ok) { coachBody.innerHTML = '<div class="empty">' + escapeHtml(coachRefusal(rp.ok ? re.status : rp.status)) + '</div>'; return; }
     const progress = await rp.json(), exercises = (await re.json()).exercises || [];
-    coachBody.innerHTML = reminderHtml(progress) + progressHtml(progress) + exercisesHtml(exercises, progress)
-      + '<div class="coach-answer" id="coach-answer" hidden></div>';
+    // The answer box comes first : after a long list it went unseen (Stéphane, 05/11).
+    coachBody.innerHTML = '<div class="coach-answer" id="coach-answer" hidden></div>'
+      + reminderHtml(progress) + progressHtml(progress) + exercisesHtml(exercises, progress);
   } catch (_) {
     coachBody.innerHTML = '<div class="empty">Exercices indisponibles (réseau).</div>';
   }
@@ -180,6 +181,8 @@ async function startExercise(id, side, kind) {
     box.dataset.exercise = id;
     box.innerHTML = '<label>Cases des pièces en prise (ex. f6 e4) : <input type="text" id="coach-squares" autocomplete="off"></label>'
       + '<button type="button" id="coach-answer-btn">Répondre</button><div id="coach-answer-msg"></div>';
+    box.scrollIntoView({ block: 'nearest' });
+    document.getElementById('coach-squares').focus();
   } else if (box) {
     box.hidden = true;
   }
