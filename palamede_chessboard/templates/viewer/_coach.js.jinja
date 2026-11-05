@@ -169,7 +169,7 @@ async function loadCoach() {
 const EXERCISE_TEXTS = {
   find_move: {
     title: 'Trouvez le bon coup',
-    rule: 'Trouvez le meilleur coup dans cette position, au Tablier ou à la souris. '
+    rule: "Trouvez le meilleur coup dans cette position, dans l'app Tablier ou à la souris dans la visionneuse. "
       + 'Un coup faux est refusé et la position reste en place : réessayez.',
   },
   attacked: {
@@ -210,9 +210,23 @@ function showExerciseBand(id, kind, motif, game) {
   if (kind === 'attacked') document.getElementById('coach-squares').focus();
 }
 
-// Another game in the page : the band of the exercise goes.
-function hideExerciseBandUnless(game) {
-  if (EXERCISE_GAME && game !== EXERCISE_GAME) { EXERCISE_GAME = ''; exerciseBand.hidden = true; }
+function hideExerciseBand() { EXERCISE_GAME = ''; exerciseBand.hidden = true; }
+
+// Whatever opened the game (« Lancer », the games list, the URL, a reload) :
+// an exo.* game of the token's exercises shows its band (Leader, 05/11).
+// Read by game_ids ; a band already shown for this game is left as it is,
+// so the field keeps what was typed.
+async function refreshExerciseBand(game) {
+  if (game === EXERCISE_GAME) return;
+  hideExerciseBand();
+  if (!game.startsWith('exo.') || !playerToken()) return;
+  try {
+    const r = await fetch('/api/coach/exercises', { cache: 'no-store', headers: coachHeaders() });
+    if (!r.ok) return;
+    const list = (await r.json()).exercises || [];
+    const e = list.find(x => Array.isArray(x.game_ids) && x.game_ids.includes(game));
+    if (e && gameId() === game && EXERCISE_GAME !== game) showExerciseBand(e.id, e.kind, e.motif, game);
+  } catch (_) { /* no band : the game still shows */ }
 }
 
 // « Lancer » : the exercise's game opens in this page, the player's side at
@@ -248,4 +262,9 @@ coachBody.addEventListener('click', ev => {
 });
 // A form : Entrée answers, like the button (nit of Admin, #235).
 exerciseBand.addEventListener('submit', ev => { ev.preventDefault(); answerExercise(exerciseBand.dataset.exercise); });
-document.getElementById('key-btn').addEventListener('click', () => { if (coachBox.open) loadCoach(); });
+document.getElementById('key-btn').addEventListener('click', () => {
+  if (coachBox.open) loadCoach();
+  hideExerciseBand();
+  if (gameId()) refreshExerciseBand(gameId());
+});
+if (gameId()) refreshExerciseBand(gameId());

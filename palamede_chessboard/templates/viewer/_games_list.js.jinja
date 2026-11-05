@@ -75,11 +75,11 @@ function selectGame(id) {
   id = (id || '').trim();
   gameIdInput.value = id || gameId();
   if (!id || id === gameId()) return;
-  hideExerciseBandUnless(id);
   CURRENT_GAME = id;
   gameIdInput.value = id;
   updateUrl();
   resetAndPoll();
+  refreshExerciseBand(id);
 }
 
 // Called every 30 s by _live.js : only while the panel is open, and only

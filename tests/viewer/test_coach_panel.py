@@ -163,13 +163,26 @@ def test_the_answer_box_is_a_form_enter_answers_and_takes_the_focus() -> None:
     assert "if (kind === 'attacked') document.getElementById('coach-squares').focus();" in COACH_JS
 
 
-def test_the_band_goes_when_another_game_opens() -> None:
+def test_the_band_follows_the_game_whatever_opened_it() -> None:
+    # Leader, 05/11 : the games list, the URL or a reload open an exo.* game
+    # too — the band must not need « Lancer ».
     games_js = (TEMPLATES_DIR / "viewer" / "_games_list.js.jinja").read_text(encoding="utf-8")
-    assert "  if (!id || id === gameId()) return;\n  hideExerciseBandUnless(id);" in games_js
-    assert (
-        "if (EXERCISE_GAME && game !== EXERCISE_GAME) { EXERCISE_GAME = ''; exerciseBand.hidden = true; }"
-        in COACH_JS
-    )
+    assert "  resetAndPoll();\n  refreshExerciseBand(id);\n}" in games_js
+    # At load, for the game of the URL.
+    assert COACH_JS.rstrip().endswith("\n});\nif (gameId()) refreshExerciseBand(gameId());")
+    body = COACH_JS[COACH_JS.index("async function refreshExerciseBand(game)") :]
+    body = body[: body.index("\n}\n")]
+    assert "  if (game === EXERCISE_GAME) return;\n  hideExerciseBand();" in body
+    assert "if (!game.startsWith('exo.') || !playerToken()) return;" in body
+    assert "headers: coachHeaders()" in body
+    assert "x.game_ids.includes(game)" in body
+    # Still this game, and not shown meanwhile by « Lancer » : the typed field stays.
+    assert "if (e && gameId() === game && EXERCISE_GAME !== game) showExerciseBand(" in body
+
+
+def test_a_new_token_reads_the_band_again() -> None:
+    block = COACH_JS[COACH_JS.index("document.getElementById('key-btn')") :]
+    assert "  hideExerciseBand();\n  if (gameId()) refreshExerciseBand(gameId());" in block
 
 
 def test_the_band_says_why_this_position_from_the_motif() -> None:
