@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.18.2](https://github.com/stephanejouve/palamede-chessboard/compare/v0.18.1...v0.18.2) (2026-11-04)
+
+
+### Bug Fixes
+
+* **coach:** a waiting game waits for its live game, not for a delay ([#212](https://github.com/stephanejouve/palamede-chessboard/issues/212)) ([84ee3d6](https://github.com/stephanejouve/palamede-chessboard/commit/84ee3d62776d7596d5b63312a3743b4219cc3c65))
+* **coach:** read stop between two games, not only between rounds ([#209](https://github.com/stephanejouve/palamede-chessboard/issues/209)) ([bf4c85d](https://github.com/stephanejouve/palamede-chessboard/commit/bf4c85d5fae66622497df9da18c4755344b9ab1e))
+* **viewer:** refuse a depth outside 1..20 on /api/engine/live ([#211](https://github.com/stephanejouve/palamede-chessboard/issues/211)) ([3497ec7](https://github.com/stephanejouve/palamede-chessboard/commit/3497ec7058134b2bc35a029b4f2f6c16853af552))
+
 ## [0.18.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.18.0...v0.18.1) (2026-11-04)
 
 
