@@ -199,6 +199,27 @@ def test_an_older_report_is_completed_without_the_engine(gdir: Path, popen) -> N
     assert report_path(gdir, "g1").read_text(encoding="utf-8") == completed
 
 
+def test_a_report_that_cannot_be_completed_stops_no_round(
+    gdir: Path, popen, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _game(gdir, "g1", SCHOLAR)
+    run_once(gdir, engine_path="/fake")
+    _as_written_before_the_progress(gdir, "g1")
+    _game(gdir, "g2", SCHOLAR)
+    real = diagnosis.write_report
+
+    def write(games_dir: Path, game_id: str, report: dict) -> Path:
+        if game_id == "g1":
+            raise OSError("read-only")
+        return real(games_dir, game_id, report)
+
+    monkeypatch.setattr(diagnosis, "write_report", write)
+    # g1 stays as it was, g2 after it is still diagnosed (review Leader #217).
+    assert run_once(gdir, engine_path="/fake")["diagnosed"] == ["g2"]
+    report = read_report(gdir, "g1")
+    assert report is not None and "game_date" not in report
+
+
 def test_an_older_report_without_date_is_completed_undated(gdir: Path, popen) -> None:
     # No Date header : its diagnosis day is not the game's (Leader, #95).
     pgn = f'[White "{AGENT}"]\n[Black "{HUMAN}"]\n[Result "1-0"]\n\n1. e4 e5 2. Qh5 Nc6 1-0\n'

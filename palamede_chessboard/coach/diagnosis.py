@@ -198,8 +198,11 @@ def _one_game(
         return "settled", 0
     existing = read_report(games_dir, game_id)
     if existing is not None and existing.get("key") == game_key(state):
-        if complete_report(existing, state):  # written before game_date and plies (#95)
-            write_report(games_dir, game_id, existing)
+        try:
+            if complete_report(existing, state):  # written before game_date and plies (#95)
+                write_report(games_dir, game_id, existing)
+        except Exception as exc:  # noqa: BLE001 — a comfort : never stops the round (Leader #217)
+            log.warning("coach: report of %s not completed (%s)", game_id, exc)
         return "settled", 0
     try:
         added = _diagnose_one(state, sides, games_dir, depth=depth, engine_path=engine_path)
