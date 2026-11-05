@@ -52,7 +52,7 @@ from palamede_chessboard.chessboard_state import ChessboardError, GameState
 from palamede_chessboard.coach import CALLER
 from palamede_chessboard.coach.exercises import exercises_of
 from palamede_chessboard.coach.motifs import HEURISTIC_MOTIFS, motif_of
-from palamede_chessboard.coach.progress import game_date, plies_of
+from palamede_chessboard.coach.progress import complete_report, game_date, plies_of
 from palamede_chessboard.coach.rounds import DEFAULT_INTERVAL, RoundMemory, Wait, mtime_ns
 from palamede_chessboard.coach.store import add_exercises, game_key, read_report, write_report
 from palamede_chessboard.paths import resolve_games_dir
@@ -198,6 +198,11 @@ def _one_game(
         return "settled", 0
     existing = read_report(games_dir, game_id)
     if existing is not None and existing.get("key") == game_key(state):
+        try:
+            if complete_report(existing, state):  # written before game_date and plies (#95)
+                write_report(games_dir, game_id, existing)
+        except Exception as exc:  # noqa: BLE001 — a comfort : never stops the round (Leader #217)
+            log.warning("coach: report of %s not completed (%s)", game_id, exc)
         return "settled", 0
     try:
         added = _diagnose_one(state, sides, games_dir, depth=depth, engine_path=engine_path)

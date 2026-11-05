@@ -171,6 +171,68 @@ def test_a_round_is_idempotent_even_when_the_pgn_is_rewritten(gdir: Path, popen)
     assert report_path(gdir, "g1").read_text(encoding="utf-8") == first
 
 
+def _as_written_before_the_progress(gdir: Path, game_id: str) -> None:
+    """The report as the coach wrote it before game_date and plies (#95 step 2)."""
+    report = read_report(gdir, game_id)
+    assert report is not None
+    del report["game_date"], report["game_date_source"]
+    for found in report["sides"].values():
+        del found["plies"]
+    write_report(gdir, game_id, report)
+
+
+def test_an_older_report_is_completed_without_the_engine(gdir: Path, popen) -> None:
+    state = _game(gdir, "g1", SCHOLAR)
+    run_once(gdir, engine_path="/fake")
+    _as_written_before_the_progress(gdir, "g1")
+    popen.reset_mock()
+    assert run_once(gdir, engine_path="/fake")["diagnosed"] == []
+    popen.assert_not_called()
+    report = read_report(gdir, "g1")
+    assert report is not None
+    assert report["game_date"] == state.metadata.date.replace(".", "-")
+    assert report["game_date_source"] == "header"
+    assert report["sides"]["black"]["plies"] == 3
+    # Completed once : the next round leaves the file as it is.
+    completed = report_path(gdir, "g1").read_text(encoding="utf-8")
+    run_once(gdir, engine_path="/fake")
+    assert report_path(gdir, "g1").read_text(encoding="utf-8") == completed
+
+
+def test_a_report_that_cannot_be_completed_stops_no_round(
+    gdir: Path, popen, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _game(gdir, "g1", SCHOLAR)
+    run_once(gdir, engine_path="/fake")
+    _as_written_before_the_progress(gdir, "g1")
+    _game(gdir, "g2", SCHOLAR)
+    real = diagnosis.write_report
+
+    def write(games_dir: Path, game_id: str, report: dict) -> Path:
+        if game_id == "g1":
+            raise OSError("read-only")
+        return real(games_dir, game_id, report)
+
+    monkeypatch.setattr(diagnosis, "write_report", write)
+    # g1 stays as it was, g2 after it is still diagnosed (review Leader #217).
+    assert run_once(gdir, engine_path="/fake")["diagnosed"] == ["g2"]
+    report = read_report(gdir, "g1")
+    assert report is not None and "game_date" not in report
+
+
+def test_an_older_report_without_date_is_completed_undated(gdir: Path, popen) -> None:
+    # No Date header : its diagnosis day is not the game's (Leader, #95).
+    pgn = f'[White "{AGENT}"]\n[Black "{HUMAN}"]\n[Result "1-0"]\n\n1. e4 e5 2. Qh5 Nc6 1-0\n'
+    (gdir / "undated.pgn").write_text(pgn, encoding="utf-8")
+    run_once(gdir, engine_path="/fake")
+    _as_written_before_the_progress(gdir, "undated")
+    run_once(gdir, engine_path="/fake")
+    report = read_report(gdir, "undated")
+    assert report is not None
+    assert (report["game_date"], report["game_date_source"]) == (None, None)
+    assert report["sides"]["black"]["plies"] == 2
+
+
 def test_an_older_file_rewritten_is_not_diagnosed_again(gdir: Path, popen) -> None:
     # Written before #199/#200 : minutes without marker, the note in Termination.
     pgn = (

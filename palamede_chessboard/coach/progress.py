@@ -45,7 +45,8 @@ def game_date(state: GameState, now: datetime) -> tuple[str, str]:
     """``(YYYY-MM-DD, source)`` of a game : its ``Date`` header, else ``now``.
 
     A ``Date`` absent or partial (``????.??.??``) gives the day of the
-    diagnosis, right for a game diagnosed in the minute it ended (Leader, #95).
+    diagnosis, right for a game diagnosed in the minute it ended (Leader, #95) ;
+    ``now`` is in UTC, and so is that day.
     """
     found = _header_date(state)
     if found is not None:
@@ -68,6 +69,27 @@ def plies_of(state: GameState, side: str) -> int:
     return mine if side == "white" else played - mine
 
 
+def complete_report(report: dict, state: GameState) -> bool:
+    """Add ``game_date`` and the sides' ``plies`` to a report written before
+    them ; whether it changed. No engine : the game only.
+
+    Only the ``Date`` header dates such a report : its diagnosis day is not
+    the game's (74 games diagnosed the same evening), so an undated game
+    gets ``None`` and stays out of the series (Leader, #95).
+    """
+    changed = False
+    if "game_date" not in report:
+        header = _header_date(state)
+        report["game_date"] = header
+        report["game_date_source"] = "header" if header is not None else None
+        changed = True
+    for side, found in report.get("sides", {}).items():
+        if "plies" not in found:
+            found["plies"] = plies_of(state, side)
+            changed = True
+    return changed
+
+
 def _games_of(games_dir: Path, player_id: str) -> list[dict]:
     """``{date, game_id, plies, by_motif}`` of the player's diagnosed games, latest first."""
     games = []
@@ -88,6 +110,8 @@ def _placed(games_dir: Path, report: dict, side: str, found: dict) -> dict | Non
     """
     game_id = report.get("game_id", "")
     if "game_date" in report and "plies" in found:
+        if report["game_date"] is None:  # completed, no ``Date`` : out of the series
+            return None
         return {"date": report["game_date"], "game_id": game_id, "plies": found["plies"]}
     try:
         state = GameState.load(game_id, games_dir=games_dir)
