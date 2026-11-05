@@ -947,14 +947,20 @@ async def test_a_corner_emptied_during_an_animation_keeps_its_time(monkeypatch) 
     assert server.posts == [] and board.counting is None
 
 
-async def test_corners_emptied_while_the_link_was_lost_open_nothing(monkeypatch) -> None:
-    # a1 put away, then h1 three seconds later, the board unlinked : seen at once on its return.
+@pytest.mark.parametrize(("gap", "opened"), [(lobby.LINK_GAP_SECONDS + 3, False), (0.1, True)])
+async def test_corners_emptied_while_the_link_was_lost_open_nothing(
+    monkeypatch, gap, opened
+) -> None:
+    # a1 put away, then h1 three seconds later, the board unlinked : seen at once on its
+    # return. Two real ticks on a fake clock : the gap is measured, not set (review Junior #214).
+    clock = [1000.0]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
     server = Server(monkeypatch)
     board, write = new_lobby(), Board()
-    held(board, chess.BaseBoard(), 10)
+    at(board, chess.BaseBoard(), clock[0] - 10)
     await board.tick(write)
-    board.last_tick = time.monotonic() - lobby.LINK_GAP_SECONDS - 3
-    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS + 0.1)
+    clock[0] += gap
+    at(board, lifted(chess.A1, chess.H1), clock[0] - GESTURE_SECONDS - 0.1)
     await board.tick(write)
     await board.tick(write)
-    assert server.posts == [] and board.counting is None
+    assert bool(server.posts) is opened
