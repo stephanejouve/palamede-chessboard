@@ -33,8 +33,9 @@ migration. The outillages dependency on ``chessboard_state.list_games``
 is replaced here by a local minimal :func:`_scan_active_games` that
 reads only the PGN headers needed for the ``games_in_progress`` input
 (``White``/``Black``/``Result``). The full ``list_games`` with
-move-level introspection stays in outillages until the chessboard
-state extraction (future V2-bis).
+move-level introspection now lives in
+:mod:`palamede_chessboard.chessboard_state` ; the matchmaker keeps
+its minimal scan, which only needs the headers.
 """
 
 from __future__ import annotations
@@ -113,13 +114,13 @@ class RoundSchedule:
 
 
 def _scan_active_games(games_dir: Path) -> list[dict]:
-    """Minimal replacement for ``outillages.chessboard_state.list_games``.
+    """Minimal stand-in for :func:`palamede_chessboard.chessboard_state.list_games`.
 
     Scans ``*.pgn`` files in ``games_dir`` and returns a list of dicts
     with the ``white``/``black`` fields for games whose PGN ``Result``
     header is still ``"*"`` (game in progress). This is the only input
     :func:`schedule_round` needs from the games-in-progress list — the
-    richer :func:`outillages.chessboard_state.list_games` (ply count,
+    richer :func:`palamede_chessboard.chessboard_state.list_games` (ply count,
     turn, is_game_over, mtime, …) is intentionally out of scope for
     the matchmaker, which only cares *who is busy*.
 

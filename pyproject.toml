@@ -31,11 +31,9 @@ palamede-chessnut = { path = "chessnut", develop = true }
 # and mypy only. GPL-3.0 ; nothing of it is imported by palamede_chessboard.
 palamede-maia = { path = "maia", develop = true }
 
-# [tool.poetry.scripts] — entry points ajoutés en Phase 1 quand le code
-# métier sera migré. Nom à finaliser pour éviter la collision avec
-# ``mcp-chessboard-server`` d'``outillages`` pendant la cohabitation
-# (cf. nit CD review #1 : préfixer ``palamede-`` ou attendre que les
-# modules outillages soient supprimés en Phase N).
+# [tool.poetry.scripts] — préfixe ``palamede-`` choisi pendant la
+# cohabitation avec les modules chess d'``outillages`` (nit CD review #1) ;
+# ces modules ont été supprimés depuis (outillages#456).
 [tool.poetry.scripts]
 palamede-lessons = "palamede_chessboard.cli_lessons:main"
 palamede-players = "palamede_chessboard.cli_players:main"
