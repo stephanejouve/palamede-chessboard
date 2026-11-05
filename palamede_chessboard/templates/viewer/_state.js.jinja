@@ -50,21 +50,55 @@ const TOKEN_KEY = 'palamede-player-token';
 function playerToken() {
   try { return sessionStorage.getItem(TOKEN_KEY) || ''; } catch (_) { return ''; }
 }
+// Who the token belongs to (#229) : asked to ``/api/me`` at load and after
+// each change, the token in a header. The click reads the last answer
+// without waiting, so the coach panel reloads with the new token.
+const KEY_TITLE = 'Jeton de joueur (pour jouer depuis le viewer)';
+let KEY_WHO = { state: 'none', player: '' };
+async function checkToken() {
+  const token = playerToken();
+  KEY_WHO = { state: token ? 'checking' : 'none', player: '' };
+  showKeyState();
+  if (!token) return;
+  let next = { state: 'unknown', player: '' };
+  try {
+    const r = await fetch('/api/me', { headers: { 'Authorization': 'Bearer ' + token }, cache: 'no-store' });
+    if (r.ok) next = { state: 'ok', player: String((await r.json()).player || '') };
+    else if (r.status === 401) next = { state: 'refused', player: '' };
+  } catch (_) { /* viewer unreachable : the player stays unknown */ }
+  if (playerToken() !== token) return;  // changed meanwhile : the newer check answers
+  KEY_WHO = next;
+  showKeyState();
+}
+function keyStatus() {
+  if (KEY_WHO.state === 'ok') return 'Connecté comme ' + KEY_WHO.player;
+  if (KEY_WHO.state === 'refused') return 'Jeton refusé';
+  if (KEY_WHO.state === 'none') return '';
+  return 'Jeton enregistré, joueur pas encore vérifié';
+}
 function showKeyState() {
   const btn = document.getElementById('key-btn');
-  if (btn) btn.classList.toggle('on', !!playerToken());
+  const who = document.getElementById('key-who');
+  if (btn) {
+    btn.classList.toggle('on', KEY_WHO.state !== 'none' && KEY_WHO.state !== 'refused');
+    btn.classList.toggle('refused', KEY_WHO.state === 'refused');
+    btn.title = keyStatus() || KEY_TITLE;
+  }
+  if (who) who.textContent = KEY_WHO.state === 'ok' ? KEY_WHO.player
+                           : KEY_WHO.state === 'refused' ? 'jeton refusé' : '';
+}
+function keyQuestion() {
+  if (KEY_WHO.state === 'none') return 'Coller votre jeton de joueur (plm_…) :';
+  if (KEY_WHO.state === 'refused') return 'Jeton refusé.\nColler un autre jeton, ou vider pour l\'oublier :';
+  return keyStatus() + '.\nColler un nouveau jeton pour changer, ou vider pour l\'oublier :';
 }
 document.getElementById('key-btn').addEventListener('click', () => {
-  const current = playerToken();
-  const value = window.prompt(
-    current ? 'Jeton enregistré pour cet onglet. Coller un nouveau jeton, ou vider pour l\'oublier :'
-            : 'Coller votre jeton de joueur (plm_…) :', '');
+  const value = window.prompt(keyQuestion(), '');
   if (value === null) return;
   try {
     if (value.trim()) sessionStorage.setItem(TOKEN_KEY, value.trim());
     else sessionStorage.removeItem(TOKEN_KEY);
   } catch (_) { /* storage unavailable : the move will be refused (401) */ }
-  showKeyState();
+  checkToken();
 });
-showKeyState();
-
+checkToken();

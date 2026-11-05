@@ -65,18 +65,83 @@ function progressHtml(p) {
   return html + '.</div>';
 }
 
-function exerciseItem(e) {
-  const label = e.kind === 'attacked' ? 'Qu\'est-ce qui est attaqué ?' : 'Trouve le bon coup';
-  return '<li><span>' + escapeHtml(motifLabel(e.motif)) + ' · ' + escapeHtml(label)
+// The two forms (#230) : a move, on the Tablier or with the mouse, or
+// squares, typed in this page only — said on each line, not guessed.
+const KIND_LABELS = {
+  find_move: 'Trouve le bon coup · Tablier ou souris',
+  attacked: 'Cases attaquées · visionneuse seulement',
+};
+const STATE_LABELS = { proposed: 'à faire', failed: 'à reprendre' };
+function kindLabel(k) { return KIND_LABELS[k] || k; }
+
+function exerciseItem(e, suggested) {
+  return '<li' + (suggested ? ' class="suggested"' : '') + '><span>'
+    + (suggested ? '<strong>Suggéré</strong> · ' : '')
+    + escapeHtml(motifLabel(e.motif)) + ' · ' + escapeHtml(kindLabel(e.kind))
     + (e.state === 'failed' ? ' · à reprendre' : '') + '</span>'
     + '<button type="button" data-start="' + escapeHtml(e.id) + '" data-side="' + escapeHtml(e.side) + '" data-kind="'
     + escapeHtml(e.kind) + '">Lancer</button></li>';
 }
 
-function exercisesHtml(list) {
+// The short list (#230) : the first SHORT_LIST of the server's queue, the
+// suggestion first. The order is the server's (/progress), never redone here.
+const SHORT_LIST = 5;
+const FILTER_KEY = 'palamede-coach-filter';
+let COACH_WAITING = [];
+// The filter in use : read back at each load, then kept here, so that it
+// applies even where sessionStorage is refused (review Admin #233).
+let COACH_FILTER = { motif: '', state: '', kind: '' };
+
+function inQueueOrder(list, ids) {
   const waiting = list.filter(e => e.state !== 'solved');
-  if (!waiting.length) return '<div class="empty">Aucun exercice en attente.</div>';
-  return '<ul class="coach-list">' + waiting.map(exerciseItem).join('') + '</ul>';
+  const rank = new Map((ids || []).map((id, i) => [id, i]));
+  const at = e => (rank.has(e.id) ? rank.get(e.id) : rank.size);
+  return waiting.map((e, i) => [at(e), i, e]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(x => x[2]);
+}
+
+function savedFilter() {
+  let f = {};
+  try { f = JSON.parse(sessionStorage.getItem(FILTER_KEY) || '{}') || {}; } catch (_) { f = {}; }
+  return {
+    motif: Object.hasOwn(MOTIF_LABELS, f.motif) ? f.motif : '',
+    state: Object.hasOwn(STATE_LABELS, f.state) ? f.state : '',
+    kind: Object.hasOwn(KIND_LABELS, f.kind) ? f.kind : '',
+  };
+}
+
+function filterSelect(name, all, labels, chosen) {
+  return '<select data-filter="' + name + '"><option value="">' + all + '</option>'
+    + Object.keys(labels).map(k => '<option value="' + escapeHtml(k) + '"' + (k === chosen ? ' selected' : '') + '>'
+      + escapeHtml(labels[k]) + '</option>').join('') + '</select>';
+}
+
+function filteredHtml(f) {
+  const shown = COACH_WAITING.filter(e => (!f.motif || e.motif === f.motif)
+    && (!f.state || e.state === f.state) && (!f.kind || e.kind === f.kind));
+  if (!shown.length) return '<div class="empty">Aucun exercice pour ce filtre.</div>';
+  return '<ul class="coach-list">' + shown.map(e => exerciseItem(e, false)).join('') + '</ul>';
+}
+
+function exercisesHtml(list, progress) {
+  COACH_WAITING = inQueueOrder(list, progress.queue);
+  if (!COACH_WAITING.length) return '<div class="empty">Aucun exercice en attente.</div>';
+  const f = COACH_FILTER = savedFilter();
+  return '<ul class="coach-list">' + COACH_WAITING.slice(0, SHORT_LIST).map((e, i) => exerciseItem(e, i === 0)).join('') + '</ul>'
+    + '<details class="coach-all"><summary>Voir tous les exercices (' + num(COACH_WAITING.length) + ')</summary>'
+    + '<div class="coach-filter">' + filterSelect('motif', 'tous les motifs', MOTIF_LABELS, f.motif)
+    + filterSelect('state', 'tous les états', STATE_LABELS, f.state)
+    + filterSelect('kind', 'toutes les formes', KIND_LABELS, f.kind) + '</div>'
+    + '<div id="coach-all-list">' + filteredHtml(f) + '</div></details>';
+}
+
+// A filter change : kept for the tab (sessionStorage, like the token), and
+// the full list redrawn from what was read — nothing is fetched again.
+function onFilterChange(select) {
+  const f = COACH_FILTER;
+  f[select.dataset.filter] = select.value;
+  try { sessionStorage.setItem(FILTER_KEY, JSON.stringify(f)); } catch (_) { /* kept in COACH_FILTER for this load */ }
+  const box = document.getElementById('coach-all-list');
+  if (box) box.innerHTML = filteredHtml(f);
 }
 
 async function loadCoach() {
@@ -92,7 +157,7 @@ async function loadCoach() {
     ]);
     if (!rp.ok || !re.ok) { coachBody.innerHTML = '<div class="empty">' + escapeHtml(coachRefusal(rp.ok ? re.status : rp.status)) + '</div>'; return; }
     const progress = await rp.json(), exercises = (await re.json()).exercises || [];
-    coachBody.innerHTML = reminderHtml(progress) + progressHtml(progress) + exercisesHtml(exercises)
+    coachBody.innerHTML = reminderHtml(progress) + progressHtml(progress) + exercisesHtml(exercises, progress)
       + '<div class="coach-answer" id="coach-answer" hidden></div>';
   } catch (_) {
     coachBody.innerHTML = '<div class="empty">Exercices indisponibles (réseau).</div>';
@@ -133,6 +198,7 @@ async function answerExercise(id) {
 }
 
 coachBox.addEventListener('toggle', () => { if (coachBox.open) loadCoach(); });
+coachBody.addEventListener('change', ev => { if (ev.target.dataset.filter) onFilterChange(ev.target); });
 coachBody.addEventListener('click', ev => {
   const start = ev.target.closest('[data-start]');
   if (start) { startExercise(start.dataset.start, start.dataset.side, start.dataset.kind); return; }

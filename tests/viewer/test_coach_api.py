@@ -427,6 +427,7 @@ def test_the_progress_is_the_tokens_own_without_solutions(
     assert body["player"] == HUMAN
     assert body["games"]["recent"]["motifs"]["hanging_piece"]["mistakes"] == 1
     assert body["games"]["recent"]["motifs"]["missed_mate"]["mistakes"] == 0
+    assert body["queue"][0] == body["suggestion"]["id"]
     assert body["suggestion"] == {
         "id": "find_move-1",
         "motif": "ignored_threat",
@@ -438,6 +439,7 @@ def test_the_progress_is_the_tokens_own_without_solutions(
     assert "f6d5" not in text and BEFORE not in text
     other = client.get("/api/coach/progress", headers=_auth(tokens[OTHER])).json()
     assert other["player"] == OTHER and other["exercises"] == {} and other["suggestion"] is None
+    assert other["queue"] == []
     assert other["games"]["recent"]["motifs"]["missed_mate"]["mistakes"] == 3
 
 
