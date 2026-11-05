@@ -461,6 +461,8 @@ function render(state) {
   // An exercise says its family and how to answer it, as the viewer does (#237).
   el('exercise').hidden = !state.exercise;
   el('exercise-title').textContent = state.exercise ? state.exercise.title : '';
+  el('exercise-context').hidden = !(state.exercise && state.exercise.context);
+  el('exercise-context').textContent = state.exercise ? state.exercise.context : '';
   el('exercise-text').textContent = state.exercise ? state.exercise.text : '';
   const fixing = state.lights.sync === 'fixing' && state.differing.length > 0;
   renderSetup(fixing ? state.setup : null);

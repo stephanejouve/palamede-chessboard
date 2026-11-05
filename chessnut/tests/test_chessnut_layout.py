@@ -155,3 +155,4 @@ def test_an_exercise_is_said_under_the_board() -> None:
     script = (PAGE / "app.js").read_text(encoding="utf-8")
     assert "el('exercise').hidden = !state.exercise;" in script
     assert "el('exercise-text').textContent = state.exercise ? state.exercise.text : '';" in script
+    assert "el('exercise-context').hidden = !(state.exercise && state.exercise.context);" in script

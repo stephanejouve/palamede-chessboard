@@ -11,8 +11,14 @@ from test_chessnut import ready_bridge
 LIST = {
     "player": "p",
     "exercises": [
-        {"id": "a", "kind": "find_move", "game_ids": ["exo.p.1"]},
-        {"id": "b", "kind": "attacked", "game_ids": ["exo.p.2", "exo.p.3"]},
+        {"id": "a", "kind": "find_move", "motif": "missed_mate", "game_ids": ["exo.p.1"]},
+        {
+            "id": "b",
+            "kind": "attacked",
+            "motif": "ignored_threat",
+            "game_ids": ["exo.p.2", "exo.p.3"],
+        },
+        {"id": "c", "kind": "find_move", "game_ids": ["exo.p.4"]},
     ],
 }
 
@@ -37,10 +43,12 @@ def gets(monkeypatch) -> list[tuple[str, str]]:
 
 def test_the_family_is_read_with_the_player_s_token(gets) -> None:
     bridge = exo_bridge("exo.p.3")
-    assert exercise.read(bridge) == "attacked"
+    assert exercise.read(bridge) == {"kind": "attacked", "motif": "ignored_threat"}
     assert gets == [("https://viewer.test/api/coach/exercises", "t")]
     assert page_state(bridge)["exercise"] == {
-        "title": "Cases attaquées",
+        "title": "Menace ignorée · Cases attaquées",
+        "context": "Dans votre partie, une de vos pièces était déjà en prise ici, "
+        "et le coup joué ne l'a pas sauvée.",
         "text": "Cet exercice se fait dans la visionneuse : le Tablier n'envoie que des coups.",
     }
 
@@ -48,7 +56,16 @@ def test_the_family_is_read_with_the_player_s_token(gets) -> None:
 def test_a_find_move_says_to_play_on_the_board(gets) -> None:
     bridge = exo_bridge("exo.p.1")
     exercise.read(bridge)
-    assert page_state(bridge)["exercise"]["title"] == "Trouvez le bon coup"
+    shown = page_state(bridge)["exercise"]
+    assert shown["title"] == "Mat manqué · Trouvez le bon coup"
+    assert shown["text"].startswith("Trouvez le meilleur coup dans cette position, au Tablier")
+
+
+def test_without_a_motif_the_family_alone(gets) -> None:
+    bridge = exo_bridge("exo.p.4")
+    exercise.read(bridge)
+    shown = page_state(bridge)["exercise"]
+    assert (shown["title"], shown["context"]) == ("Trouvez le bon coup", "")
 
 
 def test_a_game_that_is_no_exercise_asks_nothing(gets) -> None:
@@ -70,5 +87,5 @@ def test_an_old_viewer_or_an_unknown_game_shows_nothing(monkeypatch, status, bod
 
 def test_an_unknown_family_shows_nothing() -> None:
     bridge = exo_bridge("exo.p.1")
-    bridge.exercise_kind = "fork"
+    bridge.exercise = {"kind": "fork", "motif": "missed_mate"}
     assert page_state(bridge)["exercise"] is None

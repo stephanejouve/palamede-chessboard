@@ -190,6 +190,8 @@ main {
 #refused, #move-error { margin: 0 0 6px 0; font-weight: 600; font-size: 1.05em; color: var(--warn); }
 #refused[hidden], #move-error[hidden] { display: none; }
 #exercise { margin: 0 0 6px 0; }
+#exercise p { margin: 2px 0 0 0; }
+#exercise-context[hidden] { display: none; }
 #exercise[hidden] { display: none; }
 /* The gestures in a smaller type, under the lobby's line (smoke of Stéphane, 04/11). */
 #gestures { margin-top: 6px; font-size: 13px; }

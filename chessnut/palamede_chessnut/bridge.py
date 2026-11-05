@@ -110,8 +110,8 @@ class Bridge:
         self.stream_link = "connecting"
         #: The game the two rooks lifted open (#167), see :mod:`.lobby`.
         self.new_game = dict(config.NEW_GAME)
-        #: ``"find_move"``, ``"attacked"``… : the coach's family of an ``exo.*`` game (#237).
-        self.exercise_kind: str | None = None
+        #: ``{"kind", "motif"}`` of an ``exo.*`` game, read from the coach (#237).
+        self.exercise: dict[str, str] | None = None
 
     def lobby_text(self) -> str | None:
         """What the page says instead of the game's status : only a lobby has something (#167)."""
