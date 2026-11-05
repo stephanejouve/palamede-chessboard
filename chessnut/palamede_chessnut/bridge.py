@@ -86,6 +86,8 @@ class Bridge:
         self.settled_since = 0.0
         self.pending: chess.Move | None = None
         self.refused: chess.Move | None = None
+        #: What the viewer said of the refused move, shown under the board.
+        self.refused_reason: str | None = None
         self.retry_at = 0.0
         #: Move received from the viewer (``g8f6 (Nf6)``), still to be played on the board.
         self.to_relay: str | None = None
@@ -353,7 +355,7 @@ class Bridge:
         self.pending = None
         if refused:
             log.warning("move %s refused : %s", move.uci(), error)
-            self.refused = move
+            self.refused, self.refused_reason = move, error
         else:
             log.warning("move %s not delivered (%s), trying again", move.uci(), error)
             self.undelivered = move

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 import chess
 
+from palamede_chessnut import leds
 from palamede_chessnut.moves import differing_squares, find_move
 
 SETTLE_SECONDS = 0.6
@@ -43,7 +44,8 @@ def decide(
     while the pieces are being set up is not a move.
     ``pending`` : a move was posted and the stream has not confirmed it yet.
     ``refused`` : the viewer rejected that move from this position ; it is
-    not posted again, its squares light up so that it can be taken back.
+    not posted again, and its squares blink until it is taken back : steady,
+    they would read as the opponent's move to replicate (Stéphane, 05/11).
     """
     if settled_for < SETTLE_SECONDS:
         return None
@@ -52,7 +54,11 @@ def decide(
         return Decision(frozenset())
     if live and synced and game.turn == player:
         move = find_move(game, observed)
-        if move is not None and move != refused:
+        if move is not None and move == refused:
+            return Decision(
+                leds.blink(frozenset(differing_squares(expected, observed)), settled_for)
+            )
+        if move is not None:
             return Decision(frozenset(), move)
         if move is None and settled_for < GUIDE_SECONDS:
             return Decision(frozenset())

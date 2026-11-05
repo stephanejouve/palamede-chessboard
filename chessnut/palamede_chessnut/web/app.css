@@ -275,6 +275,7 @@ main {
 .clock.active.low .time, .clock.active.flag .time { color: var(--clock-lit-red); }
 .clock.flag { border-color: var(--bad); }
 #relay { font-weight: 600; }
+#refused { font-weight: 600; color: var(--warn); }
 #move-error { color: var(--warn); }
 .chip {
   display: inline-block;

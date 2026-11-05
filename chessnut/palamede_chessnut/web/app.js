@@ -453,6 +453,9 @@ function render(state) {
   el('status').textContent = statusText(state);
   el('relay').hidden = !state.to_relay;
   el('relay').textContent = state.relay_text || '';
+  // The viewer's reason for a refused move : the board only blinks (Stéphane, 05/11).
+  el('refused').hidden = !state.refused_text;
+  el('refused').textContent = state.refused_text || '';
   const fixing = state.lights.sync === 'fixing' && state.differing.length > 0;
   renderSetup(fixing ? state.setup : null);
   // The captures and the balance stay in the panel during the setup, which

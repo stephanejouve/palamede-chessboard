@@ -176,11 +176,19 @@ def test_pending_move_is_not_lit_nor_reposted() -> None:
     assert decision == decide(chess.Board(), chess.WHITE, chess.BaseBoard(), 5.0)
 
 
-def test_refused_move_lights_up_instead_of_being_reposted() -> None:
+def test_refused_move_blinks_instead_of_being_reposted() -> None:
+    # Steady, its squares would read as the opponent's move to replicate (Stéphane, 05/11).
     refused = chess.Move.from_uci("e2e4")
-    decision = decide(chess.Board(), chess.WHITE, placement(after("e4")), 1.0, refused=refused)
-    assert decision.move is None
-    assert decision.leds == {chess.E2, chess.E4}
+    lit = decide(chess.Board(), chess.WHITE, placement(after("e4")), 1.0, refused=refused)
+    dark = decide(chess.Board(), chess.WHITE, placement(after("e4")), 1.25, refused=refused)
+    assert lit.move is None and dark.move is None
+    assert lit.leds == {chess.E2, chess.E4} and dark.leds == frozenset()
+
+
+def test_another_move_than_the_refused_one_is_posted() -> None:
+    refused = chess.Move.from_uci("e2e4")
+    decision = decide(chess.Board(), chess.WHITE, placement(after("d4")), 1.0, refused=refused)
+    assert decision.move == chess.Move.from_uci("d2d4")
 
 
 def test_no_move_is_posted_once_the_game_is_over() -> None:
@@ -256,6 +264,7 @@ async def test_refused_move_is_not_posted_twice() -> None:
     await bridge.tick(write)
     assert posted == ["e2e4"]
     assert bridge.leds == {chess.E2, chess.E4}
+    assert bridge.refused_reason == "HTTP 403 NOT_YOUR_TURN"
 
 
 def test_glitched_frame_is_dropped() -> None:
