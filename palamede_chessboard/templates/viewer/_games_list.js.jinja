@@ -75,6 +75,7 @@ function selectGame(id) {
   id = (id || '').trim();
   gameIdInput.value = id || gameId();
   if (!id || id === gameId()) return;
+  hideExerciseBandUnless(id);
   CURRENT_GAME = id;
   gameIdInput.value = id;
   updateUrl();

@@ -87,7 +87,7 @@ def test_the_short_list_follows_the_server_s_queue() -> None:
 
 def test_each_line_says_its_form() -> None:
     # « Attacked » is answered here, not on the Tablier (smoke of #226, Admin).
-    assert "find_move: 'Trouve le bon coup · Tablier ou souris'," in COACH_JS
+    assert "find_move: 'Trouvez le bon coup · Tablier ou souris'," in COACH_JS
     assert "attacked: 'Cases attaquées · visionneuse seulement'," in COACH_JS
     assert "escapeHtml(kindLabel(e.kind))" in COACH_JS
 
@@ -129,10 +129,54 @@ def test_the_filter_applies_even_without_session_storage() -> None:
     assert "box.innerHTML = filteredHtml(f);" in body
 
 
-def test_the_answer_box_comes_before_the_list_and_takes_the_focus() -> None:
-    # After a long list the box went unseen (smoke of 05/11).
+def test_the_band_sits_under_the_board_outside_the_panel(client: TestClient) -> None:
+    # #237 : under the board, where the eye is — not in the panel, where the
+    # box went unseen below the list (Stéphane, 05/11).
+    page = client.get("/").text
     assert (
-        'coachBody.innerHTML = \'<div class="coach-answer" id="coach-answer" hidden></div>\'\n      + reminderHtml(progress)'
+        '<div id="board"><div id="move-error"></div></div>\n'
+        '      <div class="exercise-band" id="exercise-band" hidden></div>'
+    ) in page
+    assert "coach-answer" not in COACH_JS.replace("coach-answer-msg", "")
+
+
+def test_the_band_says_the_family_and_its_rule() -> None:
+    assert "title: 'Trouvez le bon coup'," in COACH_JS
+    assert "title: 'Cases attaquées'," in COACH_JS
+    # An unknown family : no band, rather than an empty one.
+    assert "  exerciseBand.hidden = !texts;\n  if (!texts) return;" in COACH_JS
+    assert (
+        "Votre roi n'est jamais à désigner. Le roi adverse ne compte que contre une pièce non défendue."
         in COACH_JS
     )
-    assert "document.getElementById('coach-squares').focus();" in COACH_JS
+    assert "'<div class=\"band-rule\">' + escapeHtml(texts.rule)" in COACH_JS
+    assert "showExerciseBand(id, kind, motif, body.game_id);" in COACH_JS
+
+
+def test_the_answer_box_is_a_form_enter_answers_and_takes_the_focus() -> None:
+    assert "(kind === 'attacked'\n      ? '<form id=\"band-answer\">" in COACH_JS
+    assert '<button type="submit">Répondre</button></form>' in COACH_JS
+    assert (
+        "exerciseBand.addEventListener('submit', ev => { ev.preventDefault(); "
+        "answerExercise(exerciseBand.dataset.exercise); });"
+    ) in COACH_JS
+    assert "if (kind === 'attacked') document.getElementById('coach-squares').focus();" in COACH_JS
+
+
+def test_the_band_goes_when_another_game_opens() -> None:
+    games_js = (TEMPLATES_DIR / "viewer" / "_games_list.js.jinja").read_text(encoding="utf-8")
+    assert "  if (!id || id === gameId()) return;\n  hideExerciseBandUnless(id);" in games_js
+    assert (
+        "if (EXERCISE_GAME && game !== EXERCISE_GAME) { EXERCISE_GAME = ''; exerciseBand.hidden = true; }"
+        in COACH_JS
+    )
+
+
+def test_the_band_says_why_this_position_from_the_motif() -> None:
+    # Stéphane, 05/11 : at the board, he no longer knew what was expected.
+    assert "'\" data-motif=\"' + escapeHtml(e.motif) + '\">Lancer</button></li>'" in COACH_JS
+    assert "start.dataset.kind, start.dataset.motif);" in COACH_JS
+    for motif in ("missed_mate", "hanging_piece", "ignored_threat"):
+        assert f"  {motif}: " in COACH_JS[COACH_JS.index("const EXERCISE_CONTEXTS") :]
+    assert "escapeHtml(motifLabel(motif) + ' · ' + texts.title)" in COACH_JS
+    assert "(context ? '<div class=\"band-context\">' + escapeHtml(context)" in COACH_JS
