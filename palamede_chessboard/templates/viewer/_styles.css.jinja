@@ -12,6 +12,7 @@
     --eval-black: #1a1a1a;
     --warning: #d35858;
     --ok: #4caf50;
+    --caution: #e09a2a;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -192,6 +193,10 @@
   .coach-all { margin-top: 8px; }
   .coach-filter { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .coach-error { color: var(--warning); margin-top: 6px; }
+  .standing .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  .st-never .dot { background: var(--warning); }
+  .st-found .dot { background: var(--caution); }
+  .st-solved .dot { background: var(--ok); }
   .exercise-band { margin-top: 10px; padding: 8px 10px; border-left: 3px solid var(--accent); background: var(--surface-2); border-radius: 4px; font-size: 13px; }
   .exercise-band .band-title { font-weight: 600; }
   .exercise-band .band-context { margin-top: 4px; }
