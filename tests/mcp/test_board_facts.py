@@ -254,6 +254,11 @@ async def test_board_facts_a_defended_piece_attacked_by_the_king_is_not_hanging(
         await call_tool("chess_board_facts", {"fen": "8/8/8/2k5/3P4/4P3/8/4K3 w - - 0 1"})
     )
     assert [h for h in defended["facts"]["hanging"] if h["square"] == "d4"] == []
+    # With a black knight on b5 too : the lowest real attacker (3) is worth more.
+    with_knight = _decode(
+        await call_tool("chess_board_facts", {"fen": "8/8/8/1nk5/3P4/4P3/8/4K3 w - - 0 1"})
+    )
+    assert [h for h in with_knight["facts"]["hanging"] if h["square"] == "d4"] == []
     alone = _decode(
         await call_tool("chess_board_facts", {"fen": "8/8/8/2k5/3P4/8/8/4K3 w - - 0 1"})
     )
