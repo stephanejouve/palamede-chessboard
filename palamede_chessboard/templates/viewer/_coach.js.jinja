@@ -68,7 +68,7 @@ function progressHtml(p) {
 // The two forms (#230) : a move, on the Tablier or with the mouse, or
 // squares, typed in this page only — said on each line, not guessed.
 const KIND_LABELS = {
-  find_move: 'Trouve le bon coup · Tablier ou souris',
+  find_move: 'Trouvez le bon coup · Tablier ou souris',
   attacked: 'Cases attaquées · visionneuse seulement',
 };
 const STATE_LABELS = { proposed: 'à faire', failed: 'à reprendre' };
@@ -80,7 +80,7 @@ function exerciseItem(e, suggested) {
     + escapeHtml(motifLabel(e.motif)) + ' · ' + escapeHtml(kindLabel(e.kind))
     + (e.state === 'failed' ? ' · à reprendre' : '') + '</span>'
     + '<button type="button" data-start="' + escapeHtml(e.id) + '" data-side="' + escapeHtml(e.side) + '" data-kind="'
-    + escapeHtml(e.kind) + '">Lancer</button></li>';
+    + escapeHtml(e.kind) + '" data-motif="' + escapeHtml(e.motif) + '">Lancer</button></li>';
 }
 
 // The short list (#230) : the first SHORT_LIST of the server's queue, the
@@ -157,17 +157,81 @@ async function loadCoach() {
     ]);
     if (!rp.ok || !re.ok) { coachBody.innerHTML = '<div class="empty">' + escapeHtml(coachRefusal(rp.ok ? re.status : rp.status)) + '</div>'; return; }
     const progress = await rp.json(), exercises = (await re.json()).exercises || [];
-    // The answer box comes first : after a long list it went unseen (Stéphane, 05/11).
-    coachBody.innerHTML = '<div class="coach-answer" id="coach-answer" hidden></div>'
-      + reminderHtml(progress) + progressHtml(progress) + exercisesHtml(exercises, progress);
+    coachBody.innerHTML = reminderHtml(progress) + progressHtml(progress) + exercisesHtml(exercises, progress);
   } catch (_) {
     coachBody.innerHTML = '<div class="empty">Exercices indisponibles (réseau).</div>';
   }
 }
 
+// The band under the board (#237) : the exercise's family, its rule, and for
+// « what is attacked ? » the answer box — in the panel, it went unseen below
+// the list (Stéphane, 05/11). The Tablier says the same texts.
+const EXERCISE_TEXTS = {
+  find_move: {
+    title: 'Trouvez le bon coup',
+    rule: "Trouvez le meilleur coup dans cette position, dans l'app Tablier ou à la souris dans la visionneuse. "
+      + 'Un coup faux est refusé et la position reste en place : réessayez.',
+  },
+  attacked: {
+    title: 'Cases attaquées',
+    rule: 'Tapez les cases de vos pièces en prise, séparées par des espaces, puis Entrée. '
+      + 'En prise : attaquée et non défendue, ou attaquée par une pièce de moindre valeur. '
+      + "Votre roi n'est jamais à désigner. Le roi adverse ne compte que contre une pièce non défendue. "
+      + 'Donnez toutes les cases, sans en ajouter.',
+  },
+};
+// Why this position (Stéphane, 05/11) : the mistake of the game, as the
+// motifs define it (coach/motifs.py). Not « parez la menace » : the
+// solution is the engine's best move, not always the one that saves it.
+const EXERCISE_CONTEXTS = {
+  missed_mate: 'Dans votre partie, un mat forcé était possible ici, et il a été manqué.',
+  hanging_piece: 'Dans votre partie, le coup joué ici a laissé une de vos pièces en prise.',
+  ignored_threat: "Dans votre partie, une de vos pièces était déjà en prise ici, et le coup joué ne l'a pas sauvée.",
+};
+const exerciseBand = document.getElementById('exercise-band');
+let EXERCISE_GAME = '';
+
+function showExerciseBand(id, kind, motif, game) {
+  const texts = EXERCISE_TEXTS[kind];
+  EXERCISE_GAME = texts ? game : '';
+  exerciseBand.hidden = !texts;
+  if (!texts) return;
+  exerciseBand.dataset.exercise = id;
+  const context = EXERCISE_CONTEXTS[motif];
+  exerciseBand.innerHTML = '<div class="band-title">' + escapeHtml(motifLabel(motif) + ' · ' + texts.title) + '</div>'
+    + (context ? '<div class="band-context">' + escapeHtml(context) + '</div>' : '')
+    + '<div class="band-rule">' + escapeHtml(texts.rule) + '</div>'
+    + (kind === 'attacked'
+      ? '<form id="band-answer"><label>Cases (ex. f6 e4) : <input type="text" id="coach-squares" autocomplete="off"></label>'
+        + ' <button type="submit">Répondre</button></form>'
+      : '')
+    + '<div id="coach-answer-msg"></div>';
+  exerciseBand.scrollIntoView({ block: 'nearest' });
+  if (kind === 'attacked') document.getElementById('coach-squares').focus();
+}
+
+function hideExerciseBand() { EXERCISE_GAME = ''; exerciseBand.hidden = true; }
+
+// Whatever opened the game (« Lancer », the games list, the URL, a reload) :
+// an exo.* game of the token's exercises shows its band (Leader, 05/11).
+// Read by game_ids ; a band already shown for this game is left as it is,
+// so the field keeps what was typed.
+async function refreshExerciseBand(game) {
+  if (game === EXERCISE_GAME) return;
+  hideExerciseBand();
+  if (!game.startsWith('exo.') || !playerToken()) return;
+  try {
+    const r = await fetch('/api/coach/exercises', { cache: 'no-store', headers: coachHeaders() });
+    if (!r.ok) return;
+    const list = (await r.json()).exercises || [];
+    const e = list.find(x => Array.isArray(x.game_ids) && x.game_ids.includes(game));
+    if (e && gameId() === game && EXERCISE_GAME !== game) showExerciseBand(e.id, e.kind, e.motif, game);
+  } catch (_) { /* no band : the game still shows */ }
+}
+
 // « Lancer » : the exercise's game opens in this page, the player's side at
 // the bottom. « What is attacked ? » is answered with squares, not a move.
-async function startExercise(id, side, kind) {
+async function startExercise(id, side, kind, motif) {
   const r = await fetch('/api/coach/exercises/' + encodeURIComponent(id) + '/start', { method: 'POST', headers: coachHeaders() });
   let body = {};
   try { body = await r.json(); } catch (_) { /* no body */ }
@@ -175,17 +239,7 @@ async function startExercise(id, side, kind) {
   ORIENT = side === 'black' ? 'black' : 'white';
   selectGame(body.game_id);
   applyOrientation();
-  const box = document.getElementById('coach-answer');
-  if (box && kind === 'attacked') {
-    box.hidden = false;
-    box.dataset.exercise = id;
-    box.innerHTML = '<label>Cases des pièces en prise (ex. f6 e4) : <input type="text" id="coach-squares" autocomplete="off"></label>'
-      + '<button type="button" id="coach-answer-btn">Répondre</button><div id="coach-answer-msg"></div>';
-    box.scrollIntoView({ block: 'nearest' });
-    document.getElementById('coach-squares').focus();
-  } else if (box) {
-    box.hidden = true;
-  }
+  showExerciseBand(id, kind, motif, body.game_id);
 }
 
 async function answerExercise(id) {
@@ -204,7 +258,13 @@ coachBox.addEventListener('toggle', () => { if (coachBox.open) loadCoach(); });
 coachBody.addEventListener('change', ev => { if (ev.target.dataset.filter) onFilterChange(ev.target); });
 coachBody.addEventListener('click', ev => {
   const start = ev.target.closest('[data-start]');
-  if (start) { startExercise(start.dataset.start, start.dataset.side, start.dataset.kind); return; }
-  if (ev.target.id === 'coach-answer-btn') answerExercise(document.getElementById('coach-answer').dataset.exercise);
+  if (start) startExercise(start.dataset.start, start.dataset.side, start.dataset.kind, start.dataset.motif);
 });
-document.getElementById('key-btn').addEventListener('click', () => { if (coachBox.open) loadCoach(); });
+// A form : Entrée answers, like the button (nit of Admin, #235).
+exerciseBand.addEventListener('submit', ev => { ev.preventDefault(); answerExercise(exerciseBand.dataset.exercise); });
+document.getElementById('key-btn').addEventListener('click', () => {
+  if (coachBox.open) loadCoach();
+  hideExerciseBand();
+  if (gameId()) refreshExerciseBand(gameId());
+});
+if (gameId()) refreshExerciseBand(gameId());
