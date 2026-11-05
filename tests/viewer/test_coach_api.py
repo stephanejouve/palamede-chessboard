@@ -159,7 +159,12 @@ def test_one_exercise_open_at_a_time(client: TestClient, tokens: dict, games_dir
     assert closed.result == "1-0"  # the coach, white, wins an abandoned one
     assert closed.termination_note == play.ABANDONED_NOTE
     assert GameState.load(second, games_dir=games_dir).metadata.result == "*"
-    assert _stored(games_dir)["state"] == "proposed"
+    stored = _stored(games_dir)
+    assert stored["state"] == "proposed"  # an abandon is counted apart (Stéphane, #95)
+    assert [(a["game_id"], a["abandoned"], a["ok"]) for a in stored["attempts"]] == [
+        (first, True, False)
+    ]
+    assert _stored(games_dir, "attacked-1")["attempts"] == []
 
 
 # --- the move -------------------------------------------------------------------
@@ -241,7 +246,43 @@ def test_the_player_may_resign_an_exercise(
     r = _move(client, tokens[HUMAN], game_id, "f6d5")
     assert r.status_code == 409 and "terminé" in r.json()["detail"]
     assert GameState.load(game_id, games_dir=games_dir).san_history == []
-    assert _stored(games_dir)["state"] == "proposed"
+    stored = _stored(games_dir)
+    assert stored["state"] == "proposed"
+    assert [(a["game_id"], a["abandoned"], a["ok"]) for a in stored["attempts"]] == [
+        (game_id, True, False)
+    ]
+
+
+def test_an_abandon_leaves_a_failed_exercise_failed(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    game_id = _start(client, tokens[HUMAN]).json()["game_id"]
+    _move(client, tokens[HUMAN], game_id, "d7d6")
+    client.post(f"/api/games/{game_id}/resign", headers=_auth(tokens[HUMAN]))
+    stored = _stored(games_dir)
+    assert stored["state"] == "failed"
+    assert [a.get("abandoned", False) for a in stored["attempts"]] == [False, True]
+
+
+def test_only_the_player_records_an_abandon(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    game_id = _start(client, tokens[HUMAN]).json()["game_id"]
+    for token in (tokens[AGENT], tokens[OTHER], None):
+        r = client.post(f"/api/games/{game_id}/resign", headers=_auth(token))
+        assert r.status_code in (401, 403)
+    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "*"
+    assert _stored(games_dir)["attempts"] == []
+
+
+def test_a_resign_goes_through_an_unreadable_store(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    game_id = _start(client, tokens[HUMAN]).json()["game_id"]
+    player_path(games_dir, HUMAN).write_text("{", encoding="utf-8")
+    r = client.post(f"/api/games/{game_id}/resign", headers=_auth(tokens[HUMAN]))
+    assert r.status_code == 200
+    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "1-0"
 
 
 def test_an_unreadable_store_refuses_the_move(

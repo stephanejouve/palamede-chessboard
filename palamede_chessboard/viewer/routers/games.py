@@ -221,6 +221,11 @@ def resign_from_viewer(game_id: str, request: Request) -> dict:
         result = state.resign(by=side)
     except InvalidGameStateError as exc:
         raise HTTPException(409, str(exc)) from exc
+    if is_exercise_game(game_id):
+        try:
+            exercise_play.record_abandon(gdir, who, game_id)
+        except CoachStoreError:  # the game is resigned all the same
+            log.warning("abandon of %s not recorded : unreadable store", game_id)
     return {"status": "ok", "resign": result, "state": state.to_state_dict()}
 
 
