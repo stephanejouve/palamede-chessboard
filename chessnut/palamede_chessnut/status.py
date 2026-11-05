@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import collections
-import json
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -12,6 +11,7 @@ import chess
 from palamede_chessnut.lobby import tips
 from palamede_chessnut.mouse import legal_targets
 from palamede_chessnut.moves import differing_squares
+from palamede_chessnut.refusal import refusal_said
 from palamede_chessnut.token_light import REFUSING
 from palamede_chessnut.token_light import message as token_message
 
@@ -162,18 +162,7 @@ def refused_text(bridge: Bridge) -> str | None:
     """
     if bridge.refused is None:
         return None
-    reason = bridge.refused_reason or ""
-    _status, _, body = reason.partition(" ")
-    _code, _, body = body.partition(" ")
-    try:
-        detail = json.loads(body).get("detail")
-    except (ValueError, AttributeError):
-        detail = None
-    said = detail.strip().rstrip(".") if isinstance(detail, str) and detail.strip() else ""
-    # The viewer's default 403 starts with « Coup refusé » itself (review Junior #226).
-    if not said.lower().startswith("coup refusé"):
-        said = "Coup refusé : " + (said or "le serveur l'a refusé")
-    return f"{said}. Remettez la pièce."
+    return f"{refusal_said(bridge.refused_reason)}. Remettez la pièce."
 
 
 def relay_text(bridge: Bridge) -> str | None:

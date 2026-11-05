@@ -378,7 +378,7 @@ def test_the_token_is_in_no_answer_of_the_page(page, posts) -> None:
     page.bridge.pending = None
     posts.answer[0] = (409, "stale")  # the viewer refuses : its own branch (review Junior #97)
     answers.append(request(page, "POST", "/move", MOVE, **good_headers(page)))
-    assert json.loads(answers[-1][1]) == {"error": "coup refusé par le serveur"}
+    assert json.loads(answers[-1][1]) == {"error": "Coup refusé : le serveur l'a refusé."}
     posts.answer[0] = (None, "down")
     answers.append(request(page, "POST", "/move", MOVE, **good_headers(page)))  # 502
     answers.append(request(page, "POST", "/move", MOVE, **{"X-Palamede-Nonce": "x"}))  # 403
@@ -408,3 +408,12 @@ def test_server_position_keeps_the_moves(monkeypatch) -> None:
         ["e4", "c5"],
         False,
     )
+
+
+def test_a_refused_mouse_move_says_the_viewer_s_words(page, posts) -> None:
+    # « Ce n'est pas le coup » of an exercise, without « Remettez la pièce » :
+    # the piece goes back by itself on the screen (smoke of Stéphane, 05/11).
+    posts.answer[0] = (409, '{"detail":"Ce n\'est pas le coup"}')
+    status, body = request(page, "POST", "/move", MOVE, **good_headers(page))
+    assert status == 409
+    assert json.loads(body) == {"error": "Coup refusé : Ce n'est pas le coup."}

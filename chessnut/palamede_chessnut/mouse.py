@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 import chess
 
+from palamede_chessnut.refusal import refusal_said
 from palamede_chessnut.token_light import REFUSING
 
 if TYPE_CHECKING:
@@ -92,7 +93,8 @@ def _play(bridge: Bridge, uci: str) -> tuple[int, str]:
     bridge.pending = None
     log.warning("move %s %s : %s", move.uci(), "refused" if refused else "not delivered", error)
     if refused:
-        return 409, "coup refusé par le serveur"
+        # The piece goes back by itself on the screen : nothing to put back (Stéphane, 05/11).
+        return 409, f"{refusal_said(error)}."
     # The answer may be lost while the move landed : checked before the next one.
     bridge.undelivered = move
     return 502, "coup non transmis : serveur injoignable, réessayez"

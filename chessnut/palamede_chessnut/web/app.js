@@ -88,6 +88,8 @@ function setLight(name, value) {
 function showMoveError(message) {
   el('move-error').hidden = !message;
   el('move-error').textContent = message || '';
+  // Under the board, like the board's refusal (smoke of Stéphane, 05/11).
+  if (message) el('tray').hidden = false;
 }
 
 async function sendMove(uci) {
@@ -468,7 +470,7 @@ function render(state) {
   el('lobby').hidden = !state.lobby;
   el('lobby').textContent = state.lobby || '';
   el('gestures').hidden = !state.lobby;
-  el('tray').hidden = !fixing && !state.lobby && !state.refused_text;
+  el('tray').hidden = !fixing && !state.lobby && !state.refused_text && el('move-error').hidden;
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
   canSave = Boolean(state.can_save);
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');
