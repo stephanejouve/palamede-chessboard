@@ -121,6 +121,12 @@ def test_the_report_holds_get_my_mistakes(gdir: Path, popen) -> None:
     assert report["sides"]["black"]["player"] == HUMAN
     assert sum(report["sides"]["black"]["by_motif"].values()) == 1
     assert "white" not in report["sides"]  # the agent's side is not diagnosed
+    # The time axis of the progress : the game's Date, and the human's moves (#95 step 2).
+    assert report["sides"]["black"]["plies"] == 3
+    assert (report["game_date"], report["game_date_source"]) == (
+        state.metadata.date.replace(".", "-"),
+        "header",
+    )
 
 
 def test_a_mate_given_is_no_mistake_of_the_human(gdir: Path, popen) -> None:

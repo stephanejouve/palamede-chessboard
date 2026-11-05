@@ -393,3 +393,64 @@ def test_the_starting_position_is_legal_for_the_side() -> None:
     assert board.turn == chess.BLACK
     assert chess.Move.from_uci("f6d5") in board.legal_moves
     assert chess.Move.from_uci("f6g4") in board.legal_moves
+
+
+# --- the progress (#95, step 2) ---------------------------------------------------
+
+
+def test_the_progress_needs_a_token_the_same_401(client: TestClient, tokens: dict) -> None:
+    missing = client.get("/api/coach/progress")
+    wrong = client.get("/api/coach/progress", headers=_auth("not-a-token"))
+    assert missing.status_code == wrong.status_code == 401
+    assert missing.json() == wrong.json()
+
+
+def test_the_progress_is_the_tokens_own_without_solutions(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    write_report(
+        games_dir,
+        "duel",
+        {
+            "game_id": "duel",
+            "game_date": "2026-11-05",
+            "game_date_source": "header",
+            "sides": {
+                "white": {"player": HUMAN, "plies": 20, "by_motif": {"hanging_piece": 1}},
+                "black": {"player": OTHER, "plies": 20, "by_motif": {"missed_mate": 3}},
+            },
+        },
+    )
+    r = client.get("/api/coach/progress", headers=_auth(tokens[HUMAN]))
+    assert r.status_code == 200 and r.headers["Cache-Control"] == "no-store"
+    body = r.json()
+    assert body["player"] == HUMAN
+    assert body["games"]["recent"]["motifs"]["hanging_piece"]["mistakes"] == 1
+    assert body["games"]["recent"]["motifs"]["missed_mate"]["mistakes"] == 0
+    assert body["suggestion"] == {
+        "id": "find_move-1",
+        "motif": "ignored_threat",
+        "kind": "find_move",
+    }
+    text = json.dumps(body)
+    for field in play.SOLUTION_FIELDS:
+        assert field not in text
+    assert "f6d5" not in text and BEFORE not in text
+    other = client.get("/api/coach/progress", headers=_auth(tokens[OTHER])).json()
+    assert other["player"] == OTHER and other["exercises"] == {} and other["suggestion"] is None
+    assert other["games"]["recent"]["motifs"]["missed_mate"]["mistakes"] == 3
+
+
+def test_an_abandon_shows_in_the_progress(client: TestClient, tokens: dict) -> None:
+    game_id = _start(client, tokens[HUMAN]).json()["game_id"]
+    client.post(f"/api/games/{game_id}/resign", headers=_auth(tokens[HUMAN]))
+    counts = client.get("/api/coach/progress", headers=_auth(tokens[HUMAN])).json()["exercises"]
+    assert counts["ignored_threat"]["abandoned_games"] == 1
+    assert counts["ignored_threat"]["first_try"] == {"tried": 0, "ok": 0}
+
+
+def test_an_unreadable_store_is_a_503_for_the_progress(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    player_path(games_dir, HUMAN).write_text("{", encoding="utf-8")
+    assert client.get("/api/coach/progress", headers=_auth(tokens[HUMAN])).status_code == 503
