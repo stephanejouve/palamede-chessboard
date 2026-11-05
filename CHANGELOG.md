@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.19.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.18.2...v0.19.0) (2026-11-05)
+
+
+### Features
+
+* **coach:** a player's progress, read from the coach's store ([#216](https://github.com/stephanejouve/palamede-chessboard/issues/216)) ([b9fb809](https://github.com/stephanejouve/palamede-chessboard/commit/b9fb809aa40f6d4c3a80b7eee1d59cc343751e66))
+* **coach:** complete the older reports with game_date and plies ([#217](https://github.com/stephanejouve/palamede-chessboard/issues/217)) ([5a71d87](https://github.com/stephanejouve/palamede-chessboard/commit/5a71d87dc1cc2665f3bcb9c04b2ddc1978a1a2c4))
+* **coach:** count an abandoned exercise apart ([#213](https://github.com/stephanejouve/palamede-chessboard/issues/213)) ([f187c07](https://github.com/stephanejouve/palamede-chessboard/commit/f187c072955cac75d2f24a9d7a585fe3912b3d11))
+* **viewer:** the « Mes exercices » panel ([#218](https://github.com/stephanejouve/palamede-chessboard/issues/218)) ([cf8a611](https://github.com/stephanejouve/palamede-chessboard/commit/cf8a611805a82e006f6d3a2d34a4a993a4d3d8e9))
+
+
+### Bug Fixes
+
+* **viewer:** the coach panel's numbers through num() ([#221](https://github.com/stephanejouve/palamede-chessboard/issues/221)) ([19d05cd](https://github.com/stephanejouve/palamede-chessboard/commit/19d05cd2314346d1a0ce4e65ce8b2268a4d34264))
+
 ## [0.18.2](https://github.com/stephanejouve/palamede-chessboard/compare/v0.18.1...v0.18.2) (2026-11-04)
 
 
