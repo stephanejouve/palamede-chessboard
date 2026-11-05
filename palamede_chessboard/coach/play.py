@@ -126,6 +126,21 @@ def _attempt(exercise_id: str, games_dir: Path, player_id: str, entry: dict, ok:
     return update_exercise(games_dir, player_id, exercise_id, change)
 
 
+def record_abandon(games_dir: Path, player_id: str, game_id: str) -> None:
+    """Count an abandoned game apart : an attempt that leaves ``state`` as it was.
+
+    A game no exercise of ``player_id`` holds records nothing.
+    """
+    try:
+        exercise = _exercise_of_game(games_dir, player_id, game_id)
+    except ExerciseError:
+        return
+    entry = {"game_id": game_id, "abandoned": True, "ok": False, "at": _now()}
+    update_exercise(
+        games_dir, player_id, exercise["id"], lambda e: e.setdefault("attempts", []).append(entry)
+    )
+
+
 def _refuse_if_in_play(games_dir: Path, exercise: dict, action: str) -> None:
     """409 while a live game went through the exercise's position, logged."""
     fen = exercise["fen"]
@@ -150,6 +165,7 @@ def _close_open_games(games_dir: Path, player_id: str) -> None:
             if state.metadata.result == "*":
                 winner = "black" if _player_side(state, player_id) == "white" else "white"
                 _finish(state, winner, ABANDONED_NOTE)
+                record_abandon(games_dir, player_id, pgn.stem)
 
 
 def start(games_dir: Path, player_id: str, exercise_id: str) -> dict:
