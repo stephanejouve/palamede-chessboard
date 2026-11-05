@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/stephanejouve/palamede-chessboard/compare/palamede-chessnut-v0.3.0...palamede-chessnut-v0.4.0) (2026-11-05)
+
+
+### Features
+
+* **chessnut:** a new game from any placement, the two corners lifted together ([#214](https://github.com/stephanejouve/palamede-chessboard/issues/214)) ([7e0a72f](https://github.com/stephanejouve/palamede-chessboard/commit/7e0a72f4315508366f63df4b9f245413845291cf))
+
+
+### Tests
+
+* **chessnut:** the lobby's link gap measured on two real ticks ([#220](https://github.com/stephanejouve/palamede-chessboard/issues/220)) ([822e7dd](https://github.com/stephanejouve/palamede-chessboard/commit/822e7dd654e5ac261eadba83b6dde6f5429509b4))
+
 ## [0.3.0](https://github.com/stephanejouve/palamede-chessboard/compare/palamede-chessnut-v0.2.0...palamede-chessnut-v0.3.0) (2026-11-04)
 
 
