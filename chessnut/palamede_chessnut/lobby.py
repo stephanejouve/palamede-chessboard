@@ -2,16 +2,21 @@
 
 The app starts without a game in progress, or one is over : a lobby then
 holds the board instead of a game's bridge. It reads the placement only.
-From the starting position, the two rooks of one side lifted together for
+The two corners of one side emptied together and left empty for
 :data:`GESTURE_SECONDS` open a game for that side, against the default
 opponent of :func:`.config.new_game` (``bot-maia-1100`` in 15+10), through
-the viewer's ``POST /api/games`` (#126) with the player's token.
+the viewer's ``POST /api/games`` (#126) with the player's token. The rest
+of the board may be anything : once the game is opened, its bridge guides
+the setup square by square (#117), so that a beginner is never stuck on a
+queen one square off (smoke of Stéphane 02/11, #175).
 
-* a1 + h1 lifted : White ; a8 + h8 lifted : Black. No legal move takes two
-  rooks off at once, and resigning lifts the king alone ;
-* the whole starting position must have stood on the board first : pieces
-  set up with the rooks last pass through « start without a1 + h1 », which
-  opens nothing (review Junior and Admin #170) ;
+* a1 + h1 emptied : White ; a8 + h8 emptied : Black. The corners, not the
+  rooks : the piece is not looked at (a Chess960 start keeps a piece there) ;
+* each corner must have been seen occupied first, so pieces set up with the
+  corners last open nothing (review Junior and Admin #170) ;
+* the two corners are emptied within :data:`TOGETHER_SECONDS` of each other,
+  and the other side's corners stay occupied : putting the pieces away one
+  by one after a game opens nothing (owner, 05/11) ;
 * while the gesture holds, the two squares blink ; once the game is opened,
   a light runs along the player's back rank, then the window moves to the
   new game the way « Ouvrir une partie » does (#90, #121) ;
@@ -57,6 +62,13 @@ GESTURES = {
     chess.BLACK: (chess.A8, chess.H8),
 }
 SIDES = {chess.WHITE: "Blancs", chess.BLACK: "Noirs"}
+#: Two hands lift two corners together ; one by one is putting the pieces away (owner, 05/11).
+TOGETHER_SECONDS = 1.0
+CORNERS = (*GESTURES[chess.WHITE], *GESTURES[chess.BLACK])
+#: Corner → when it was emptied, ``None`` while occupied ; absent until seen occupied.
+Emptied = dict[chess.Square, float | None]
+#: Ticks come every 0.1 s while the board is linked : a longer gap is a lost link.
+LINK_GAP_SECONDS = 1.0
 #: The knight still on its square that long : a choice, not a square crossed (owner, 2 to 3 s).
 CHOICE_SECONDS = 2.0
 #: Part of the clock (0 the base minutes, 1 the increment seconds) → the rank
@@ -92,10 +104,15 @@ def _without(squares: tuple[chess.Square, ...]) -> chess.BaseBoard:
     return start
 
 
-def gesture_side(observed: chess.BaseBoard) -> chess.Color | None:
-    """The side whose two rooks are lifted off the starting position, else ``None``."""
+def gesture_side(observed: chess.BaseBoard, emptied: Emptied) -> chess.Color | None:
+    """The side whose two corners were emptied together, the other's still occupied, else ``None``."""
     for side, squares in GESTURES.items():
-        if observed == _without(squares):
+        times = [emptied.get(square) for square in squares]
+        if any(observed.piece_at(square) is not None for square in squares):
+            continue
+        if times[0] is None or times[1] is None or abs(times[0] - times[1]) > TOGETHER_SECONDS:
+            continue
+        if all(observed.piece_at(square) is not None for square in GESTURES[not side]):
             return side
     return None
 
@@ -211,6 +228,9 @@ class Lobby(Bridge):
         self.on_created: OnCreated | None = None
         #: ``settled_since`` of the placement already tried : not again until it changes.
         self.tried: float | None = None
+        #: The corners' times of the gesture already tried : another piece moved
+        #: does not try again, the corners must be seen occupied first.
+        self.tried_corners: tuple[float | None, ...] = ()
         self.creating = False
         #: The new game, once opened : handed over after the chaser.
         self.created: str | None = None
@@ -224,8 +244,12 @@ class Lobby(Bridge):
         #: ``settled_since`` of the placement whose idle knight is logged.
         self.noted: float | None = None
         self.refused_text: str | None = None
-        #: The whole starting position stood on the board since the last other placement.
+        #: The whole starting position stood on the board since the last other
+        #: placement : the knights may choose the clock.
         self.armed = False
+        #: When each corner was emptied : the rooks' gesture (#175).
+        self.emptied: Emptied = {}
+        self.last_tick: float | None = None
 
     def lobby_text(self) -> str | None:
         if self.created is not None:
@@ -258,6 +282,14 @@ class Lobby(Bridge):
         await self.run_board()
 
     async def tick(self, write: Any) -> None:
+        now = time.monotonic()
+        if self.last_tick is not None and now - self.last_tick > LINK_GAP_SECONDS:
+            # The link was lost : corners emptied meanwhile would get one time (review Junior #214).
+            self.emptied.clear()
+        self.last_tick = now
+        if self.observed is not None:
+            # At every tick, an animation's too : each corner keeps its own time.
+            self._watch_corners(self.observed)
         if self.animation:
             await self._show(write, self.animation.pop(0))
             if not self.animation and self.created is not None:
@@ -269,15 +301,16 @@ class Lobby(Bridge):
         # gesture not seen from one not made (smoke of Stéphane, 04/11).
         if self.observed == chess.BaseBoard():
             if not self.armed:
-                log.info("starting position on the board : gestures armed")
+                log.info("starting position on the board : clock gestures armed")
             self.armed = True
         elif not on_the_way(self.observed):
             if self.armed:
                 log.info(
-                    "gestures disarmed until the starting position : %s", self.observed.board_fen()
+                    "clock gestures disarmed until the starting position : %s",
+                    self.observed.board_fen(),
                 )
             self.armed = False
-        side = gesture_side(self.observed) if self.armed else None
+        side = gesture_side(self.observed, self.emptied)
         standing = choices(self.observed) if self.armed else ()
         # A knight gone forgets its square ; one still there is not taken again.
         self.taken &= {square for _part, _value, square in standing}
@@ -289,7 +322,11 @@ class Lobby(Bridge):
         # Said, else nothing seems to happen (review Junior #191).
         self.clash = sorted({CHOICES[part][0] + 1 for part in parts if parts.count(part) > 1})
         self._note_idle_knights(self.observed, standing)
-        if (side is None and not picked) or self.tried == self.settled_since:
+        corners = tuple(self.emptied.get(s) for s in GESTURES[side]) if side is not None else ()
+        tried = self.tried == self.settled_since or (
+            bool(corners) and corners == self.tried_corners
+        )
+        if (side is None and not picked) or tried:
             if side is None and not picked:
                 self.refused_text = None  # the pieces are back : a new try may come
             self.counting, self.choosing = None, ()
@@ -311,7 +348,16 @@ class Lobby(Bridge):
         if picked:
             self._choose(picked)
         elif side is not None:
+            self.tried_corners = corners
             await self._create(side)
+
+    def _watch_corners(self, observed: chess.BaseBoard) -> None:
+        """Notes when each corner, once seen occupied, was emptied : when its placement appeared."""
+        for square in CORNERS:
+            if observed.piece_at(square) is not None:
+                self.emptied[square] = None
+            elif square in self.emptied and self.emptied[square] is None:
+                self.emptied[square] = self.settled_since
 
     def _note_idle_knights(self, observed: chess.BaseBoard, standing: tuple[Choice, ...]) -> None:
         """Logs, once per placement, a knight standing where no value is."""
