@@ -16,8 +16,10 @@ from palamede_chessnut.cli import bridge_from_args
 from palamede_chessnut.games import NO_GAME, Session, successor
 from palamede_chessnut.lobby import (
     CHOICE_SECONDS,
+    CORNERS,
     GESTURE_SECONDS,
     NO_SERVER,
+    TOGETHER_SECONDS,
     Lobby,
     choices,
     chosen,
@@ -69,30 +71,61 @@ class Server:
 
 
 def new_lobby(*, armed: bool = True, **kwargs) -> Lobby:
-    """A lobby ; ``armed`` : the whole starting position has stood on its board."""
+    """A lobby ; ``armed`` : the whole starting position has stood on its board,
+    its four corners seen occupied."""
     board = Lobby(VIEWER, TOKEN, **kwargs)
     board.armed = armed
+    if armed:
+        board.emptied = dict.fromkeys(CORNERS)
     return board
+
+
+def at(bridge: Bridge, placement: chess.BaseBoard, since: float) -> None:
+    """``placement`` on the board since ``since`` (``time.monotonic()`` scale)."""
+    bridge.observed = placement
+    bridge.settled_since = since
 
 
 # ---- the gesture ----------------------------------------------------------
 
 
+def emptied_at(**times: float) -> dict[chess.Square, float | None]:
+    """The four corners seen occupied, those named emptied at their time."""
+    corners: dict[chess.Square, float | None] = dict.fromkeys(CORNERS)
+    corners.update({chess.parse_square(name): time for name, time in times.items()})
+    return corners
+
+
 @pytest.mark.parametrize(
-    ("placement", "side"),
+    ("placement", "emptied", "side"),
     [
-        (lifted(chess.A1, chess.H1), chess.WHITE),
-        (lifted(chess.A8, chess.H8), chess.BLACK),
-        (chess.BaseBoard(), None),
-        (lifted(chess.A1), None),
-        (lifted(chess.A1, chess.H8), None),
-        (lifted(chess.A1, chess.H1, chess.A8, chess.H8), None),  # four rooks : out of scope
-        (lifted(chess.E1), None),  # the king alone is resigning, not this
-        (lifted(chess.A1, chess.H1, chess.E2), None),  # not the starting position
+        (lifted(chess.A1, chess.H1), emptied_at(a1=10, h1=10), chess.WHITE),
+        (lifted(chess.A8, chess.H8), emptied_at(a8=10, h8=10.5), chess.BLACK),
+        (chess.BaseBoard(), emptied_at(), None),
+        (lifted(chess.A1), emptied_at(a1=10), None),
+        (lifted(chess.A1, chess.H8), emptied_at(a1=10, h8=10), None),
+        # four corners : out of scope, and the other side's must stay occupied
+        (lifted(*CORNERS), emptied_at(a1=10, h1=10, a8=10, h8=10), None),
+        (lifted(chess.E1), emptied_at(), None),  # the king alone is resigning, not this
+        # the rest of the board may be anything : the queen one square off (smoke 02/11)
+        (lifted(chess.A1, chess.H1, chess.E2, chess.D8), emptied_at(a1=10, h1=10), chess.WHITE),
+        # one corner, then the other later : putting the pieces away (owner 05/11)
+        (lifted(chess.A1, chess.H1), emptied_at(a1=10, h1=10 + TOGETHER_SECONDS + 0.1), None),
+        # never seen occupied : set up with the corners last (review #170)
+        (lifted(chess.A1, chess.H1), {chess.A8: None, chess.H8: None}, None),
     ],
 )
-def test_two_rooks_of_one_side_off_the_start(placement, side) -> None:
-    assert gesture_side(placement) == side
+def test_two_corners_of_one_side_emptied_together(placement, emptied, side) -> None:
+    assert gesture_side(placement, emptied) == side
+
+
+def test_the_corner_piece_is_not_looked_at() -> None:
+    # A Chess960 start keeps a piece in each corner, not always a rook.
+    board = chess.BaseBoard()
+    board.set_piece_at(chess.A8, chess.Piece(chess.KNIGHT, chess.BLACK))
+    board.remove_piece_at(chess.A1)
+    board.remove_piece_at(chess.H1)
+    assert gesture_side(board, emptied_at(a1=3, h1=3)) == chess.WHITE
 
 
 async def test_the_gesture_held_opens_the_game_with_the_defaults(monkeypatch) -> None:
@@ -155,30 +188,62 @@ async def test_pieces_set_up_with_the_rooks_last_open_nothing(monkeypatch) -> No
     assert board.leds == frozenset()
 
 
-async def test_from_the_whole_start_one_rook_then_the_other(monkeypatch) -> None:
+async def test_one_corner_then_the_other_within_a_second(monkeypatch) -> None:
     server = Server(monkeypatch)
     board, write = new_lobby(armed=False), Board()
-    for placement, seconds in [
-        (chess.BaseBoard(), 1),
-        (lifted(chess.H8), 0.5),
-        (lifted(chess.A8, chess.H8), GESTURE_SECONDS),
+    now = time.monotonic()
+    for placement, since in [
+        (chess.BaseBoard(), now - 10),
+        (lifted(chess.H8), now - 6),
+        (lifted(chess.A8, chess.H8), now - 6 + TOGETHER_SECONDS / 2),
     ]:
-        held(board, placement, seconds)
+        at(board, placement, since)
         await board.tick(write)
     assert [payload["color"] for _url, _token, payload in server.posts] == ["black"]
 
 
-async def test_another_piece_moved_needs_the_whole_start_again(monkeypatch) -> None:
+async def test_the_pieces_put_away_one_by_one_open_nothing(monkeypatch) -> None:
     server = Server(monkeypatch)
     board, write = new_lobby(armed=False), Board()
-    for placement, seconds in [
-        (chess.BaseBoard(), 1),
-        (lifted(chess.E2), 1),
-        (lifted(chess.A1, chess.H1), GESTURE_SECONDS),
+    now = time.monotonic()
+    for placement, since in [
+        (lifted(chess.E4, chess.D5), now - 30),  # a finished game's last position
+        (lifted(chess.E4, chess.D5, chess.A1), now - 20),
+        (lifted(chess.E4, chess.D5, chess.A1, chess.H1), now - 17),
     ]:
-        held(board, placement, seconds)
+        at(board, placement, since)
         await board.tick(write)
-    assert server.posts == [] and not board.armed
+    assert server.posts == [] and board.counting is None
+
+
+async def test_from_any_placement_the_game_opens_then_its_bridge_guides(monkeypatch) -> None:
+    # The black queen on e8 (smoke of Stéphane, 02/11) : the gesture no longer waits for it.
+    server = Server(monkeypatch)
+    board, write = new_lobby(armed=False), Board()
+    queen_off = chess.BaseBoard()
+    queen_off.remove_piece_at(chess.D8)
+    queen_off.remove_piece_at(chess.E8)
+    queen_off.set_piece_at(chess.E8, chess.Piece(chess.QUEEN, chess.BLACK))
+    now = time.monotonic()
+    at(board, queen_off, now - 10)
+    await board.tick(write)
+    without = queen_off.copy()
+    without.remove_piece_at(chess.A1)
+    without.remove_piece_at(chess.H1)
+    at(board, without, now - GESTURE_SECONDS - 0.1)
+    await board.tick(write)
+    assert [payload["color"] for _url, _token, payload in server.posts] == ["white"]
+    assert not board.armed  # the knights' clock still wants the whole start
+
+
+async def test_after_a_try_the_corners_must_be_seen_occupied_again(monkeypatch) -> None:
+    server = Server(monkeypatch, 429, {})
+    board, write = new_lobby(), Board()
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS)
+    await board.tick(write)
+    held(board, lifted(chess.A1, chess.H1, chess.E2), GESTURE_SECONDS)  # another piece moved
+    await board.tick(write)
+    assert len(server.posts) == 1
 
 
 async def test_the_chaser_then_the_window_moves_to_the_new_game(monkeypatch) -> None:
@@ -297,7 +362,7 @@ def knight(home: chess.Square, square: chess.Square | None) -> chess.BaseBoard:
 )
 def test_the_knight_s_square_says_the_part_and_the_value(placement, picked) -> None:
     assert choices(placement) == picked
-    assert gesture_side(placement) is None
+    assert gesture_side(placement, emptied_at()) is None
 
 
 def test_both_knights_off_say_both_parts() -> None:
@@ -332,7 +397,7 @@ def test_a_choosing_knight_off_keeps_the_lobby_armed(placement) -> None:
     ],
 )
 def test_other_pieces_off_choose_nothing(placement) -> None:
-    assert choices(placement) == () and gesture_side(placement) is None
+    assert choices(placement) == () and gesture_side(placement, emptied_at()) is None
     assert not on_the_way(placement)
 
 
@@ -866,3 +931,30 @@ def test_a_clock_the_viewer_would_refuse_is_refused_here(tmp_path, value) -> Non
     path.write_text(f'time_control = "{value}"\n', encoding="utf-8")
     with pytest.raises(SystemExit, match="time_control must be"):
         config.load(path)
+
+
+async def test_a_corner_emptied_during_an_animation_keeps_its_time(monkeypatch) -> None:
+    # A knight's blink is running when a1 leaves : h1 three seconds later is putting away.
+    server = Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    now = time.monotonic()
+    board.animation = [frozenset()] * 2
+    at(board, lifted(chess.A1), now - 10)
+    await board.tick(write)
+    await board.tick(write)
+    at(board, lifted(chess.A1, chess.H1), now - 7)
+    await board.tick(write)
+    assert server.posts == [] and board.counting is None
+
+
+async def test_corners_emptied_while_the_link_was_lost_open_nothing(monkeypatch) -> None:
+    # a1 put away, then h1 three seconds later, the board unlinked : seen at once on its return.
+    server = Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, chess.BaseBoard(), 10)
+    await board.tick(write)
+    board.last_tick = time.monotonic() - lobby.LINK_GAP_SECONDS - 3
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS + 0.1)
+    await board.tick(write)
+    await board.tick(write)
+    assert server.posts == [] and board.counting is None

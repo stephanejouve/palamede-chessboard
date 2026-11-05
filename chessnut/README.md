@@ -64,11 +64,15 @@ On the board :
   meanwhile ; put it back to cancel).
 
 In the app, without a game on the board (none in progress at launch, or
-the one shown is over), set all the pieces in the starting position, then
-lift two rooks for 5 seconds (#167) : a1 + h1 for White, a8 + h8 for Black.
-Setting the pieces up with the rooks last opens nothing : the whole starting
-position must stand on the board first. Their
-squares blink meanwhile ; put them back to cancel. The game is opened
+the one shown is over), lift the two corner pieces of your side together
+and keep them off for 5 seconds (#167, #175) : a1 + h1 for White, a8 + h8
+for Black. The rest of the board may be anything : once the game is opened,
+the LEDs guide you square by square to the starting position. Both corners
+must leave within a second of each other while the other side's corners
+stay occupied, so putting the pieces away one by one opens nothing ; and a
+corner must have been seen occupied first, so setting up with the corners
+last opens nothing either. Their squares blink meanwhile ; put them back to
+cancel. The game is opened
 against `opponent` in `time_control` (settings above), a light runs along
 your back rank, and the window moves to the new game. A refusal (too many
 games open, opponent unknown, token refused) is said in the window ; put
