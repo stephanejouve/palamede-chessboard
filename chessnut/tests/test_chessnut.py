@@ -24,13 +24,9 @@ import chess
 import pytest
 from palamede_chessnut import bridge as bridge_module
 from palamede_chessnut import viewer as viewer_module
-from palamede_chessnut.bridge import (
-    GUIDE_SECONDS,
-    RESIGN_SECONDS,
-    Bridge,
-    decide,
-)
+from palamede_chessnut.bridge import RESIGN_SECONDS, Bridge
 from palamede_chessnut.cli import check_viewer_url, read_token
+from palamede_chessnut.decide import GUIDE_SECONDS, decide
 from palamede_chessnut.moves import differing_squares, find_move, relayed
 from palamede_chessnut.protocol import (
     PIECE_CODES,
