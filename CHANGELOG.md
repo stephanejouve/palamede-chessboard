@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.20.0...v0.20.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **viewer:** an exercise tried only by abandons is red, not « à faire » ([#243](https://github.com/stephanejouve/palamede-chessboard/issues/243)) ([5eebd85](https://github.com/stephanejouve/palamede-chessboard/commit/5eebd857cb4fed3a43de3a9b9ecd64a95b75f856))
+
 ## [0.20.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.19.1...v0.20.0) (2026-11-05)
 
 
