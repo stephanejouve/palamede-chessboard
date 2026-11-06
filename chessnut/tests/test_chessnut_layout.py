@@ -105,8 +105,8 @@ def test_without_a_game_the_gestures_are_said_under_the_board() -> None:
     assert parents.around["lobby"][-2:] == ["stage", "tray"]
     script = (PAGE / "app.js").read_text(encoding="utf-8")
     assert (
-        "el('tray').hidden = !fixing && !state.lobby && !state.refused_text && el('move-error').hidden;"
-        in script
+        "el('tray').hidden = !fixing && !state.lobby && !state.refused_text && !state.exercise\n"
+        "    && el('move-error').hidden;" in script
     )
     assert "el('lobby').textContent = state.lobby || '';" in script
     assert (
@@ -145,3 +145,43 @@ def test_a_refused_move_is_said_under_the_board() -> None:
     assert '<p id="move-error" role="alert" hidden></p>' in tray  # the mouse's too
     side = html[html.index('<section id="side">') :]
     assert 'id="refused"' not in side and 'id="move-error"' not in side
+
+
+def test_an_exercise_is_said_under_the_board() -> None:
+    # Its family and how to answer it, where the viewer says them (#237).
+    parents = Parents()
+    parents.feed((PAGE / "index.html").read_text(encoding="utf-8"))
+    assert parents.around["exercise"][-2:] == ["stage", "tray"]
+    script = (PAGE / "app.js").read_text(encoding="utf-8")
+    assert "el('exercise').hidden = !state.exercise;" in script
+    assert "el('exercise-text').textContent = state.exercise ? state.exercise.text : '';" in script
+    assert "el('exercise-context').hidden = !(state.exercise && state.exercise.context);" in script
+
+
+def test_an_exercise_puts_its_tray_in_the_right_column() -> None:
+    # The board kept shrinking when the exercise's text grew (smoke of
+    # Stéphane #238, 06/11) : an exercise has no clock, its tray goes to the
+    # right column and the board keeps its full, fixed size.
+    js = (PAGE / "app.js").read_text(encoding="utf-8")
+    body = js[js.index("function placeTray(exercise)") :]
+    body = body[: body.index("\n}\n")]
+    assert "const aside = Boolean(exercise) && !NARROW.matches;" in body
+    assert "el('side').insertBefore(tray, el('log'))" in body
+    assert "el('stage').appendChild(tray)" in body
+    # Moved only when its place changes : not re-inserted at each state, which
+    # would lay out the page and re-read its role="alert" (review Junior).
+    assert "if (aside === (tray.parentElement === el('side'))) return;" in body
+    # Its name follows its place (review Junior).
+    assert 'tray.setAttribute(\'aria-label\', aside ? "Exercice" : "Sous l\'échiquier");' in body
+    # Too narrow for two columns : under the board, as in a game.
+    assert "window.matchMedia('(max-width: 760px)')" in js
+    assert "NARROW.addEventListener('change', () => placeTray(lastExercise));" in js
+    # Placed after each state, once the tray's visibility is known.
+    assert (
+        "&& el('move-error').hidden;\n  lastExercise = state.exercise;\n  placeTray(state.exercise);"
+        in js
+    )
+    css = (PAGE / "app.css").read_text(encoding="utf-8")
+    assert "#tray.aside { grid-area: auto;" in css
+    # The board's size no longer depends on the tray.
+    assert "--below" not in js and "--below" not in css

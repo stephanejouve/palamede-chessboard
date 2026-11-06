@@ -458,6 +458,12 @@ function render(state) {
   // The viewer's reason for a refused move : the board only blinks (Stéphane, 05/11).
   el('refused').hidden = !state.refused_text;
   el('refused').textContent = state.refused_text || '';
+  // An exercise says its family and how to answer it, as the viewer does (#237).
+  el('exercise').hidden = !state.exercise;
+  el('exercise-title').textContent = state.exercise ? state.exercise.title : '';
+  el('exercise-context').hidden = !(state.exercise && state.exercise.context);
+  el('exercise-context').textContent = state.exercise ? state.exercise.context : '';
+  el('exercise-text').textContent = state.exercise ? state.exercise.text : '';
   const fixing = state.lights.sync === 'fixing' && state.differing.length > 0;
   renderSetup(fixing ? state.setup : null);
   // The captures and the balance stay in the panel during the setup, which
@@ -470,7 +476,10 @@ function render(state) {
   el('lobby').hidden = !state.lobby;
   el('lobby').textContent = state.lobby || '';
   el('gestures').hidden = !state.lobby;
-  el('tray').hidden = !fixing && !state.lobby && !state.refused_text && el('move-error').hidden;
+  el('tray').hidden = !fixing && !state.lobby && !state.refused_text && !state.exercise
+    && el('move-error').hidden;
+  lastExercise = state.exercise;
+  placeTray(state.exercise);
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
   canSave = Boolean(state.can_save);
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');
@@ -690,6 +699,24 @@ function runMenus(state) {
     lastNotice = state.notice.n;
   }
 }
+
+// An exercise has no clock : its banner, the refused move and the setup go
+// to the right column, under the status and the buttons, and the board keeps
+// its full, fixed size (smoke of Stéphane #238, 06/11). After the « Journal »
+// button, which stays with the other buttons (smoke of Stéphane, 06/11). Under the board again
+// for a game, or on a window too narrow for two columns.
+const NARROW = window.matchMedia('(max-width: 760px)');
+let lastExercise = null;
+function placeTray(exercise) {
+  const tray = el('tray');
+  const aside = Boolean(exercise) && !NARROW.matches;
+  if (aside === (tray.parentElement === el('side'))) return;
+  if (aside) el('side').insertBefore(tray, el('log'));
+  else el('stage').appendChild(tray);
+  tray.classList.toggle('aside', aside);
+  tray.setAttribute('aria-label', aside ? "Exercice" : "Sous l'échiquier");
+}
+NARROW.addEventListener('change', () => placeTray(lastExercise));
 
 el('log-btn').addEventListener('click', () => {
   const log = el('log');

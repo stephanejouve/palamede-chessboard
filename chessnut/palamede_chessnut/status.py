@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import chess
 
+from palamede_chessnut.exercise import banner
 from palamede_chessnut.lobby import tips
 from palamede_chessnut.mouse import legal_targets
 from palamede_chessnut.moves import differing_squares
@@ -234,6 +235,8 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
         "to_relay": bridge.to_relay,
         "relay_text": relay_text(bridge),
         "refused_text": refused_text(bridge),
+        # An exo.* game : its family and how to answer it (#237).
+        "exercise": banner(bridge),
         "differing": differing,
         "setup": (
             setup_steps(chess.BaseBoard(game.board_fen()), observed)
