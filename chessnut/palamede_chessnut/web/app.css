@@ -80,9 +80,11 @@ h1 { font-size: 18px; margin: 0; }
 main {
   display: grid;
   /* The board as tall as the window allows (review Admin #174), no longer
-     capped at 520 px : less the header, the page's padding and room for the
-     setup tray under it, so that the squares to fix stay on screen. */
-  grid-template-columns: minmax(0, max(240px, calc(100vh - 150px))) minmax(240px, 1fr);
+     capped at 520 px : less the header and the page's padding (70 px), and
+     the room under it (--below, set by app.js : 80 px at least, more when the
+     tray is taller), so that the tray stays on screen with the board, an
+     exercise's text included (smoke of Stéphane #238, 06/11). */
+  grid-template-columns: minmax(0, max(240px, calc(100vh - 70px - var(--below, 80px)))) minmax(240px, 1fr);
   grid-template-areas: "stage side";
   gap: 10px 16px;
   align-items: start;

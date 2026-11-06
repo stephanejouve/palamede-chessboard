@@ -68,8 +68,9 @@ def test_the_grid_keeps_the_tray_in_the_boards_column() -> None:
     wide = re.search(r"main \{\s*display: grid;(.*?)\}", css, re.S)
     assert wide is not None
     assert 'grid-template-areas: "stage side"' in wide.group(1)
-    # The board follows the window's height (review Admin #174), room kept for the tray.
-    assert "minmax(0, max(240px, calc(100vh - 150px)))" in wide.group(1)
+    # The board follows the window's height (review Admin #174), room kept for
+    # the tray : 80 px at least, the tray's height when taller (smoke #238).
+    assert "minmax(0, max(240px, calc(100vh - 70px - var(--below, 80px))))" in wide.group(1)
     stage = re.search(r"#stage \{(.*?)\}", css, re.S)
     assert stage is not None and '"board" "tray"' in stage.group(1)
     # Stacked on a narrow window : the board and its tray, then the panel.
@@ -156,3 +157,14 @@ def test_an_exercise_is_said_under_the_board() -> None:
     assert "el('exercise').hidden = !state.exercise;" in script
     assert "el('exercise-text').textContent = state.exercise ? state.exercise.text : '';" in script
     assert "el('exercise-context').hidden = !(state.exercise && state.exercise.context);" in script
+
+
+def test_the_board_leaves_the_tray_room_under_it() -> None:
+    # Full screen, an exercise's text pushed the tray off the window (smoke of
+    # Stéphane #238, 06/11) : the room under the board follows the tray.
+    js = (PAGE / "app.js").read_text(encoding="utf-8")
+    assert "const BELOW_MIN = 80;" in js
+    assert "Math.max(BELOW_MIN, tray.offsetHeight + TRAY_GAP)" in js
+    assert "new ResizeObserver(fitBelow).observe(el('tray'))" in js
+    # Recomputed when the tray shows or hides, after each state.
+    assert "&& el('move-error').hidden;\n  fitBelow();" in js

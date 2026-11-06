@@ -478,6 +478,7 @@ function render(state) {
   el('gestures').hidden = !state.lobby;
   el('tray').hidden = !fixing && !state.lobby && !state.refused_text && !state.exercise
     && el('move-error').hidden;
+  fitBelow();
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
   canSave = Boolean(state.can_save);
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');
@@ -697,6 +698,20 @@ function runMenus(state) {
     lastNotice = state.notice.n;
   }
 }
+
+// The room kept under the board : 80 px as before, more when the tray is
+// taller (an exercise's text, a refused move), so that the board and its tray
+// fit in the window together (smoke of Stéphane #238, 06/11). A narrower
+// board wraps the tray's text further : the height only grows until it holds.
+const BELOW_MIN = 80;
+const TRAY_GAP = 10;
+function fitBelow() {
+  const tray = el('tray');
+  const below = tray.hidden ? BELOW_MIN : Math.max(BELOW_MIN, tray.offsetHeight + TRAY_GAP);
+  const now = parseFloat(document.documentElement.style.getPropertyValue('--below')) || BELOW_MIN;
+  if (Math.abs(below - now) > 2) document.documentElement.style.setProperty('--below', below + 'px');
+}
+if (typeof ResizeObserver === 'function') new ResizeObserver(fitBelow).observe(el('tray'));
 
 el('log-btn').addEventListener('click', () => {
   const log = el('log');
