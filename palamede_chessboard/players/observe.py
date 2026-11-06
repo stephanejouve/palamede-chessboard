@@ -228,6 +228,7 @@ def _append(path: Path, entry: dict) -> None:
     with _atomic.locked(path):
         if path.exists() and path.stat().st_size >= MAX_JOURNAL_BYTES:
             os.replace(path, path.with_name(path.name + ".1"))
+            _atomic.fsync_dir(path.parent)  # the rotation itself (#252)
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
         with os.fdopen(fd, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
