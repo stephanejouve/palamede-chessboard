@@ -33,6 +33,7 @@ from pathlib import Path
 
 import chess
 
+from palamede_chessboard.chess_arbiter import validate_san_strict
 from palamede_chessboard.chess_engine_guard import (
     live_game_through,
     log_engine_call,
@@ -226,9 +227,13 @@ def play_move(state: GameState, player_id: str, move_san: str, games_dir: Path) 
         faster = uci in exercise.get("slower_mates", [])
         raise ExerciseError(409, FASTER_MATE if faster else NOT_THE_MOVE)
     side = _player_side(state, player_id)
+    # The attempt before the move : a mate ends the game inside play_move, and a
+    # reader woken by the finished game must find it (#254). A SAN the board
+    # refuses is refused by play_move as before, nothing counted.
+    if validate_san_strict(state.board, move_san).ok:
+        _attempt(exercise["id"], games_dir, player_id, entry, ok=True)
     result = state.play_move(move_san, by=player_id)
     _finish(state, side, SOLVED_NOTE)
-    _attempt(exercise["id"], games_dir, player_id, entry, ok=True)
     return {**result, "result": state.metadata.result}
 
 
@@ -260,6 +265,7 @@ def answer(games_dir: Path, player_id: str, exercise_id: str, squares: list[str]
         if given != exercise["solution_squares"]:
             _attempt(exercise_id, games_dir, player_id, entry, ok=False)
             raise ExerciseError(409, "Ce ne sont pas les bonnes cases")
-        _finish(state, _player_side(state, player_id), SOLVED_NOTE)
+        # The attempt before the end : a reader woken by the finished game finds it (#254).
         exercise = _attempt(exercise_id, games_dir, player_id, entry, ok=True)
+        _finish(state, _player_side(state, player_id), SOLVED_NOTE)
     return public_view(exercise)
