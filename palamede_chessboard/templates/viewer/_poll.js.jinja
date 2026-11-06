@@ -30,8 +30,12 @@ async function pollPositions() {
     if (gameId() !== game) return;
     const wasAtEnd = (POS.length === 0) || (idx === POS.length - 1);
     const oldLen = POS.length;
+    // Ended while shown : this game was read in progress before (a first
+    // read after resetAndPoll is not an end, the game may be long over).
+    const ended = oldLen > 0 && lastResult === '*' && (data.result || '*') !== '*';
     POS = data.positions;
     lastResult = data.result || '*';
+    if (ended && game.startsWith('exo.')) rereadCoach(game);
     const h = data.headers || {};
     document.getElementById('hdr-meta').innerHTML =
       '<strong>' + (h.White || '?') + '</strong> vs <strong>' + (h.Black || '?') + '</strong>'

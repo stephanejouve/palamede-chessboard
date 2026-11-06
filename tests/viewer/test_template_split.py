@@ -16,7 +16,7 @@ MARKERS = {
     "_poll.js": "async function pollPositions()",
     "_render.js": "function renderCaptures(fen)",
     "_live.js": "function startEventStream()",
-    "_coach.js": "async function loadCoach()",
+    "_coach.js": "async function loadCoach(again)",
     "_board.js": "import { Chessground }",
 }
 

@@ -173,12 +173,13 @@ function onFilterChange(select) {
   if (box) box.innerHTML = filteredHtml(f);
 }
 
-async function loadCoach() {
+async function loadCoach(again) {
   if (!playerToken()) {
     coachBody.innerHTML = '<div class="empty">Collez votre jeton avec 🔑 pour voir vos exercices.</div>';
     return;
   }
-  coachBody.innerHTML = '<div class="empty">Chargement…</div>';
+  // A reread keeps the list on screen until the answer, without « Chargement… ».
+  if (!again) coachBody.innerHTML = '<div class="empty">Chargement…</div>';
   try {
     const [rp, re] = await Promise.all([
       fetch('/api/coach/progress', { cache: 'no-store', headers: coachHeaders() }),
@@ -186,10 +187,25 @@ async function loadCoach() {
     ]);
     if (!rp.ok || !re.ok) { coachBody.innerHTML = '<div class="empty">' + escapeHtml(coachRefusal(rp.ok ? re.status : rp.status)) + '</div>'; return; }
     const progress = await rp.json(), exercises = (await re.json()).exercises || [];
+    // « Voir tous » stays unfolded across a reread (#254) ; the filter is kept by savedFilter().
+    const unfolded = Boolean(coachBody.querySelector('.coach-all[open]'));
     coachBody.innerHTML = reminderHtml(progress) + progressHtml(progress) + exercisesHtml(exercises, progress);
+    if (unfolded) coachBody.querySelector('.coach-all').open = true;
   } catch (_) {
     coachBody.innerHTML = '<div class="empty">Exercices indisponibles (réseau).</div>';
   }
+}
+
+// #254 : the panel kept its opening read — a solved exercise stayed « à
+// reprendre » until the panel was closed and opened again. Read once more
+// when the exo.* game shown ends or an answer is accepted : on the event,
+// never in a loop (Admin, #95). A closed panel reads when it opens. Once per
+// game : an accepted answer also ends its game, and the stream may see it first.
+let COACH_REREAD = '';
+function rereadCoach(game) {
+  if (game === COACH_REREAD) return;
+  COACH_REREAD = game;
+  if (coachBox.open) loadCoach(true);
 }
 
 // The band under the board (#237) : the exercise's family, its rule, and for
@@ -282,7 +298,7 @@ async function answerExercise(id) {
   try { body = await r.json(); } catch (_) { /* no body */ }
   const msg = document.getElementById('coach-answer-msg');
   msg.textContent = r.ok ? 'Bonne réponse !' : (typeof body.detail === 'string' ? body.detail : coachRefusal(r.status));
-  if (r.ok) resetAndPoll();
+  if (r.ok) { resetAndPoll(); rereadCoach(gameId()); }
 }
 
 coachBox.addEventListener('toggle', () => { if (coachBox.open) loadCoach(); });

@@ -20,7 +20,7 @@ COACH_JS = (TEMPLATES_DIR / "viewer" / "_coach.js.jinja").read_text(encoding="ut
 def test_the_panel_is_on_the_page_folded(client: TestClient) -> None:
     page = _page_and_scripts(client)
     assert '<details class="coach" id="coach">' in page  # folded : no « open »
-    assert "async function loadCoach()" in page
+    assert "async function loadCoach(again)" in page
 
 
 def test_the_progress_is_read_when_the_panel_opens_never_polled() -> None:
