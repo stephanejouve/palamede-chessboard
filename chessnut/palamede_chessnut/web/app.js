@@ -702,7 +702,8 @@ function runMenus(state) {
 
 // An exercise has no clock : its banner, the refused move and the setup go
 // to the right column, under the status and the buttons, and the board keeps
-// its full, fixed size (smoke of Stéphane #238, 06/11). Under the board again
+// its full, fixed size (smoke of Stéphane #238, 06/11). After the « Journal »
+// button, which stays with the other buttons (smoke of Stéphane, 06/11). Under the board again
 // for a game, or on a window too narrow for two columns.
 const NARROW = window.matchMedia('(max-width: 760px)');
 let lastExercise = null;
@@ -710,7 +711,7 @@ function placeTray(exercise) {
   const tray = el('tray');
   const aside = Boolean(exercise) && !NARROW.matches;
   if (aside === (tray.parentElement === el('side'))) return;
-  if (aside) el('side').insertBefore(tray, el('log-btn'));
+  if (aside) el('side').insertBefore(tray, el('log'));
   else el('stage').appendChild(tray);
   tray.classList.toggle('aside', aside);
   tray.setAttribute('aria-label', aside ? "Exercice" : "Sous l'échiquier");

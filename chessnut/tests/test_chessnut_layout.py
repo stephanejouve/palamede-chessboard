@@ -166,7 +166,7 @@ def test_an_exercise_puts_its_tray_in_the_right_column() -> None:
     body = js[js.index("function placeTray(exercise)") :]
     body = body[: body.index("\n}\n")]
     assert "const aside = Boolean(exercise) && !NARROW.matches;" in body
-    assert "el('side').insertBefore(tray, el('log-btn'))" in body
+    assert "el('side').insertBefore(tray, el('log'))" in body
     assert "el('stage').appendChild(tray)" in body
     # Moved only when its place changes : not re-inserted at each state, which
     # would lay out the page and re-read its role="alert" (review Junior).
