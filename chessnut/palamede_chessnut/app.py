@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from collections.abc import Callable
 from typing import Any
 
 from palamede_chessnut.bridge import Bridge
@@ -102,7 +103,34 @@ def copier(page: PageServer, kind: str, copy: Copy | None) -> Any:
     return start
 
 
-def menus(page: PageServer, menu: Any, action: Any, copy: Copy | None = None) -> list[Any]:
+def about(page: PageServer, dialog: Callable[[str], Any] | None) -> Any:
+    """« Aide ▸ À propos du Tablier » : the build, in the journal, the page and a native dialog.
+
+    The page's notice alone was not seen in the window (smoke S7 of
+    Stéphane, 06/11) : the journal line tells whether the item ran, the
+    dialog shows the build whatever the page draws.
+    """
+
+    def run() -> None:
+        text = build_info()
+        log.info("À propos : %s", text)
+        page.notify(text)
+        if dialog is not None:
+            try:
+                dialog(text)
+            except Exception:  # noqa: BLE001 (a dialog refused leaves the page's notice)
+                log.warning("dialogue « À propos » refusé par la fenêtre", exc_info=True)
+
+    return run
+
+
+def menus(
+    page: PageServer,
+    menu: Any,
+    action: Any,
+    copy: Copy | None = None,
+    dialog: Callable[[str], Any] | None = None,
+) -> list[Any]:
     """The window's menus (#90, #140) : each item does what the page's button does."""
 
     def ask(name: str) -> Any:
@@ -133,8 +161,16 @@ def menus(page: PageServer, menu: Any, action: Any, copy: Copy | None = None) ->
             ],
         ),
         # The build a smoke runs : release, branch and commit (Stéphane, 05/11).
-        menu("Aide", [action("À propos du Tablier", lambda: page.notify(build_info()))]),
+        menu("Aide", [action("À propos du Tablier", about(page, dialog))]),
     ]
+
+
+def about_dialog(window: Any) -> Callable[[str], Any] | None:
+    """The window's native dialog for « À propos », or ``None`` on a pywebview without one."""
+    create = getattr(window, "create_confirmation_dialog", None)
+    if create is None:
+        return None
+    return lambda text: create("À propos du Tablier", text)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -167,7 +203,7 @@ def main(argv: list[str] | None = None) -> None:
         # The title of the session's bridge, not of the one told : two crossing
         # openings may tell them out of order (review Junior #123).
         session.on_change = lambda _new: window.set_title(title(session.bridge))
-        webview.start(menu=menus(page, Menu, MenuAction, system_copy()))
+        webview.start(menu=menus(page, Menu, MenuAction, system_copy(), about_dialog(window)))
     finally:
         # Also when the window cannot open (no graphical session, review
         # Junior #87) : the bridge switches the LEDs off before the exit.

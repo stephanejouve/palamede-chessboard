@@ -87,6 +87,47 @@ def test_about_says_the_build_in_the_page(page, monkeypatch) -> None:
     assert state_of(page)["notice"]["text"] == "palamede-chessnut 9.9.9, branche b, commit abcdef0"
 
 
+def test_about_opens_a_native_dialog_and_says_so_in_the_journal(page, monkeypatch, caplog) -> None:
+    # The page's notice alone was not seen in the window (smoke S7, 06/11).
+    monkeypatch.setattr(app_module, "build_info", lambda: "palamede-chessnut 9.9.9")
+    shown: list[str] = []
+    menus = app_module.menus(page, fake_menu, fake_action, dialog=shown.append)
+    entries = {label: run for _title, items_ in menus for label, run in items_}
+    with caplog.at_level("INFO"):
+        entries["À propos du Tablier"]()
+    assert shown == ["palamede-chessnut 9.9.9"]
+    assert "À propos : palamede-chessnut 9.9.9" in caplog.text
+    assert state_of(page)["notice"]["text"] == "palamede-chessnut 9.9.9"
+
+
+def test_a_refused_dialog_leaves_the_page_notice(page, monkeypatch) -> None:
+    monkeypatch.setattr(app_module, "build_info", lambda: "palamede-chessnut 9.9.9")
+
+    def refused(_text: str) -> None:
+        raise RuntimeError("no window")
+
+    menus = app_module.menus(page, fake_menu, fake_action, dialog=refused)
+    entries = {label: run for _title, items_ in menus for label, run in items_}
+    entries["À propos du Tablier"]()
+    assert state_of(page)["notice"]["text"] == "palamede-chessnut 9.9.9"
+
+
+def test_about_dialog_uses_the_window_s_confirmation_dialog() -> None:
+    asked: list[tuple[str, str]] = []
+
+    class Window:
+        def create_confirmation_dialog(self, title: str, message: str) -> bool:
+            asked.append((title, message))
+            return True
+
+    dialog = app_module.about_dialog(Window())
+    assert dialog is not None
+    dialog("palamede-chessnut 9.9.9")
+    assert asked == [("À propos du Tablier", "palamede-chessnut 9.9.9")]
+    # An older pywebview without the dialog : the page's notice only.
+    assert app_module.about_dialog(object()) is None
+
+
 @pytest.mark.parametrize(
     ("label", "action"),
     [
