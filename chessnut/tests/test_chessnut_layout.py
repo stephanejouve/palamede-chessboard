@@ -68,9 +68,8 @@ def test_the_grid_keeps_the_tray_in_the_boards_column() -> None:
     wide = re.search(r"main \{\s*display: grid;(.*?)\}", css, re.S)
     assert wide is not None
     assert 'grid-template-areas: "stage side"' in wide.group(1)
-    # The board follows the window's height (review Admin #174), room kept for
-    # the tray : 80 px at least, the tray's height when taller (smoke #238).
-    assert "minmax(0, max(240px, calc(100vh - 70px - var(--below, 80px))))" in wide.group(1)
+    # The board follows the window's height (review Admin #174), room kept for the tray.
+    assert "minmax(0, max(240px, calc(100vh - 150px)))" in wide.group(1)
     stage = re.search(r"#stage \{(.*?)\}", css, re.S)
     assert stage is not None and '"board" "tray"' in stage.group(1)
     # Stacked on a narrow window : the board and its tray, then the panel.
@@ -159,14 +158,25 @@ def test_an_exercise_is_said_under_the_board() -> None:
     assert "el('exercise-context').hidden = !(state.exercise && state.exercise.context);" in script
 
 
-def test_the_board_leaves_the_tray_room_under_it() -> None:
-    # Full screen, an exercise's text pushed the tray off the window (smoke of
-    # Stéphane #238, 06/11) : the room under the board follows the tray.
+def test_an_exercise_puts_its_tray_in_the_right_column() -> None:
+    # The board kept shrinking when the exercise's text grew (smoke of
+    # Stéphane #238, 06/11) : an exercise has no clock, its tray goes to the
+    # right column and the board keeps its full, fixed size.
     js = (PAGE / "app.js").read_text(encoding="utf-8")
-    assert "const BELOW_MIN = 80;" in js
-    assert "Math.max(BELOW_MIN, tray.offsetHeight + TRAY_GAP)" in js
-    assert "new ResizeObserver(fitBelow).observe(el('tray'))" in js
-    # A length, not a bare number : calc() would be invalid and the grid drop (review Junior).
-    assert "setProperty('--below', below + 'px')" in js
-    # Recomputed when the tray shows or hides, after each state.
-    assert "&& el('move-error').hidden;\n  fitBelow();" in js
+    body = js[js.index("function placeTray(exercise)") :]
+    body = body[: body.index("\n}\n")]
+    assert "const aside = Boolean(exercise) && !NARROW.matches;" in body
+    assert "el('side').insertBefore(tray, el('log-btn'))" in body
+    assert "el('stage').appendChild(tray)" in body
+    # Too narrow for two columns : under the board, as in a game.
+    assert "window.matchMedia('(max-width: 760px)')" in js
+    assert "NARROW.addEventListener('change', () => placeTray(lastExercise));" in js
+    # Placed after each state, once the tray's visibility is known.
+    assert (
+        "&& el('move-error').hidden;\n  lastExercise = state.exercise;\n  placeTray(state.exercise);"
+        in js
+    )
+    css = (PAGE / "app.css").read_text(encoding="utf-8")
+    assert "#tray.aside { grid-area: auto;" in css
+    # The board's size no longer depends on the tray.
+    assert "--below" not in js and "--below" not in css

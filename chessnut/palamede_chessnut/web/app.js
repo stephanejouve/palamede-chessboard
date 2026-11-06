@@ -478,7 +478,8 @@ function render(state) {
   el('gestures').hidden = !state.lobby;
   el('tray').hidden = !fixing && !state.lobby && !state.refused_text && !state.exercise
     && el('move-error').hidden;
-  fitBelow();
+  lastExercise = state.exercise;
+  placeTray(state.exercise);
   if (el('fen').value !== (state.fen || '')) el('fen').value = state.fen || '';
   canSave = Boolean(state.can_save);
   if (!el('log').hidden) el('log').textContent = state.log.join('\n');
@@ -699,19 +700,21 @@ function runMenus(state) {
   }
 }
 
-// The room kept under the board : 80 px as before, more when the tray is
-// taller (an exercise's text, a refused move), so that the board and its tray
-// fit in the window together (smoke of Stéphane #238, 06/11). A narrower
-// board wraps the tray's text further : the height only grows until it holds.
-const BELOW_MIN = 80;
-const TRAY_GAP = 10;
-function fitBelow() {
+// An exercise has no clock : its banner, the refused move and the setup go
+// to the right column, under the status and the buttons, and the board keeps
+// its full, fixed size (smoke of Stéphane #238, 06/11). Under the board again
+// for a game, or on a window too narrow for two columns.
+const NARROW = window.matchMedia('(max-width: 760px)');
+let lastExercise = null;
+function placeTray(exercise) {
   const tray = el('tray');
-  const below = tray.hidden ? BELOW_MIN : Math.max(BELOW_MIN, tray.offsetHeight + TRAY_GAP);
-  const now = parseFloat(document.documentElement.style.getPropertyValue('--below')) || BELOW_MIN;
-  if (Math.abs(below - now) > 2) document.documentElement.style.setProperty('--below', below + 'px');
+  const aside = Boolean(exercise) && !NARROW.matches;
+  if (aside === (tray.parentElement === el('side'))) return;
+  if (aside) el('side').insertBefore(tray, el('log-btn'));
+  else el('stage').appendChild(tray);
+  tray.classList.toggle('aside', aside);
 }
-if (typeof ResizeObserver === 'function') new ResizeObserver(fitBelow).observe(el('tray'));
+NARROW.addEventListener('change', () => placeTray(lastExercise));
 
 el('log-btn').addEventListener('click', () => {
   const log = el('log');
