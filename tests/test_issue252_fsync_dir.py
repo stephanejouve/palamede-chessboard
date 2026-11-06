@@ -4,6 +4,7 @@ the parent directory after their rename (following #246).
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -34,6 +35,27 @@ def test_cursor_fsyncs_parent_after_rename(tmp_path: Path, monkeypatch: pytest.M
     _write_cursor(cursor, 7)
     assert calls == [(cursor.parent, ["g.cursor"])]
     assert cursor.read_text(encoding="utf-8") == "7"
+
+
+def test_cursor_fsyncs_its_content_before_rename(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Renamed but empty after a power cut, the cursor would read 0 and the
+    # arbiter re-announce the whole game (review Leader, Junior #256).
+    cursor = tmp_path / "g.cursor"
+    real_fsync = os.fsync
+    seen: list[tuple[str, list[str]]] = []
+
+    def spy(fd: int) -> None:
+        content = (tmp_path / "g.cursor.tmp").read_text(encoding="utf-8")
+        seen.append((content, sorted(p.name for p in tmp_path.iterdir())))
+        real_fsync(fd)
+
+    monkeypatch.setattr(chess_arbiter_daemon, "fsync_dir", lambda _d: None)
+    monkeypatch.setattr(chess_arbiter_daemon.os, "fsync", spy)
+    _write_cursor(cursor, 42)
+    assert seen == [("42", ["g.cursor.tmp"])]
+    assert cursor.read_text(encoding="utf-8") == "42"
 
 
 def test_pidfile_fsyncs_parent_after_rename(

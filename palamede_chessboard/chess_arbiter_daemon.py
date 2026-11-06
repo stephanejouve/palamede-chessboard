@@ -152,7 +152,10 @@ def _read_cursor(path: Path) -> int:
 def _write_cursor(path: Path, line_no: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(str(line_no), encoding="utf-8")
+    with tmp.open("w", encoding="utf-8") as f:
+        f.write(str(line_no))
+        f.flush()
+        os.fsync(f.fileno())  # the content first : a cursor renamed but empty reads 0 (#252)
     tmp.replace(path)
     fsync_dir(path.parent)  # the rename itself : a cursor that goes back re-announces moves (#252)
 
