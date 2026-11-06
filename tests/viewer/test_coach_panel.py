@@ -215,13 +215,9 @@ def test_each_line_says_where_the_player_stands_in_colour_and_words() -> None:
     # Stéphane, 05/11 : missed then found in the same game stays « failed »,
     # like never found ; the attempts tell them apart, an abandon finds nothing.
     assert "if (e.state === 'solved') return 'solved';" in COACH_JS
-    # Abandons only : still « proposed » on the server, but tried — red, not fresh.
-    assert "const tries = Array.isArray(e.attempts) ? e.attempts : [];" in COACH_JS
-    assert "if (e.state !== 'failed' && !tries.length) return 'todo';" in COACH_JS
-    assert (
-        "return tries.some(a => a && a.ok === true && !a.abandoned) ? 'found' : 'never';"
-        in COACH_JS
-    )
+    assert "if (e.state !== 'failed') return 'todo';" in COACH_JS
+    assert "e.attempts.some(a => a && a.ok === true && !a.abandoned)" in COACH_JS
+    assert "return found ? 'found' : 'never';" in COACH_JS
     for key, words in (
         ("never", "à reprendre · jamais trouvé"),
         ("found", "à reprendre · déjà trouvé"),
