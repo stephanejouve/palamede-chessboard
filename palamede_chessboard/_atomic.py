@@ -34,7 +34,8 @@ def locked(path: Path) -> Iterator[None]:
             fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
-def _fsync_dir(directory: Path) -> None:
+def fsync_dir(directory: Path) -> None:
+    """``fsync`` a directory, so a rename inside it survives a power cut (#246)."""
     fd = os.open(directory, os.O_RDONLY)
     try:
         os.fsync(fd)
@@ -57,4 +58,4 @@ def write_json(path: Path, data: object, *, mode: int) -> None:
         with contextlib.suppress(FileNotFoundError):
             os.unlink(tmp_name)
         raise
-    _fsync_dir(path.parent)
+    fsync_dir(path.parent)
