@@ -116,6 +116,7 @@ def clock_after_move(state: GameState, mover: str, games_dir: Path) -> ClockStat
         clock.last_move_ts = clock_module._now()
         clock.active = "black" if mover == "white" else "white"
     else:
+        clock.drop_silent(mover)  # still held : its bridge is gone (#164a)
         clock.on_move_played(mover=mover)
         # The flag fell before the late move : 6.9 is judged on the position
         # it was played from, or taking the last pawn would turn a loss into a
@@ -181,6 +182,8 @@ def declare_board(game_id: str, sides: list[str], with_board: bool, games_dir: P
     """The bridge of ``sides`` plays on an eBoard, or no longer does (#164).
 
     Leaving the board ends a hold of those sides at once : nothing to set.
+    A declaration left by a bridge that died expires on its own : the side
+    loses the hold at its first move made while held (#164a).
     """
     with game_lock(game_id, games_dir):
         clock = load_clock(game_id, games_dir=games_dir)
@@ -188,6 +191,7 @@ def declare_board(game_id: str, sides: list[str], with_board: bool, games_dir: P
             return
         others = [side for side in clock.board_sides if side not in sides]
         clock.board_sides = sorted(set(others + sides)) if with_board else others
+        clock.stale_sides = [side for side in clock.stale_sides if side not in sides]
         if not with_board and clock.active in sides:
             clock.release()
         save_clock(clock, games_dir=games_dir)
@@ -197,15 +201,18 @@ def release_on_sync(game_id: str, board_fen: str, games_dir: Path) -> bool:
     """The board of the side to move shows ``board_fen`` (#164) : release its hold.
 
     Only for the game's current position : a late signal about an older one
-    releases nothing. ``True`` when the time now runs.
+    releases nothing. ``True`` when the time now runs. A side dropped for a
+    silent bridge plays on its board again (#164a) : held from the next move.
     """
     with game_lock(game_id, games_dir):
         clock = load_clock(game_id, games_dir=games_dir)
-        if clock is None or not clock.held:
+        if clock is None or not (clock.held or clock.active in clock.stale_sides):
             return False
         state = GameState.load(game_id, games_dir=games_dir)
         if state.board.board_fen() != board_fen:
             return False
-        clock.release()
+        if clock.active is not None:
+            clock.rejoin(clock.active)
+        released = clock.release()
         save_clock(clock, games_dir=games_dir)
-        return True
+        return released

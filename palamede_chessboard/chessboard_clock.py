@@ -19,7 +19,10 @@ clock is a thin wrapper around two countdowns (white / black) plus an
   opponent's move on the board. Its time is held until its bridge says the
   board matches the game (:meth:`ClockState.release`), at most
   :data:`HOLD_SECONDS` : ``last_move_ts`` is moved that far ahead, and every
-  reader already counts ``max(0, now - last_move_ts)``.
+  reader already counts ``max(0, now - last_move_ts)``. A side that moves
+  while still held has a silent bridge, a Tablier killed without closing :
+  it loses the hold (:meth:`ClockState.drop_silent`) until its bridge says
+  again that the board matches (#164a).
 * Persistence is a JSONL side-car ``clock_<game_id>.json`` (single-line
   snapshot, rewritten on every change) next to the PGN.
 
@@ -31,7 +34,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -67,6 +70,8 @@ class ClockState:
     board_sides: list[str] = field(default_factory=list)
     #: The side to move's time is held until its board matches (#164).
     held: bool = False
+    #: The sides dropped from :attr:`board_sides` for a silent bridge (#164a).
+    stale_sides: list[str] = field(default_factory=list)
 
     @classmethod
     def init_from_time_control(cls, game_id: str, tc: TimeControl) -> ClockState | None:
@@ -152,6 +157,28 @@ class ClockState:
         if self.held and self.last_move_ts is not None:
             self.last_move_ts += HOLD_SECONDS
 
+    def drop_silent(self, mover: str) -> bool:
+        """``mover`` moves while still held : its bridge never said the board matched.
+
+        A Tablier killed without closing leaves its side declared (review
+        Junior and Admin #166) : it would win the hold at every move. The side
+        leaves :attr:`board_sides` for :attr:`stale_sides`, until its bridge
+        speaks again (:meth:`rejoin`). ``True`` when dropped (#164a).
+        """
+        if not (self.held and self.active == mover and mover in self.board_sides):
+            return False
+        self.board_sides = [side for side in self.board_sides if side != mover]
+        self.stale_sides = sorted(set(self.stale_sides) | {mover})
+        return True
+
+    def rejoin(self, side: str) -> bool:
+        """The bridge of a dropped ``side`` says its board matches : it plays on it (#164a)."""
+        if side not in self.stale_sides:
+            return False
+        self.stale_sides = [s for s in self.stale_sides if s != side]
+        self.board_sides = sorted(set(self.board_sides) | {side})
+        return True
+
     def release(self, *, now: float | None = None) -> bool:
         """The board matches (#164) : the side to move's time runs from ``now``.
 
@@ -199,7 +226,10 @@ def load_clock(game_id: str, *, games_dir: Path | None = None) -> ClockState | N
         return None
     with path.open("r", encoding="utf-8") as f:
         data = json.load(f)
-    return ClockState(**data)
+    # A field this version does not know (written by a newer one) is left out :
+    # a rollback must still read the clock (#164a).
+    known = {fld.name for fld in fields(ClockState)}
+    return ClockState(**{k: v for k, v in data.items() if k in known})
 
 
 def init_and_save_clock(
