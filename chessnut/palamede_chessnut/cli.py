@@ -25,8 +25,9 @@ from urllib.parse import urlsplit
 
 import chess
 
-from palamede_chessnut import __version__, config, launch
+from palamede_chessnut import config, launch
 from palamede_chessnut.bridge import Bridge
+from palamede_chessnut.build import build_info
 from palamede_chessnut.lobby import Lobby
 
 log = logging.getLogger(__name__)
@@ -146,7 +147,7 @@ def _bridge(args: argparse.Namespace, token: str, new_game: dict[str, str], *, a
 def main(argv: list[str] | None = None) -> None:
     bridge = bridge_from_args(argv, "Play a viewer game on a Chessnut Air+ board.")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    log.info("palamede-chessnut %s", __version__)
+    log.info("%s", build_info())
     try:
         asyncio.run(bridge.run())
     except (KeyboardInterrupt, asyncio.CancelledError):
