@@ -14,13 +14,13 @@ from palamede_chessboard.chess_engine_guard import (
     GUARDED_TOOLS,
     MASKED_CLASSIFICATION,
     OPENING_PLIES_IGNORED,
-    _mirror_fingerprint,
     check_engine_call,
     engine_calls_log_path,
     log_engine_call,
     mask_walk_entries,
     normalize_fen_for_match,
 )
+from palamede_chessboard.chess_engine_positions import _mirror_fingerprint
 from palamede_chessboard.chessboard_state import GameMetadata, GameState, TimeControl
 
 
