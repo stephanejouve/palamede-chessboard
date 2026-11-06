@@ -168,6 +168,11 @@ def test_an_exercise_puts_its_tray_in_the_right_column() -> None:
     assert "const aside = Boolean(exercise) && !NARROW.matches;" in body
     assert "el('side').insertBefore(tray, el('log-btn'))" in body
     assert "el('stage').appendChild(tray)" in body
+    # Moved only when its place changes : not re-inserted at each state, which
+    # would lay out the page and re-read its role="alert" (review Junior).
+    assert "if (aside === (tray.parentElement === el('side'))) return;" in body
+    # Its name follows its place (review Junior).
+    assert 'tray.setAttribute(\'aria-label\', aside ? "Exercice" : "Sous l\'échiquier");' in body
     # Too narrow for two columns : under the board, as in a game.
     assert "window.matchMedia('(max-width: 760px)')" in js
     assert "NARROW.addEventListener('change', () => placeTray(lastExercise));" in js

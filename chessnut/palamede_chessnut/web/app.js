@@ -713,6 +713,7 @@ function placeTray(exercise) {
   if (aside) el('side').insertBefore(tray, el('log-btn'));
   else el('stage').appendChild(tray);
   tray.classList.toggle('aside', aside);
+  tray.setAttribute('aria-label', aside ? "Exercice" : "Sous l'échiquier");
 }
 NARROW.addEventListener('change', () => placeTray(lastExercise));
 
