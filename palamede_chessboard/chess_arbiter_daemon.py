@@ -61,6 +61,7 @@ from pathlib import Path
 
 import chess
 
+from palamede_chessboard._atomic import fsync_dir
 from palamede_chessboard.chess_arbiter import move_request_context, validate_san_strict
 from palamede_chessboard.chessboard_state import GAMES_DIR, GameState, IllegalMoveError
 from palamede_chessboard.paths import resolve_games_dir
@@ -153,6 +154,7 @@ def _write_cursor(path: Path, line_no: int) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(str(line_no), encoding="utf-8")
     tmp.replace(path)
+    fsync_dir(path.parent)  # the rename itself : a cursor that goes back re-announces moves (#252)
 
 
 # ---- Talk send indirection (test seam) ----------------------------------
@@ -342,6 +344,7 @@ def pidfile_lifecycle(games_dir: Path, game_id: str):
     tmp = marker.with_suffix(marker.suffix + ".tmp")
     tmp.write_text(str(os.getpid()), encoding="utf-8")
     tmp.replace(marker)
+    fsync_dir(marker.parent)  # the rename itself (#252)
     log.info("wrote arbiter pidfile %s (pid=%d)", marker, os.getpid())
 
     def _cleanup(*_args):
