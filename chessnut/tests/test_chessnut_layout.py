@@ -166,5 +166,7 @@ def test_the_board_leaves_the_tray_room_under_it() -> None:
     assert "const BELOW_MIN = 80;" in js
     assert "Math.max(BELOW_MIN, tray.offsetHeight + TRAY_GAP)" in js
     assert "new ResizeObserver(fitBelow).observe(el('tray'))" in js
+    # A length, not a bare number : calc() would be invalid and the grid drop (review Junior).
+    assert "setProperty('--below', below + 'px')" in js
     # Recomputed when the tray shows or hides, after each state.
     assert "&& el('move-error').hidden;\n  fitBelow();" in js
