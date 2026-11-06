@@ -15,7 +15,7 @@ import chess
 
 from palamede_chessboard._mcp_tool_handlers import _resolve_analyze_fen
 from palamede_chessboard.chess_arbiter import move_request_context
-from palamede_chessboard.chess_engine_guard import (
+from palamede_chessboard.chess_engine_positions import (
     _fingerprint_pair,
     _game_position_fingerprints,
     _position_fen_at_ply,
