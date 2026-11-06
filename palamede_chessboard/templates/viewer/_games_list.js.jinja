@@ -9,6 +9,8 @@ const gselLive = document.getElementById('gsel-live');
 const gselDone = document.getElementById('gsel-done');
 const gselMore = document.getElementById('gsel-more');
 const gselExos = document.getElementById('gsel-exos');
+const gselMine = document.getElementById('gsel-mine');
+const gselMineOpt = document.getElementById('gsel-mine-opt');
 const GSEL_PAGE = 20;
 let gselOffset = 0;
 let gselTimer = null;
@@ -43,6 +45,12 @@ function gselQuery(limit, offset) {
   const q = gameIdInput.value.trim();
   if (q && q !== gameId()) p.set('q', q);
   if (!gselExos.checked) p.set('exercises', 'false');
+  // #245 : with a token whose player /api/me confirmed, only that player's
+  // games by default (#46) ; unticking the box lists them all again.
+  // Without a confirmed player, the box is hidden and nothing changes.
+  const me = KEY_WHO.state === 'ok' ? KEY_WHO.player : '';
+  gselMineOpt.hidden = !me;
+  if (me && gselMine.checked) p.set('player', me);
   p.set('limit', String(limit));
   p.set('offset', String(offset));
   // 'no-cache', not 'no-store' : the browser revalidates with
@@ -113,6 +121,7 @@ gselPanel.addEventListener('mousedown', e => {
   else if (e.target !== gselExos && !e.target.closest('label')) e.preventDefault();
 });
 gselExos.addEventListener('change', () => gselLoad(false));
+gselMine.addEventListener('change', () => gselLoad(false));
 document.addEventListener('mousedown', e => {
   if (gselOpen() && !e.target.closest('#gsel')) selectGame('');
 });
