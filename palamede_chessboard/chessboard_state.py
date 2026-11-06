@@ -31,6 +31,7 @@ from pathlib import Path
 import chess
 import chess.pgn
 
+from palamede_chessboard._atomic import fsync_dir
 from palamede_chessboard.chess_arbiter import ValidationResult, validate_san_strict
 from palamede_chessboard.commentary import get_commentary, post_commentary
 from palamede_chessboard.errors import (
@@ -353,6 +354,7 @@ class GameState:
             f.flush()
             os.fsync(f.fileno())  # durable before the swap (#46)
         tmp.replace(path)
+        fsync_dir(path.parent)  # the rename itself (#246)
         return path
 
     # ---- views ----------------------------------------------------------

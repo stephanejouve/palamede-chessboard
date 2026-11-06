@@ -35,6 +35,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from palamede_chessboard._atomic import fsync_dir
 from palamede_chessboard.chessboard_state import GAMES_DIR, TimeControl, _validate_game_id
 from palamede_chessboard.metadata import parse_time_control
 
@@ -185,6 +186,7 @@ def save_clock(state: ClockState, games_dir: Path | None = None) -> Path:
         f.flush()
         os.fsync(f.fileno())  # durable before the swap (#46)
     tmp.replace(path)
+    fsync_dir(path.parent)  # the rename itself (#246)
     return path
 
 

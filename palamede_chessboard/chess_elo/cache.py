@@ -15,6 +15,7 @@ import os
 import tempfile
 from pathlib import Path
 
+from palamede_chessboard._atomic import fsync_dir
 from palamede_chessboard.chess_elo.models import RATINGS_FILENAME, RatingBoard
 from palamede_chessboard.chess_elo.paths import GAMES_DIR
 from palamede_chessboard.chess_elo.pgn_scan import rebuild_ratings_from_games_dir
@@ -94,6 +95,7 @@ def save_cached_ratings(board: RatingBoard, games_dir: Path | None = None) -> Pa
         except OSError:
             pass
         raise
+    fsync_dir(path.parent)  # the rename itself (#246)
     return path
 
 

@@ -34,6 +34,7 @@ import os
 import tempfile
 from pathlib import Path
 
+from palamede_chessboard._atomic import fsync_dir
 from palamede_chessboard.chess_elo import normalize_identity
 
 log = logging.getLogger(__name__)
@@ -191,4 +192,5 @@ def set_max_concurrent(games_dir: Path, player: object, value: object) -> dict:
             with contextlib.suppress(FileNotFoundError):
                 os.unlink(tmp_name)
             raise
+        fsync_dir(path.parent)  # the rename itself (#246)
     return {"player": name, "max_concurrent": value}
