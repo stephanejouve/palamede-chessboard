@@ -892,6 +892,36 @@ async def test_game_over_guides_to_the_final_position_then_blinks_and_stops() ->
     assert board.frames[-1] == set()
 
 
+async def test_game_over_never_set_up_stops_without_guidance() -> None:
+    """#258 : an exercise answered in the viewer, its position never on the board."""
+    final = chess.Board("r1b2rk1/ppp1qppp/2n5/3Qp3/2P5/P1n1B3/2P2PPP/3RKBNR w K - 10 14")
+    bridge = Bridge("https://viewer.test", "exo.1", chess.WHITE, token="t")
+    board = Board()
+    bridge.apply_stream(snapshot_of(final.fen(), over=True))
+    bridge.on_frame(None, bytearray(frame(placement(chess.Board()))))
+    bridge.settled_since = time.monotonic() - 1.0
+    for _ in range(50):
+        await bridge.tick(board.write)
+        if bridge.stopped.is_set():
+            break
+    assert not bridge.ready
+    assert bridge.finished and bridge.stopped.is_set()
+    assert board.frames[-1] == set()
+
+
+async def test_game_over_set_up_still_guides_to_the_final_position() -> None:
+    """#258 : the shortcut is only for a game never set up ; a ready one is guided."""
+    mate = after("f3", "e5", "g4", "Qh4#")
+    bridge = ready_bridge(after("f3", "e5", "g4"))
+    board = Board()
+    bridge.apply_stream(snapshot(mate, over=True))
+    bridge.on_frame(None, bytearray(frame(placement(after("f3", "e5", "g4")))))
+    bridge.settled_since = time.monotonic() - 1.0
+    for _ in range(50):
+        await bridge.tick(board.write)
+    assert not bridge.finished and not bridge.stopped.is_set()
+
+
 async def test_after_resigning_the_board_goes_dark_without_the_king() -> None:
     bridge, _calls, board = await _lift_king((200, ""))
     bridge.apply_stream(snapshot(after("e4"), over=True))

@@ -279,10 +279,16 @@ class Bridge:
             await self._play(decision.move)
 
     async def _end(self, write: Any, in_sync: bool) -> None:
-        """Game over : guide to the final position, then a blink, LEDs off, stop."""
+        """Game over : guide to the final position, then a blink, LEDs off, stop.
+
+        A game whose position was never set up on the board (``ready`` still
+        False, e.g. an exercise answered in the viewer) has no final position to
+        come back to : it ends without guidance. Guiding it would never finish,
+        and the lobby gestures stay dead until the Tablier restarts (#258).
+        """
         assert self.game is not None and self.observed is not None
         if not self.finished:
-            if not (in_sync or self.resign_state == "sent"):
+            if not (in_sync or self.resign_state == "sent" or not self.ready):
                 settled_for = time.monotonic() - self.settled_since
                 decision = decide(self.game, self.player, self.observed, settled_for, live=False)
                 if decision is not None:
