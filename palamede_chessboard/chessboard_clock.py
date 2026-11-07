@@ -179,6 +179,25 @@ class ClockState:
         self.board_sides = sorted(set(self.board_sides) | {side})
         return True
 
+    def stop(self, *, now: float | None = None) -> bool:
+        """The game is over (#287) : charge the side to move its time, then stop.
+
+        Resignation and agreed draws end a game without a move, so nothing
+        else stops the clock : ``active`` would stay set and every display
+        would keep counting down. A hold (#164) has pushed ``last_move_ts``
+        ahead : no time is charged before it ends. ``False`` when the clock
+        was not running.
+        """
+        if self.active not in ("white", "black") or not self.started:
+            return False
+        if self.flag_fall is None and self.last_move_ts is not None:
+            spent = max((now if now is not None else _now()) - self.last_move_ts, 0.0)
+            left = getattr(self, f"{self.active}_seconds") - spent
+            setattr(self, f"{self.active}_seconds", max(left, 0.0))
+        self.active = None
+        self.held = False
+        return True
+
     def release(self, *, now: float | None = None) -> bool:
         """The board matches (#164) : the side to move's time runs from ``now``.
 
