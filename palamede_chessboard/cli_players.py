@@ -7,6 +7,7 @@ Usage ::
     palamede-players show leader
     palamede-players token leader --label "Claude Code Hera" --out /path/leader.token
     palamede-players revoke leader a1b2c3d4
+    palamede-players relay-teams chessnut-stephane-008g --black leader,admin,junior,cd --dry-run
 
 The games directory comes from ``MCP_CHESSBOARD_GAMES_DIR`` (or
 ``--games-dir``). A new token is **never** printed by default : it is
@@ -23,8 +24,10 @@ import os
 import sys
 from pathlib import Path
 
+from palamede_chessboard.errors import ChessboardError
 from palamede_chessboard.paths import resolve_games_dir
 from palamede_chessboard.players import registry
+from palamede_chessboard.players.relay_backfill import backfill_teams
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -52,7 +55,19 @@ def _build_parser() -> argparse.ArgumentParser:
     rev = sub.add_parser("revoke", help="revoke a token by its id")
     rev.add_argument("player")
     rev.add_argument("token_id")
+
+    relay = sub.add_parser(
+        "relay-teams", help="arbiter : add the teams of a relay game created before #281, once"
+    )
+    relay.add_argument("game_id")
+    relay.add_argument("--white", default="", help="white members, comma separated")
+    relay.add_argument("--black", default="", help="black members, comma separated")
+    relay.add_argument("--dry-run", action="store_true", help="check only, write nothing")
     return parser
+
+
+def _members(raw: str) -> list[str]:
+    return [m.strip() for m in raw.split(",") if m.strip()]
 
 
 def _issue_to_file(games_dir: Path, args: argparse.Namespace) -> None:
@@ -99,6 +114,15 @@ def _run(args: argparse.Namespace, games_dir: Path) -> None:
     elif args.command == "revoke":
         registry.revoke_token(games_dir, args.player, args.token_id)
         print(f"jeton {args.token_id} révoqué", file=sys.stderr)
+    elif args.command == "relay-teams":
+        done = backfill_teams(
+            games_dir,
+            args.game_id,
+            _members(args.white),
+            _members(args.black),
+            dry_run=args.dry_run,
+        )
+        print(json.dumps(done, ensure_ascii=False))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -106,7 +130,7 @@ def main(argv: list[str] | None = None) -> int:
     games_dir = args.games_dir or resolve_games_dir()
     try:
         _run(args, games_dir)
-    except (registry.RegistryError, OSError) as exc:
+    except (registry.RegistryError, ChessboardError, OSError) as exc:
         print(f"Erreur : {exc}", file=sys.stderr)
         return 1
     return 0
