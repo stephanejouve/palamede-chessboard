@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.21.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.20.1...v0.21.0) (2026-11-07)
+
+
+### Features
+
+* **viewer:** « mes parties » filters the game selector by the token's player ([#249](https://github.com/stephanejouve/palamede-chessboard/issues/249)) ([75af61a](https://github.com/stephanejouve/palamede-chessboard/commit/75af61a9a7a842d5b667b117edec9067a823f59c))
+
+
+### Bug Fixes
+
+* **clock:** a declaration left by a dead bridge expires ([#257](https://github.com/stephanejouve/palamede-chessboard/issues/257)) ([7016f0a](https://github.com/stephanejouve/palamede-chessboard/commit/7016f0a38b37eeed4d052c068abbbbfb356e1059))
+* **durability:** fsync the parent directory after the arbiter's cursor, pidfile and the observations' rotation ([#256](https://github.com/stephanejouve/palamede-chessboard/issues/256)) ([e8549c3](https://github.com/stephanejouve/palamede-chessboard/commit/e8549c3e143503393fd2205933268cc816d0ee64))
+* **storage:** PGN, clock, prefs and Elo cache writes fsync the parent directory ([#248](https://github.com/stephanejouve/palamede-chessboard/issues/248)) ([4c7ea76](https://github.com/stephanejouve/palamede-chessboard/commit/4c7ea767cb9535db131304337905c6b281a5bac3))
+* **viewer:** « Mes exercices » reads its list once more when the exercise shown ends ([#255](https://github.com/stephanejouve/palamede-chessboard/issues/255)) ([d7df08a](https://github.com/stephanejouve/palamede-chessboard/commit/d7df08a829f324b9332d17155144d8eb3edfc767))
+* **viewer:** an exercise only abandoned stays « à faire », an abandon is counted apart ([#250](https://github.com/stephanejouve/palamede-chessboard/issues/250)) ([8ca5b99](https://github.com/stephanejouve/palamede-chessboard/commit/8ca5b990872946730f1ee932dc11f4a86157b8ab))
+
+
+### Refactor
+
+* **guard:** the positions the guard compares to move to chess_engine_positions ([#253](https://github.com/stephanejouve/palamede-chessboard/issues/253)) ([131e76c](https://github.com/stephanejouve/palamede-chessboard/commit/131e76c1a116f8c04f1f5ebb0926e95799f87a7f))
+
 ## [0.20.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.20.0...v0.20.1) (2026-11-05)
 
 
