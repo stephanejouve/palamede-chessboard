@@ -33,7 +33,7 @@ from urllib.parse import quote
 
 import chess
 
-from palamede_chessnut import clock_hold, config, exercise, leds, token_light, transport
+from palamede_chessnut import clock_hold, config, exercise, leds, sounds, token_light, transport
 from palamede_chessnut.decide import decide
 from palamede_chessnut.moves import only_king_lifted, relayed
 from palamede_chessnut.protocol import UnknownPieceCode, decode_board, led_frame
@@ -101,6 +101,8 @@ class Bridge:
         self.resign_state: str | None = None
         self.leds: frozenset[chess.Square] | None = None
         self.animation: list[leds.Frame] = []
+        #: The sound code's series playing, one entry per tick (#186).
+        self.sound: list[bytes | None] = []
         #: Set when the bridge stops : game over, or game impossible to follow.
         self.stopped = threading.Event()
         self.history: list[str] = []  #: moves so far (SAN), as the stream gives them
@@ -237,6 +239,14 @@ class Bridge:
             self.observed = placement
             self.settled_since = time.monotonic()
 
+    def say(self, series: str) -> None:
+        """Play a series of :data:`.sounds.SERIES` on the board : ``"ok"``, ``"no"``…"""
+        self.sound = sounds.frames(series)
+
+    async def _beep(self, write: Any) -> None:
+        if self.sound and (frame := self.sound.pop(0)) is not None:
+            await write(frame)
+
     async def _show(self, write: Any, squares: leds.Frame) -> None:
         if squares != self.leds:
             await write(led_frame(squares))
@@ -365,11 +375,15 @@ class Bridge:
         self.undelivered = None
         if error is None:
             self.refused = None  # another move went through : nothing left to take back
+            if self.exercise is not None:
+                self.say("ok")  # the exercise's move found (#186)
             return
         self.pending = None
         if refused:
             log.warning("move %s refused : %s", move.uci(), error)
             self.refused, self.refused_reason = move, error
+            if self.exercise is not None:
+                self.say("no")  # « Ce n'est pas le coup »
         else:
             log.warning("move %s not delivered (%s), trying again", move.uci(), error)
             self.undelivered = move
@@ -405,6 +419,7 @@ class Bridge:
                     self.link_kind = link.kind
                     try:
                         while link.connected() and not self.stopped.is_set():
+                            await self._beep(link.write)
                             await self.tick(link.write)
                             await asyncio.sleep(TICK_SECONDS)
                     finally:
