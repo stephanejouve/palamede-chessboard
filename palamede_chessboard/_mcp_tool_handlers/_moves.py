@@ -16,7 +16,12 @@ from palamede_chessboard.chessboard_state import (
     get_commentary,
     post_commentary,
 )
-from palamede_chessboard.clock_moves import clock_after_move, game_lock, settle_flag, stop_clock
+from palamede_chessboard.clock_moves import (
+    clock_after_move,
+    game_lock,
+    settle_flag,
+    stop_clock_locked,
+)
 
 
 async def _handle_chess_play_move(arguments: dict, games_dir: Path) -> dict:
@@ -40,9 +45,12 @@ async def _handle_chess_play_move(arguments: dict, games_dir: Path) -> dict:
 
 
 async def _handle_chess_resign(arguments: dict, games_dir: Path) -> dict:
-    state = GameState.load(arguments["game_id"], games_dir=games_dir)
-    result = state.resign(by=arguments["by"])
-    stop_clock(arguments["game_id"], games_dir)  # no move ends it : stop it here (#287)
+    # One hold for the end and the clock : a flag falling meanwhile cannot
+    # cross the resignation (#289).
+    with game_lock(arguments["game_id"], games_dir):
+        state = GameState.load(arguments["game_id"], games_dir=games_dir)
+        result = state.resign(by=arguments["by"])
+        stop_clock_locked(arguments["game_id"], games_dir)  # no move ends it (#287)
     return {"status": "ok", "resign": result, "state": state.to_state_dict()}
 
 
@@ -53,9 +61,10 @@ async def _handle_chess_offer_draw(arguments: dict, games_dir: Path) -> dict:
 
 
 async def _handle_chess_agree_draw(arguments: dict, games_dir: Path) -> dict:
-    state = GameState.load(arguments["game_id"], games_dir=games_dir)
-    result = state.agree_draw(by=arguments["by"])
-    stop_clock(arguments["game_id"], games_dir)  # an agreed draw ends it too (#287)
+    with game_lock(arguments["game_id"], games_dir):
+        state = GameState.load(arguments["game_id"], games_dir=games_dir)
+        result = state.agree_draw(by=arguments["by"])
+        stop_clock_locked(arguments["game_id"], games_dir)  # an agreed draw ends it too (#287)
     return {"status": "ok", "agree": result, "state": state.to_state_dict()}
 
 

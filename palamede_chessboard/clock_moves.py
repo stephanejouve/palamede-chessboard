@@ -25,9 +25,10 @@ Chessnut board, the mouse, the Maia bot) : two copies would drift apart
 * **Relay hold** (#164) : after each move, the side to move that plays on
   an eBoard has its time held until its board matches, see
   :meth:`ClockState.hold_for_relay` and :func:`release_on_sync`.
-* **One lock per game** (:func:`game_lock`), taken by a move and by
-  :func:`settle_flag` : a read that ends the game on time and a move that
-  cross must not lose one another (review Leader #136).
+* **One lock per game** (:func:`game_lock`), taken by a move, a
+  resignation, an agreed draw and :func:`settle_flag` : a read that ends
+  the game on time and a move or an end that cross must not lose one
+  another (review Leader #136, #289).
 """
 
 from __future__ import annotations
@@ -38,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 import chess
+import chess.pgn
 
 from palamede_chessboard import _atomic
 from palamede_chessboard import chessboard_clock as clock_module
@@ -134,33 +136,46 @@ def clock_after_move(state: GameState, mover: str, games_dir: Path) -> ClockStat
     return clock
 
 
-def stop_clock(game_id: str, games_dir: Path) -> ClockState | None:
+def stop_clock_locked(game_id: str, games_dir: Path) -> ClockState | None:
     """Stop the clock of a game that has just ended without a move (#287).
 
-    Called after a resignation or an agreed draw : the side to move is
-    charged its time, ``active`` is cleared. A checkmate or a stalemate is
-    stopped by :func:`clock_after_move`, a flag fall by :func:`settle_flag`.
+    Called **under** :func:`game_lock`, in the same hold as the resignation
+    or the agreed draw : a read that makes the flag fall cannot slip in
+    between the end and the clock (#289). The side to move is charged its
+    time, ``active`` is cleared. A checkmate or a stalemate is stopped by
+    :func:`clock_after_move`, a flag fall by :func:`settle_flag`.
     """
-    with game_lock(game_id, games_dir):
-        clock = load_clock(game_id, games_dir=games_dir)
-        if clock is not None and clock.stop():
-            save_clock(clock, games_dir=games_dir)
-        return clock
+    clock = load_clock(game_id, games_dir=games_dir)
+    if clock is not None and clock.stop():
+        save_clock(clock, games_dir=games_dir)
+    return clock
+
+
+def _result_header(game_id: str, games_dir: Path) -> str | None:
+    """The game's ``Result`` header, read alone (#289) ; ``None`` if unreadable.
+
+    A checkmate or a stalemate writes it on the move (``play_move``) : the
+    header says whether the game is over without replaying the moves.
+    """
+    try:
+        with check_game(game_id, games_dir).open("r", encoding="utf-8") as f:
+            headers = chess.pgn.read_headers(f)
+    except GameNotFoundError:
+        return None
+    return headers.get("Result", "*") if headers is not None else None
 
 
 def _stopped_if_over(game_id: str, clock: ClockState | None, games_dir: Path) -> ClockState | None:
     """A game already over shows a stopped clock (#287), without rewriting it.
 
-    For a game ended before :func:`stop_clock` existed : its clock still
-    names a side to move. Nothing is charged, the end's time being unknown.
+    For a game ended before :func:`stop_clock_locked` existed : its clock
+    still names a side to move. Nothing is charged, the end's time being
+    unknown. Only the ``Result`` header is read : the viewer asks for the
+    clock every 5 s (#289).
     """
     if clock is None or clock.active is None:
         return clock
-    try:
-        state = GameState.load(game_id, games_dir=games_dir)
-    except GameNotFoundError:
-        return clock
-    if state.metadata.result != "*" or state.board.is_game_over():
+    if _result_header(game_id, games_dir) not in (None, "*"):
         clock.active = None
         clock.held = False
     return clock

@@ -37,7 +37,7 @@ from palamede_chessboard.clock_moves import (
     declare_board,
     game_lock,
     release_on_sync,
-    stop_clock,
+    stop_clock_locked,
 )
 from palamede_chessboard.coach import play as exercise_play
 from palamede_chessboard.coach.store import CoachStoreError
@@ -207,22 +207,23 @@ def resign_from_viewer(game_id: str, request: Request) -> dict:
     """
     gdir = _games_dir()
     try:
-        state = GameState.load(game_id, games_dir=gdir)
+        # One hold for the end and the clock : a flag falling meanwhile
+        # cannot cross the resignation (#289).
+        with game_lock(game_id, gdir):
+            state = GameState.load(game_id, games_dir=gdir)
+            who = _authorized_mover(request, state, gdir, tool="chess_resign")
+            seats = roles_of(state)["seats"]
+            if who in seats["white"] and who in seats["black"]:
+                side = "white" if state.board.turn else "black"
+            else:
+                side = "white" if who in seats["white"] else "black"
+            try:
+                result = state.resign(by=side)
+            except InvalidGameStateError as exc:
+                raise HTTPException(409, str(exc)) from exc
+            stop_clock_locked(game_id, gdir)  # no move ends it : stop it here (#287)
     except GameNotFoundError as exc:
         raise HTTPException(404, _not_found_detail(game_id)) from exc
-
-    who = _authorized_mover(request, state, gdir, tool="chess_resign")
-    seats = roles_of(state)["seats"]
-    if who in seats["white"] and who in seats["black"]:
-        side = "white" if state.board.turn else "black"
-    else:
-        side = "white" if who in seats["white"] else "black"
-
-    try:
-        result = state.resign(by=side)
-    except InvalidGameStateError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    stop_clock(game_id, gdir)  # no move ends it : stop it here (#287)
     if is_exercise_game(game_id):
         try:
             exercise_play.record_abandon(gdir, who, game_id)
