@@ -705,6 +705,14 @@ def test_after_a_game_over_the_lobby_draws_the_board_as_read() -> None:
     assert state["screen"] == knight_out.board_fen() != chess.Board(state["fen"]).board_fen()
 
 
+def test_a_lobby_without_a_game_draws_the_board_as_read() -> None:
+    """#261 : no game yet, the window shows the pieces on the board (review Junior #263)."""
+    board = new_lobby()
+    held(board, chess.BaseBoard(), 1)
+    state = snapshot(board)
+    assert state["fen"] is None and state["screen"] == chess.BaseBoard().board_fen()
+
+
 def test_a_lobby_without_a_board_read_draws_nothing_new() -> None:
     assert snapshot(new_lobby())["screen"] is None
     done = finished_bridge()
