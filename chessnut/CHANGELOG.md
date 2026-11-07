@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/stephanejouve/palamede-chessboard/compare/palamede-chessnut-v0.5.1...palamede-chessnut-v0.5.2) (2026-11-07)
+
+
+### Bug Fixes
+
+* **chessnut:** in the lobby, the window draws the board as read, not the finished game ([#263](https://github.com/stephanejouve/palamede-chessboard/issues/263)) ([4accdd5](https://github.com/stephanejouve/palamede-chessboard/commit/4accdd50bf75573b14daa31427ced575cae359c2))
+
 ## [0.5.1](https://github.com/stephanejouve/palamede-chessboard/compare/palamede-chessnut-v0.5.0...palamede-chessnut-v0.5.1) (2026-11-07)
 
 
