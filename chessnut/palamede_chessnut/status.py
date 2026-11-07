@@ -206,6 +206,18 @@ def _said(before: chess.Board, move: chess.Move) -> str:
     return text
 
 
+def screen_fen(bridge: Bridge) -> str | None:
+    """The position drawn : the game's, or in a lobby the board as read (#261).
+
+    A lobby compares nothing (#167) : after a game over, its last position is
+    not where the next game is set up, and the knights' values (#186) are read
+    on the board's own squares.
+    """
+    if bridge.lobby_text() is not None and bridge.observed is not None:
+        return bridge.observed.board_fen()
+    return bridge.game.fen() if bridge.game is not None else None
+
+
 def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
     """The JSON document behind the page's ``/state``."""
     game, observed = bridge.game, bridge.observed
@@ -226,6 +238,7 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
         "color": "white" if bridge.player == chess.WHITE else "black",
         "fen": game.fen() if game is not None else None,
         "board_fen": observed.board_fen() if observed is not None else None,
+        "screen": screen_fen(bridge),
         "history": list(bridge.history),
         # Half-move of history[0], from the FEN : a game set up with Black to
         # move does not start at « 1. » with a White move (008d, 28/10).

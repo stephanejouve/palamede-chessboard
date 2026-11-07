@@ -693,6 +693,38 @@ def test_a_finished_game_stays_on_screen_its_board_no_longer_compared() -> None:
     assert sync_light(board) == "waiting"
 
 
+def test_after_a_game_over_the_lobby_draws_the_board_as_read() -> None:
+    """#261 : the pieces set up for the next game, not the finished game's last position."""
+    done = finished_bridge()
+    board = new_lobby(after=done)
+    knight_out = chess.Board()
+    knight_out.push_san("Nc3")
+    held(board, chess.BaseBoard(knight_out.board_fen()), 1)
+    state = snapshot(board)
+    assert state["fen"] == done.game.fen()  # the FEN field and the moves stay the game's
+    assert state["screen"] == knight_out.board_fen() != chess.Board(state["fen"]).board_fen()
+
+
+def test_a_lobby_without_a_game_draws_the_board_as_read() -> None:
+    """#261 : no game yet, the window shows the pieces on the board (review Junior #263)."""
+    board = new_lobby()
+    held(board, chess.BaseBoard(), 1)
+    state = snapshot(board)
+    assert state["fen"] is None and state["screen"] == chess.BaseBoard().board_fen()
+
+
+def test_a_lobby_without_a_board_read_draws_nothing_new() -> None:
+    assert snapshot(new_lobby())["screen"] is None
+    done = finished_bridge()
+    assert snapshot(new_lobby(after=done))["screen"] == done.game.fen()
+
+
+def test_a_game_s_bridge_draws_its_game_not_the_board() -> None:
+    bridge = finished_bridge()
+    bridge.observed = chess.BaseBoard()
+    assert snapshot(bridge)["screen"] == bridge.game.fen()
+
+
 def test_the_window_title_without_a_game() -> None:
     from palamede_chessnut.app import title
 

@@ -131,6 +131,9 @@ def test_the_gestures_help_folds_and_says_the_knight_s_ends() -> None:
     script = (PAGE / "app.js").read_text(encoding="utf-8")
     assert "el('gestures').hidden = !state.lobby;" in script
     assert "renderTips(state.tips || {});" in script
+    # The board drawn is the status' screen : the board as read in a lobby (#261).
+    assert "cg.set({ fen: state.screen });" in script
+    assert "cg.set({ fen: state.fen });" not in script
 
 
 def test_a_refused_move_is_said_under_the_board() -> None:

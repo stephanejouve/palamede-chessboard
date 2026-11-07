@@ -429,11 +429,12 @@ function render(state) {
     lastColor = state.color;
     el('flip-btn').setAttribute('aria-pressed', 'false');
   }
-  if (state.fen && state.fen !== lastFen) {
+  // The position drawn : in a lobby, the board as read, not the finished game's (#261).
+  if (state.screen && state.screen !== lastFen) {
     // The position moved on under the choice (a move from the board, say).
     cancelPromotion();
-    cg.set({ fen: state.fen });
-    lastFen = state.fen;
+    cg.set({ fen: state.screen });
+    lastFen = state.screen;
     renderMoves(state.history, state.first_ply);
   }
   renderMouse(state);

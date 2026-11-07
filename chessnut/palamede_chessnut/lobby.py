@@ -35,7 +35,9 @@ does not change). The knights go home before the rooks' gesture. The clock
 lives as long as the app : it does not rewrite the settings file, which
 also says where the token is sent.
 
-A lobby that follows a finished game keeps that game on screen.
+A lobby that follows a finished game keeps that game's name and moves on
+screen ; the board drawn is the one read, where the pieces of the next game
+are set up, not the finished game's last position (#261).
 """
 
 from __future__ import annotations
@@ -219,7 +221,8 @@ class Lobby(Bridge):
         # No stream to follow : the light says the viewer answered the launch.
         self.stream_link = "connected"
         if after is not None:
-            # The finished game stays on screen, its board is no longer compared.
+            # The finished game's name and moves stay on screen ; its board is
+            # no longer compared, nor drawn (#261).
             self.game, self.history, self.start_fen = after.game, after.history, after.start_fen
             self.finished = True
             self.account, self.token_light = after.account, after.token_light
