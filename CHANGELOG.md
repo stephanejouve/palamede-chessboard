@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.23.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.23.0...v0.23.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* **clock:** the clock stops when a game ends without a move ([#288](https://github.com/stephanejouve/palamede-chessboard/issues/288)) ([3593db7](https://github.com/stephanejouve/palamede-chessboard/commit/3593db7113b07e9efd14ee4ddcd6196901f2e3b2))
+
 ## [0.23.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.22.0...v0.23.0) (2026-11-07)
 
 
