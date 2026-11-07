@@ -52,7 +52,12 @@
       "package-name": "palamede-chessboard",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
-        "palamede_chessboard/__init__.py"
+        "palamede_chessboard/__init__.py",
+        {
+          "type": "json",
+          "path": "docs/openapi.json",
+          "jsonpath": "$.info.version"
+        }
       ],
       "exclude-paths": [
         "maia",
