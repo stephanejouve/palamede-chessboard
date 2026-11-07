@@ -14,6 +14,7 @@ one on both sides), and every backfill is appended to
 from __future__ import annotations
 
 import getpass
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -21,6 +22,22 @@ from palamede_chessboard.errors import ChessboardError
 from palamede_chessboard.players import registry
 
 JOURNAL_FILENAME = "relay_teams.jsonl"
+
+
+def _os_user() -> str:
+    """Who ran the command, for the journal ; never raises.
+
+    In the container the uid has no passwd entry and neither ``USER`` nor
+    ``LOGNAME`` is set : :func:`getpass.getuser` raises ``KeyError`` there
+    (review Admin #284). The uid is then written.
+    """
+    for var in ("USER", "LOGNAME"):
+        if os.environ.get(var):
+            return os.environ[var]
+    try:
+        return getpass.getuser()
+    except (KeyError, OSError):
+        return f"uid={os.getuid()}"
 
 
 def backfill_teams(
@@ -63,7 +80,7 @@ def backfill_teams(
             "black": meta.black,
             "white_team": white,
             "black_team": black,
-            "os_user": getpass.getuser(),
+            "os_user": _os_user(),
         }
         if not dry_run:
             meta.white_team, meta.black_team = white, black

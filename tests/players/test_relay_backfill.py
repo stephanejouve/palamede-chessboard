@@ -153,3 +153,48 @@ def test_cli_backfill(gdir: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert json.loads(capsys.readouterr().out)["black_team"] == MEMBERS
     assert cli_players.main(argv) == 1
     assert "already has its teams" in capsys.readouterr().err
+
+
+@pytest.fixture
+def no_passwd_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """As in palamede-mcp-prod : uid without passwd entry, no USER nor LOGNAME."""
+    import getpass
+
+    for var in ("USER", "LOGNAME", "LNAME", "USERNAME"):
+        monkeypatch.delenv(var, raising=False)
+
+    def no_entry() -> str:
+        raise KeyError("getpwuid(): uid not found: 1032")
+
+    monkeypatch.setattr(getpass, "getuser", no_entry)
+
+
+@pytest.mark.parametrize("dry_run", [True, False])
+def test_a_uid_without_name_is_journaled_as_uid(gdir: Path, no_passwd_entry, dry_run: bool) -> None:
+    """Review Admin #284 : getpass.getuser() raised KeyError, even in dry-run."""
+    import os
+
+    done = backfill_teams(gdir, "relais", [], MEMBERS, dry_run=dry_run)
+    assert done["os_user"] == f"uid={os.getuid()}"
+    assert GameState.load("relais", games_dir=gdir).metadata.black_team == (
+        [] if dry_run else MEMBERS
+    )
+
+
+@pytest.mark.parametrize(
+    ("env", "expected"),
+    [({"USER": "stephane", "LOGNAME": "autre"}, "stephane"), ({"LOGNAME": "stephane"}, "stephane")],
+)
+def test_os_user_from_the_environment_first(
+    gdir: Path, no_passwd_entry, monkeypatch: pytest.MonkeyPatch, env: dict, expected: str
+) -> None:
+    for var, value in env.items():
+        monkeypatch.setenv(var, value)
+    assert backfill_teams(gdir, "relais", [], MEMBERS, dry_run=True)["os_user"] == expected
+
+
+def test_cli_dry_run_without_passwd_entry(
+    gdir: Path, no_passwd_entry, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert cli_players.main(["relay-teams", "relais", "--black", "leader", "--dry-run"]) == 0
+    assert json.loads(capsys.readouterr().out)["os_user"].startswith("uid=")
