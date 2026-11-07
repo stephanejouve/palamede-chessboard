@@ -62,3 +62,12 @@ def test_creating_a_rated_game_is_a_documented_400() -> None:
     """new_game refuses rated true or a non-boolean with 400 (review Leader #264)."""
     spec = openapi_doc.build_spec()
     assert "400" in spec["paths"]["/api/games"]["post"]["responses"]
+
+
+def test_release_please_bumps_the_document_version() -> None:
+    """info.version is __version__ : release-please must bump the document too,
+    or the first test fails on every release PR (0.22.0, #271)."""
+    root = openapi_doc.DOC_PATH.parents[1]
+    config = json.loads((root / ".release-please-config.json").read_text(encoding="utf-8"))
+    extra = config["packages"]["."]["extra-files"]
+    assert {"type": "json", "path": "docs/openapi.json", "jsonpath": "$.info.version"} in extra
