@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.0](https://github.com/stephanejouve/palamede-chessboard/compare/palamede-chessnut-v0.4.0...palamede-chessnut-v0.5.0) (2026-11-06)
+
+
+### Features
+
+* **tablier:** a refused move blinks its squares and says why, on the board and with the mouse ([#226](https://github.com/stephanejouve/palamede-chessboard/issues/226)) ([2fce35e](https://github.com/stephanejouve/palamede-chessboard/commit/2fce35e1423f1c04a9e0b5eb818a917d64773e66))
+* **tablier:** Aide ▸ À propos gives the build, in the journal and a native dialog ([#228](https://github.com/stephanejouve/palamede-chessboard/issues/228)) ([cd04ee0](https://github.com/stephanejouve/palamede-chessboard/commit/cd04ee0095ceea28fbf2227a09e3cd0d9bcda404))
+* **tablier:** an exercise says its motif, family and how to answer it ([#238](https://github.com/stephanejouve/palamede-chessboard/issues/238)) ([e48aafb](https://github.com/stephanejouve/palamede-chessboard/commit/e48aafb66706b2d1e488604f541b392a29de3741))
+
 ## [0.4.0](https://github.com/stephanejouve/palamede-chessboard/compare/palamede-chessnut-v0.3.0...palamede-chessnut-v0.4.0) (2026-11-05)
 
 
