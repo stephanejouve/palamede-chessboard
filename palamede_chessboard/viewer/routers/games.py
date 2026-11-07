@@ -192,8 +192,8 @@ def seat_of_token(game_id: str, request: Request) -> dict:
     except GameNotFoundError as exc:
         raise HTTPException(404, _not_found_detail(game_id)) from exc
     who = _authorized_mover(request, state, gdir, tool="chess_resign")
-    roles = roles_of(state)
-    colors = [color for color in ("white", "black") if roles[color] == who]
+    seats = roles_of(state)["seats"]  # a relay team's members included (#280)
+    colors = [color for color in ("white", "black") if who in seats[color]]
     return {"game_id": game_id, "player": who, "colors": colors}
 
 
@@ -211,11 +211,11 @@ def resign_from_viewer(game_id: str, request: Request) -> dict:
         raise HTTPException(404, _not_found_detail(game_id)) from exc
 
     who = _authorized_mover(request, state, gdir, tool="chess_resign")
-    roles = roles_of(state)
-    if roles["white"] == roles["black"]:
+    seats = roles_of(state)["seats"]
+    if who in seats["white"] and who in seats["black"]:
         side = "white" if state.board.turn else "black"
     else:
-        side = "white" if who == roles["white"] else "black"
+        side = "white" if who in seats["white"] else "black"
 
     try:
         result = state.resign(by=side)

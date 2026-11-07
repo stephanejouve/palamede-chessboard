@@ -38,6 +38,20 @@ SCHEMAS: list[Tool] = [
                     ),
                 },
                 "spectators": {"type": "array", "items": {"type": "string"}},
+                "white_team": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "Relay game (#280) : registry ids of the players who hold "
+                        "white, humans and agents mixed ; ``white`` stays the "
+                        "team's name. Set at creation only, never changed."
+                    ),
+                },
+                "black_team": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Relay game (#280) : like ``white_team``, for black.",
+                },
                 "event": {"type": "string"},
                 "site": {"type": "string"},
                 "round": {"type": "string", "default": "1"},
