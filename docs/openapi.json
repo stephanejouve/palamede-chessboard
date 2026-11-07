@@ -1,0 +1,2837 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "API palamède (viewer)",
+    "version": "0.21.0",
+    "description": "API HTTP du viewer palamède, servie sur chess.alliancejr.eu. Générée depuis le code (FastAPI, `build_app().openapi()`), puis annotée par `palamede_chessboard/viewer/openapi_doc.py` : authentification, codes d'erreur, formes des réponses et types de contenu.\n\n**Authentification** : `Authorization: Bearer plm_…`, jeton d'un joueur du registre. Les lectures (parties, positions, horloge, flux) sont publiques ; les actions d'un joueur exigent son jeton. Sans jeton ou avec un jeton inconnu : 401, la même réponse quelle que soit la raison (absent, révoqué, inconnu). Jeton valide mais pas le bon joueur : 403. Registre ou données illisibles : 503.\n\n**Erreurs** : corps `{\"detail\": \"…\"}`, message en français.\n\n**Hors périmètre** : le serveur MCP (`/mcp`, outils `chess_*`, `/healthz`), qui n'est pas une API REST, et les fichiers statiques (`/assets`, `/vendor`, favicon)."
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Page du viewer",
+        "operationId": "index__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "description": "Page HTML de l'échiquier, avec sa Content-Security-Policy.",
+        "tags": [
+          "viewer"
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "summary": "Santé",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Api Health Get"
+                }
+              }
+            }
+          }
+        },
+        "description": "Répond `{\"status\": \"ok\"}`.",
+        "tags": [
+          "viewer"
+        ]
+      }
+    },
+    "/api/games": {
+      "get": {
+        "tags": [
+          "parties"
+        ],
+        "summary": "Liste des parties",
+        "description": "Toutes les parties en cours, puis une page des parties finies, triées par date de modification. `q` cherche dans l'identifiant et les joueurs, `player` filtre sur un joueur (« mes parties »), `exercises=false` masque les parties non classées. 304 si le dossier n'a pas changé (ETag).",
+        "operationId": "games_endpoint_api_games_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "default": "",
+              "title": "Q"
+            }
+          },
+          {
+            "name": "player",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "default": "",
+              "title": "Player"
+            }
+          },
+          {
+            "name": "exercises",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Exercises"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 0,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GamesList"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "à renvoyer en If-None-Match"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Inchangé depuis l'ETag envoyé, sans corps",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "parties"
+        ],
+        "summary": "Ouvrir une partie",
+        "description": "Partie non classée ouverte par le joueur du jeton, contre un agent ou un bot (`bot-*`, pour un créateur humain seulement). 5 parties en cours au plus par créateur (429 au-delà).",
+        "operationId": "game_create_api_games_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewGamePayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedGame"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de parties en cours pour ce créateur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/raw": {
+      "get": {
+        "tags": [
+          "parties"
+        ],
+        "summary": "PGN brut",
+        "operationId": "raw_api_raw_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Raw Api Raw Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Le PGN complet de la partie."
+      }
+    },
+    "/api/games/{game_id}/move": {
+      "post": {
+        "tags": [
+          "parties"
+        ],
+        "summary": "Jouer un coup",
+        "description": "Coup en `san` ou en `uci` (`e7e8q` pour une promotion). Le joueur du jeton doit avoir le trait. `by` sert seulement à l'audit.",
+        "operationId": "game_move_api_games__game_id__move_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MovePayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Game Move Api Games  Game Id  Move Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflit avec l'état de la partie ou de l'exercice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/games/{game_id}/resign": {
+      "post": {
+        "tags": [
+          "parties"
+        ],
+        "summary": "Abandonner",
+        "description": "Abandon du camp du joueur du jeton. 409 si la partie est déjà finie.",
+        "operationId": "game_resign_api_games__game_id__resign_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Game Resign Api Games  Game Id  Resign Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflit avec l'état de la partie ou de l'exercice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/games/{game_id}/seat": {
+      "get": {
+        "tags": [
+          "parties"
+        ],
+        "summary": "Place du jeton",
+        "description": "Le joueur du jeton et son ou ses camps dans la partie, sans rien jouer. Utilisé par le Tablier au lancement.",
+        "operationId": "game_seat_api_games__game_id__seat_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Seat"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/games/{game_id}/board": {
+      "post": {
+        "tags": [
+          "Tablier"
+        ],
+        "summary": "Déclarer un échiquier physique",
+        "operationId": "game_board_api_games__game_id__board_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BoardPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Game Board Api Games  Game Id  Board Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Le pont du Tablier joue sur un eBoard (`board: true`), ou plus (`false`). Réservé à un joueur humain (#164).",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/games/{game_id}/synced": {
+      "post": {
+        "tags": [
+          "Tablier"
+        ],
+        "summary": "Échiquier synchronisé",
+        "operationId": "game_synced_api_games__game_id__synced_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SyncedPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Game Synced Api Games  Game Id  Synced Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "L'eBoard montre ce placement (`fen`). La pendule du joueur repart quand l'échiquier correspond à la position du serveur (#164).",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/piece.svg": {
+      "get": {
+        "tags": [
+          "rendu"
+        ],
+        "summary": "Pièce en SVG",
+        "description": "Une pièce seule, cache immuable.",
+        "operationId": "piece_svg_api_piece_svg_get",
+        "parameters": [
+          {
+            "name": "color",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "w",
+                "b"
+              ]
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "p",
+                "n",
+                "b",
+                "r",
+                "q",
+                "k"
+              ]
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 24,
+              "title": "Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "image/svg+xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/board.svg": {
+      "get": {
+        "tags": [
+          "rendu"
+        ],
+        "summary": "Échiquier en SVG",
+        "operationId": "board_svg_api_board_svg_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "ply",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Ply"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 400,
+              "title": "Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "image/svg+xml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "L'échiquier d'une partie au demi-coup `ply` (0 : position de départ de la partie)."
+      }
+    },
+    "/api/positions": {
+      "get": {
+        "tags": [
+          "parties"
+        ],
+        "summary": "Positions de la partie",
+        "description": "Toutes les positions de la partie, une par demi-coup. GET conditionnel : ETag et 304.",
+        "operationId": "positions_api_positions_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionsResponse"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "à renvoyer en If-None-Match"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Inchangé depuis l'ETag envoyé, sans corps",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/clock": {
+      "get": {
+        "tags": [
+          "parties"
+        ],
+        "summary": "Pendule",
+        "operationId": "clock_api_clock_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "viewer",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "spectator",
+              "title": "Viewer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClockResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "État de la pendule. Lue avec le jeton d'un joueur ou de l'arbitre, elle termine aussi une partie au temps (#135)."
+      }
+    },
+    "/api/engine/live": {
+      "get": {
+        "tags": [
+          "analyse"
+        ],
+        "summary": "Analyse moteur",
+        "operationId": "engine_live_api_engine_live_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "viewer",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "spectator",
+                "arbiter",
+                "player_white",
+                "player_black",
+                "post_mortem"
+              ],
+              "default": "spectator"
+            }
+          },
+          {
+            "name": "fen",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fen"
+            }
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 20,
+              "minimum": 1,
+              "default": 15,
+              "title": "Depth"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Engine Live Api Engine Live Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Évaluation de la position courante (ou de `fen`) à la profondeur `depth`. Le garde-fou moteur (#206) refuse avec 403 une partie en cours, **quel que soit** `viewer` : le rôle est déclaré par le client et seulement comparé à la liste des rôles (400 sinon), et toute position par laquelle est passée une partie en cours, symétrique compris. `viewer` sert seulement au journal du moteur."
+      }
+    },
+    "/api/games/{game_id}/stream": {
+      "get": {
+        "tags": [
+          "parties"
+        ],
+        "summary": "Flux temps réel (SSE)",
+        "description": "Server-Sent Events : un instantané JSON sur une ligne `data:` à chaque changement du PGN, un commentaire SSE toutes les 15 s, et un événement d'erreur `GAME_NOT_FOUND` si la partie disparaît.",
+        "operationId": "game_stream_api_games__game_id__stream_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/commentary": {
+      "get": {
+        "tags": [
+          "analyse"
+        ],
+        "summary": "Lire les commentaires",
+        "operationId": "commentary_get_api_commentary_get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          },
+          {
+            "name": "ply",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ply"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Commentary Get Api Commentary Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Commentaires de la partie, éventuellement d'un demi-coup."
+      },
+      "post": {
+        "tags": [
+          "analyse"
+        ],
+        "summary": "Ajouter un commentaire",
+        "operationId": "commentary_post_api_commentary_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentaryPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Commentary Post Api Commentary Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "description": "Commentaire sur un demi-coup (`ply`, `source`, `text`). Sans jeton à ce jour."
+      }
+    },
+    "/api/elo": {
+      "get": {
+        "tags": [
+          "joueurs"
+        ],
+        "summary": "Classement Elo",
+        "description": "Le classement Elo courant.",
+        "operationId": "elo_endpoint_api_elo_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Elo Endpoint Api Elo Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "tags": [
+          "joueurs"
+        ],
+        "summary": "Qui suis-je",
+        "description": "`{player, kind}` du jeton, sans partie. Utilisé par le Tablier pour se lancer sans `--game`.",
+        "operationId": "me_api_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/coach/exercises": {
+      "get": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Mes exercices",
+        "operationId": "exercises_api_coach_exercises_get",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExercisesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Les exercices du joueur du jeton, sans leur solution tant qu'ils ne sont pas résolus.",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/coach/exercises/{exercise_id}/start": {
+      "post": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Commencer un exercice",
+        "operationId": "start_api_coach_exercises__exercise_id__start_post",
+        "parameters": [
+          {
+            "name": "exercise_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Exercise Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExerciseStartResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflit avec l'état de la partie ou de l'exercice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Ouvre une partie sur la position de l'exercice, pour le joueur du jeton.",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/coach/exercises/{exercise_id}/answer": {
+      "post": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Répondre à un exercice",
+        "operationId": "answer_api_coach_exercises__exercise_id__answer_post",
+        "parameters": [
+          {
+            "name": "exercise_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Exercise Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExerciseAnswerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflit avec l'état de la partie ou de l'exercice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Réponse en cases (`squares`, 16 au plus), pour un exercice de type `attacked`.",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/coach/progress": {
+      "get": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Ma progression",
+        "operationId": "own_progress_api_coach_progress_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Progress"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Compteurs par motif, suggestion, file d'attente et rappel du joueur du jeton.",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/coach/reports/{game_id}": {
+      "get": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Rapport de partie",
+        "operationId": "report_api_coach_reports__game_id__get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Report Api Coach Reports  Game Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Le rapport du coach. Réservé aux joueurs et à l'arbitre de la partie.",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnswerPayload": {
+        "properties": {
+          "squares": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 16,
+            "title": "Squares"
+          }
+        },
+        "type": "object",
+        "required": [
+          "squares"
+        ],
+        "title": "AnswerPayload"
+      },
+      "BoardPayload": {
+        "properties": {
+          "board": {
+            "type": "boolean",
+            "title": "Board"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "board"
+        ],
+        "title": "BoardPayload",
+        "description": "``POST /api/games/<id>/board`` : the bridge plays on an eBoard, or not (#164)."
+      },
+      "CommentaryPayload": {
+        "properties": {
+          "ply": {
+            "type": "integer",
+            "title": "Ply"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ply",
+          "source",
+          "text"
+        ],
+        "title": "CommentaryPayload"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "MovePayload": {
+        "properties": {
+          "san": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "San"
+          },
+          "uci": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uci"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          }
+        },
+        "type": "object",
+        "title": "MovePayload",
+        "description": "Payload for ``POST /api/games/<id>/move``.\n\nEither ``san`` or ``uci`` must be provided. ``uci`` is server-side\nconverted to SAN before validation, so promotion suffixes (``e7e8q``)\nare supported without a dedicated UI dialog. ``by`` is audit-only."
+      },
+      "NewGamePayload": {
+        "properties": {
+          "opponent": {
+            "type": "string",
+            "title": "Opponent"
+          },
+          "color": {
+            "type": "string",
+            "enum": [
+              "white",
+              "black",
+              "random"
+            ],
+            "title": "Color",
+            "default": "random"
+          },
+          "rated": {
+            "type": "boolean",
+            "default": false,
+            "description": "Parties non classées seulement : true, ou un non-booléen, donne 400."
+          },
+          "time_control": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TimeControlPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "opponent"
+        ],
+        "title": "NewGamePayload",
+        "description": "Body of ``POST /api/games``. ``rated`` is checked by hand : strict bool."
+      },
+      "SyncedPayload": {
+        "properties": {
+          "fen": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Fen"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "fen"
+        ],
+        "title": "SyncedPayload",
+        "description": "``POST /api/games/<id>/synced`` : the eBoard shows this placement (#164)."
+      },
+      "TimeControlPayload": {
+        "properties": {
+          "format": {
+            "type": "string",
+            "title": "Format",
+            "default": "unrated"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "TimeControlPayload",
+        "description": "Only ``format`` : ``start_seconds`` and the like are refused (422)."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "detail"
+        ],
+        "description": "Erreur FastAPI (HTTPException)."
+      },
+      "GameSummary": {
+        "type": "object",
+        "properties": {
+          "game_id": {
+            "type": "string"
+          },
+          "white": {
+            "type": "string"
+          },
+          "black": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "*",
+              "1-0",
+              "0-1",
+              "1/2-1/2"
+            ],
+            "description": "« * » en cours"
+          },
+          "ply": {
+            "type": "integer",
+            "description": "demi-coups joués"
+          },
+          "turn": {
+            "type": "string",
+            "enum": [
+              "white",
+              "black"
+            ]
+          },
+          "is_game_over": {
+            "type": "boolean"
+          },
+          "mtime": {
+            "type": "number",
+            "description": "date du PGN, secondes depuis l'epoch"
+          },
+          "rated": {
+            "type": "boolean"
+          },
+          "date": {
+            "type": "string",
+            "description": "en-tête PGN Date (AAAA.MM.JJ)"
+          }
+        },
+        "required": [
+          "game_id",
+          "white",
+          "black",
+          "result",
+          "ply",
+          "turn",
+          "is_game_over",
+          "mtime"
+        ],
+        "description": "Une partie de la liste (chessboard_state.list_games)."
+      },
+      "GamesList": {
+        "type": "object",
+        "properties": {
+          "in_progress": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameSummary"
+            }
+          },
+          "completed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GameSummary"
+            }
+          },
+          "completed_total": {
+            "type": "integer"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "in_progress",
+          "completed",
+          "completed_total",
+          "has_more"
+        ],
+        "description": "Toutes les parties en cours (jamais paginées), puis une page des parties finies."
+      },
+      "ClockState": {
+        "type": "object",
+        "properties": {
+          "game_id": {
+            "type": "string"
+          },
+          "white_seconds": {
+            "type": "number"
+          },
+          "black_seconds": {
+            "type": "number"
+          },
+          "increment_seconds": {
+            "type": "integer"
+          },
+          "active": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "white",
+                  "black"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_move_ts": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "started": {
+            "type": "boolean"
+          },
+          "flag_fall": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "white",
+                  "black"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "board_sides": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "white",
+                "black"
+              ]
+            },
+            "description": "camps joués sur un eBoard (#164)"
+          },
+          "held": {
+            "type": "boolean",
+            "description": "temps du camp au trait retenu jusqu'à la synchro (#164)"
+          },
+          "stale_sides": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "white",
+                "black"
+              ]
+            },
+            "description": "camps d'un pont muet (#164a)"
+          },
+          "now_ts": {
+            "type": "number",
+            "description": "heure du serveur, pour le décompte"
+          }
+        },
+        "required": [
+          "game_id",
+          "white_seconds",
+          "black_seconds",
+          "increment_seconds",
+          "now_ts"
+        ]
+      },
+      "ClockResponse": {
+        "type": "object",
+        "properties": {
+          "game_id": {
+            "type": "string"
+          },
+          "viewer": {
+            "type": "string"
+          },
+          "clock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClockState"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null : partie sans pendule"
+          }
+        },
+        "required": [
+          "game_id",
+          "viewer",
+          "clock"
+        ]
+      },
+      "Position": {
+        "type": "object",
+        "properties": {
+          "fen": {
+            "type": "string"
+          },
+          "san": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "w",
+                  "b"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "fen",
+          "san",
+          "from",
+          "to",
+          "color"
+        ],
+        "description": "Une position ; la première (demi-coup 0) n'a ni coup ni couleur."
+      },
+      "PositionsResponse": {
+        "type": "object",
+        "properties": {
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "en-têtes PGN"
+          },
+          "positions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Position"
+            }
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "*",
+              "1-0",
+              "0-1",
+              "1/2-1/2"
+            ],
+            "description": "« * » en cours"
+          }
+        },
+        "required": [
+          "headers",
+          "positions",
+          "result"
+        ]
+      },
+      "Exercise": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "attacked",
+              "find_move"
+            ]
+          },
+          "source_game_id": {
+            "type": "string"
+          },
+          "ply": {
+            "type": "integer"
+          },
+          "fen": {
+            "type": "string"
+          },
+          "side": {
+            "type": "string",
+            "enum": [
+              "white",
+              "black"
+            ]
+          },
+          "motif": {
+            "type": "string",
+            "examples": [
+              "missed_mate",
+              "hanging_piece",
+              "ignored_threat"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "proposed",
+              "solved",
+              "failed"
+            ]
+          },
+          "attempts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "game_id": {
+                  "type": "string"
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "abandoned": {
+                  "type": "boolean"
+                },
+                "at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "game_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "gap_cp": {
+            "type": "integer"
+          },
+          "solution_uci": {
+            "type": "string",
+            "description": "seulement une fois résolu"
+          },
+          "solution_san": {
+            "type": "string",
+            "description": "seulement une fois résolu"
+          },
+          "solution_squares": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "seulement une fois résolu"
+          },
+          "slower_mates": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "seulement une fois résolu"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "fen",
+          "side",
+          "motif",
+          "state"
+        ],
+        "description": "Un exercice tel que son joueur peut le lire : sans solution tant qu'il n'est pas résolu."
+      },
+      "ExercisesResponse": {
+        "type": "object",
+        "properties": {
+          "player": {
+            "type": "string"
+          },
+          "exercises": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Exercise"
+            }
+          }
+        },
+        "required": [
+          "player",
+          "exercises"
+        ]
+      },
+      "ExerciseStartResponse": {
+        "type": "object",
+        "properties": {
+          "game_id": {
+            "type": "string"
+          },
+          "exercise": {
+            "$ref": "#/components/schemas/Exercise"
+          }
+        },
+        "required": [
+          "game_id",
+          "exercise"
+        ]
+      },
+      "ExerciseAnswerResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "exercise": {
+            "$ref": "#/components/schemas/Exercise"
+          }
+        },
+        "required": [
+          "status",
+          "exercise"
+        ]
+      },
+      "MotifCounts": {
+        "type": "object",
+        "properties": {
+          "exercises": {
+            "type": "integer"
+          },
+          "proposed": {
+            "type": "integer"
+          },
+          "solved": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "first_try": {
+            "type": "object",
+            "properties": {
+              "tried": {
+                "type": "integer"
+              },
+              "ok": {
+                "type": "integer"
+              }
+            }
+          },
+          "solved_after_retry": {
+            "type": "integer"
+          },
+          "abandoned_games": {
+            "type": "integer"
+          }
+        }
+      },
+      "Progress": {
+        "type": "object",
+        "properties": {
+          "player": {
+            "type": "string"
+          },
+          "games": {
+            "type": "object",
+            "description": "erreurs relevées dans les parties, par période et par motif"
+          },
+          "exercises": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MotifCounts"
+            },
+            "description": "par motif"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "motif": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "queue": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "ids des exercices, dans l'ordre à jouer"
+          },
+          "reminder": {
+            "type": "object",
+            "properties": {
+              "waiting": {
+                "type": "integer"
+              },
+              "last_attempt_at": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "days_since_last_attempt": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "due": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "required": [
+          "player",
+          "games",
+          "exercises",
+          "suggestion",
+          "queue",
+          "reminder"
+        ]
+      },
+      "Me": {
+        "type": "object",
+        "properties": {
+          "player": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "type du compte au registre"
+          }
+        },
+        "required": [
+          "player",
+          "kind"
+        ]
+      },
+      "Seat": {
+        "type": "object",
+        "properties": {
+          "game_id": {
+            "type": "string"
+          },
+          "player": {
+            "type": "string"
+          },
+          "colors": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "white",
+                "black"
+              ]
+            },
+            "description": "les deux si le joueur tient les deux camps"
+          }
+        },
+        "required": [
+          "game_id",
+          "player",
+          "colors"
+        ]
+      },
+      "CreatedGame": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "game_id": {
+            "type": "string",
+            "description": "tablier.<créateur>.<horodatage>-<hex>"
+          },
+          "color": {
+            "type": "string",
+            "enum": [
+              "white",
+              "black"
+            ]
+          },
+          "state": {
+            "type": "object",
+            "description": "état de la partie (GameState.to_state_dict)"
+          },
+          "clock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClockState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "game_id",
+          "color",
+          "state",
+          "clock"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "jetonJoueur": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "plm_…",
+        "description": "Jeton d'un joueur du registre palamède. Jamais dans l'URL."
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://chess.alliancejr.eu",
+      "description": "Production"
+    }
+  ],
+  "tags": [
+    {
+      "name": "parties"
+    },
+    {
+      "name": "Tablier"
+    },
+    {
+      "name": "coach"
+    },
+    {
+      "name": "joueurs"
+    },
+    {
+      "name": "analyse"
+    },
+    {
+      "name": "rendu"
+    },
+    {
+      "name": "viewer"
+    }
+  ]
+}
