@@ -204,6 +204,16 @@
               }
             }
           },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Jeton absent, révoqué ou inconnu",
             "content": {
@@ -830,7 +840,10 @@
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Color"
+              "enum": [
+                "w",
+                "b"
+              ]
             }
           },
           {
@@ -839,7 +852,14 @@
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Type"
+              "enum": [
+                "p",
+                "n",
+                "b",
+                "r",
+                "q",
+                "k"
+              ]
             }
           },
           {
@@ -870,6 +890,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -1062,14 +1092,8 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": [
-                "spectator",
-                "arbiter",
-                "player_white",
-                "player_black",
-                "post_mortem"
-              ],
-              "default": "spectator"
+              "default": "spectator",
+              "title": "Viewer"
             }
           }
         ],
@@ -1234,7 +1258,7 @@
             }
           }
         },
-        "description": "Évaluation de la position courante (ou de `fen`) à la profondeur `depth`. Le garde-fou moteur refuse l'analyse d'une partie en cours selon le rôle `viewer`."
+        "description": "Évaluation de la position courante (ou de `fen`) à la profondeur `depth`. Le garde-fou moteur (#206) refuse avec 403 une partie en cours, **quel que soit** `viewer` : le rôle est déclaré par le client et seulement comparé à la liste des rôles (400 sinon), et toute position par laquelle est passée une partie en cours, symétrique compris. `viewer` sert seulement au journal du moteur."
       }
     },
     "/api/games/{game_id}/stream": {
@@ -2002,7 +2026,8 @@
           },
           "rated": {
             "type": "boolean",
-            "default": false
+            "default": false,
+            "description": "Parties non classées seulement : true, ou un non-booléen, donne 400."
           },
           "time_control": {
             "anyOf": [
