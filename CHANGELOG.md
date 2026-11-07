@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.22.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.21.0...v0.22.0) (2026-11-07)
+
+
+### Features
+
+* **mcp:** chess_whoami and chess_seat, the MCP twins of /api/me and /seat ([#272](https://github.com/stephanejouve/palamede-chessboard/issues/272)) ([e8e9666](https://github.com/stephanejouve/palamede-chessboard/commit/e8e96668efb8e715185468ecb140866f4543d781))
+
+
+### Refactor
+
+* **mcp:** split the tool handlers by family, like the schemas ([#270](https://github.com/stephanejouve/palamede-chessboard/issues/270)) ([8a13e85](https://github.com/stephanejouve/palamede-chessboard/commit/8a13e85864c850ed4be78d59cc6ab8fd09ab4fe3))
+
+
+### Tests
+
+* **mcp:** chess_seat with an unreadable registry is REGISTRY_UNREADABLE ([#273](https://github.com/stephanejouve/palamede-chessboard/issues/273)) ([8619ed5](https://github.com/stephanejouve/palamede-chessboard/commit/8619ed5bd040b25b3e2e893b86a69ad070676e23))
+
 ## [0.21.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.20.1...v0.21.0) (2026-11-07)
 
 
