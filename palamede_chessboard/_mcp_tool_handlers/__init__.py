@@ -44,7 +44,9 @@ from palamede_chessboard._mcp_tool_handlers._moves import (
 )
 from palamede_chessboard._mcp_tool_handlers._players import (
     _handle_chess_get_player_preferences,
+    _handle_chess_seat,
     _handle_chess_set_player_preferences,
+    _handle_chess_whoami,
 )
 
 __all__ = ["TOOL_HANDLERS", "_resolve_analyze_fen"]
@@ -70,4 +72,6 @@ TOOL_HANDLERS: dict[str, Callable[[dict, Path], Awaitable[dict]]] = {
     "chess_get_my_mistakes": _handle_chess_get_my_mistakes,
     "chess_get_player_preferences": _handle_chess_get_player_preferences,
     "chess_set_player_preferences": _handle_chess_set_player_preferences,
+    "chess_whoami": _handle_chess_whoami,
+    "chess_seat": _handle_chess_seat,
 }
