@@ -12,8 +12,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from palamede_chessboard import chessboard_clock
-from palamede_chessboard.chessboard_clock import ClockState, load_clock, save_clock
-from palamede_chessboard.chessboard_state import GameState
+from palamede_chessboard.chessboard_clock import (
+    ClockState,
+    init_and_save_clock,
+    load_clock,
+    save_clock,
+)
+from palamede_chessboard.chessboard_state import GameMetadata, GameState, TimeControl
 from palamede_chessboard.mcp_chessboard_server import call_tool
 from palamede_chessboard.players import registry
 from tests.mcp.conftest import _decode
@@ -122,9 +127,39 @@ def test_a_game_over_with_a_running_clock_shows_it_stopped(
     shown = _read(client, game_id)
     assert shown["active"] is None
     assert shown["black_seconds"] == pytest.approx(clock.black_seconds)
+    assert shown["held"] is False
     # Shown, not rewritten : the file keeps what it had.
     kept = load_clock(game_id, games_dir=games_dir)
     assert kept is not None and kept.active == "black"
+
+
+def test_a_game_outside_the_tablier_over_with_a_running_clock_shows_it_stopped(
+    client: TestClient, games_dir: Path, wall: Clock
+) -> None:
+    """The other branch of settle_flag (review Junior #288) : chessnut-*, relays, agents."""
+    game_id = "chessnut-stephane-test"
+    GameState.create(
+        GameMetadata(
+            game_id=game_id,
+            white="stephane",
+            black="relais-leader-admin",
+            time_control=TimeControl(format="15+10"),
+        ),
+        games_dir=games_dir,
+    )
+    init_and_save_clock(game_id, TimeControl(format="15+10"), games_dir=games_dir)
+    running = load_clock(game_id, games_dir=games_dir)
+    assert running is not None
+    running.started, running.active, running.held = True, "white", True
+    running.last_move_ts = wall.t
+    save_clock(running, games_dir=games_dir)
+    GameState.load(game_id, games_dir=games_dir).resign(by="white")
+    wall.advance(60)
+    shown = _read(client, game_id)
+    assert shown["active"] is None and shown["held"] is False
+    assert shown["white_seconds"] == pytest.approx(running.white_seconds)
+    kept = load_clock(game_id, games_dir=games_dir)
+    assert kept is not None and kept.active == "white"
 
 
 def test_a_game_in_progress_keeps_its_clock_running(
