@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "palamede-chessnut"
-version = "0.5.0"
+version = "0.5.1"
 description = "Play palamède games on a Chessnut Air+ electronic board, over Bluetooth LE or USB"
 readme = "README.md"
 license = "MIT AND GPL-3.0-or-later"
