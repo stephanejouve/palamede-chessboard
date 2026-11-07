@@ -37,6 +37,7 @@ from palamede_chessboard.clock_moves import (
     declare_board,
     game_lock,
     release_on_sync,
+    stop_clock,
 )
 from palamede_chessboard.coach import play as exercise_play
 from palamede_chessboard.coach.store import CoachStoreError
@@ -221,6 +222,7 @@ def resign_from_viewer(game_id: str, request: Request) -> dict:
         result = state.resign(by=side)
     except InvalidGameStateError as exc:
         raise HTTPException(409, str(exc)) from exc
+    stop_clock(game_id, gdir)  # no move ends it : stop it here (#287)
     if is_exercise_game(game_id):
         try:
             exercise_play.record_abandon(gdir, who, game_id)

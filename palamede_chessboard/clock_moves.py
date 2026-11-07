@@ -134,6 +134,38 @@ def clock_after_move(state: GameState, mover: str, games_dir: Path) -> ClockStat
     return clock
 
 
+def stop_clock(game_id: str, games_dir: Path) -> ClockState | None:
+    """Stop the clock of a game that has just ended without a move (#287).
+
+    Called after a resignation or an agreed draw : the side to move is
+    charged its time, ``active`` is cleared. A checkmate or a stalemate is
+    stopped by :func:`clock_after_move`, a flag fall by :func:`settle_flag`.
+    """
+    with game_lock(game_id, games_dir):
+        clock = load_clock(game_id, games_dir=games_dir)
+        if clock is not None and clock.stop():
+            save_clock(clock, games_dir=games_dir)
+        return clock
+
+
+def _stopped_if_over(game_id: str, clock: ClockState | None, games_dir: Path) -> ClockState | None:
+    """A game already over shows a stopped clock (#287), without rewriting it.
+
+    For a game ended before :func:`stop_clock` existed : its clock still
+    names a side to move. Nothing is charged, the end's time being unknown.
+    """
+    if clock is None or clock.active is None:
+        return clock
+    try:
+        state = GameState.load(game_id, games_dir=games_dir)
+    except GameNotFoundError:
+        return clock
+    if state.metadata.result != "*" or state.board.is_game_over():
+        clock.active = None
+        clock.held = False
+    return clock
+
+
 def settle_flag(game_id: str, games_dir: Path, headers: Any = None) -> ClockState | None:
     """The clock of ``game_id``, with a fallen flag applied if time ran out.
 
@@ -145,12 +177,13 @@ def settle_flag(game_id: str, games_dir: Path, headers: Any = None) -> ClockStat
     or a game already over.
     """
     if not game_id.startswith(TABLIER):
-        return load_clock(game_id, games_dir=games_dir)
+        return _stopped_if_over(game_id, load_clock(game_id, games_dir=games_dir), games_dir)
     try:
         with game_lock(game_id, games_dir):
-            return _settle_flag_locked(game_id, games_dir, headers)
+            clock = _settle_flag_locked(game_id, games_dir, headers)
     except GameNotFoundError:
         return None
+    return _stopped_if_over(game_id, clock, games_dir)
 
 
 def _settle_flag_locked(game_id: str, games_dir: Path, headers: Any) -> ClockState | None:
