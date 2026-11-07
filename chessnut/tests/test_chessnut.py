@@ -23,6 +23,7 @@ from pathlib import Path
 import chess
 import pytest
 from palamede_chessnut import bridge as bridge_module
+from palamede_chessnut import server as server_module
 from palamede_chessnut import viewer as viewer_module
 from palamede_chessnut.bridge import RESIGN_SECONDS, Bridge
 from palamede_chessnut.cli import check_viewer_url, read_token
@@ -382,7 +383,7 @@ def test_stream_error_stops_the_bridge(monkeypatch) -> None:
         def __exit__(self, *_exc):
             return False
 
-    monkeypatch.setattr(bridge_module.urllib.request, "urlopen", lambda *_a, **_k: Response())
+    monkeypatch.setattr(server_module.urllib.request, "urlopen", lambda *_a, **_k: Response())
 
     class Loop:
         def __init__(self) -> None:
@@ -783,7 +784,7 @@ def test_lost_stream_reopens_as_back(monkeypatch) -> None:
         def call_soon_threadsafe(self, callback, *args) -> None:
             self.calls.append((callback, *args))
 
-    monkeypatch.setattr(bridge_module.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(server_module.urllib.request, "urlopen", urlopen)
     monkeypatch.setattr(bridge_module.time, "sleep", lambda _s: None)
     bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "t")
     loop = Loop()

@@ -14,6 +14,7 @@ import chess
 import pytest
 from palamede_chessnut import app as app_module
 from palamede_chessnut import bridge as bridge_module
+from palamede_chessnut import server as server_module
 from palamede_chessnut.bridge import Bridge, cancel_on_sigterm
 from palamede_chessnut.cli import bridge_from_args
 from palamede_chessnut.page import CHESSGROUND, CONTENT_SECURITY_POLICY, PageServer
@@ -537,7 +538,7 @@ def test_server_light_goes_orange_when_the_stream_drops(monkeypatch) -> None:
 
     bridge = Bridge("https://viewer.test", "g1", chess.WHITE, TOKEN)
     bridge.stream_link = "connected"
-    monkeypatch.setattr(bridge_module.urllib.request, "urlopen", unreachable)
+    monkeypatch.setattr(server_module.urllib.request, "urlopen", unreachable)
     monkeypatch.setattr(bridge_module.time, "sleep", lambda _s: bridge.stopped.set())
     bridge._follow_stream(loop=None)  # type: ignore[arg-type]
     assert bridge.stream_link == "reconnecting"
