@@ -85,4 +85,6 @@ def test_tool_order_is_unchanged() -> None:
         "chess_get_my_mistakes",
         "chess_get_player_preferences",
         "chess_set_player_preferences",
+        "chess_whoami",
+        "chess_seat",
     ]
