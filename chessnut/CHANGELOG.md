@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/stephanejouve/palamede-chessboard/compare/palamede-chessnut-v0.5.0...palamede-chessnut-v0.5.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* **chessnut:** a game over never set up on the board stops without guidance ([#259](https://github.com/stephanejouve/palamede-chessboard/issues/259)) ([681d80f](https://github.com/stephanejouve/palamede-chessboard/commit/681d80f4f35ba64ad39009229fb714b97c6c8d0a))
+
 ## [0.5.0](https://github.com/stephanejouve/palamede-chessboard/compare/palamede-chessnut-v0.4.0...palamede-chessnut-v0.5.0) (2026-11-06)
 
 
