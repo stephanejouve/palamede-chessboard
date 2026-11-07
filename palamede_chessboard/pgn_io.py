@@ -139,6 +139,8 @@ def metadata_from_headers(
         black=headers.get("Black", ""),
         arbiter=headers.get("Arbiter") or None,
         spectators=([s for s in headers.get("Spectators", "").split(",") if s]),
+        white_team=[m for m in headers.get("WhiteTeam", "").split(",") if m],
+        black_team=[m for m in headers.get("BlackTeam", "").split(",") if m],
         time_control=time_control_from_headers(headers),
         result=headers.get("Result", "*"),
         annotator=headers.get("Annotator") or None,

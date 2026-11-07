@@ -392,3 +392,47 @@ def _refuse_unaccountable_players(white: object, black: object) -> None:
             raise ChessboardError(
                 f"{side} {name!r} cannot be a player id (a-z, 0-9, _ and -, 32 max)"
             ) from None
+
+
+def _relay_teams(arguments: dict, games_dir: Path) -> tuple[list[str], list[str]]:
+    """``(white_team, black_team)`` of a game being created (#280), checked.
+
+    Each list is optional. A member is an existing account of the registry,
+    named once, and never holds the other side too (its team, or the
+    player it faces) ; it is never the name of a side that has a team (no
+    team inside a team). Any breach is a
+    :class:`ChessboardError` and nothing is created.
+    """
+    teams: dict[str, list[str]] = {}
+    for side in ("white", "black"):
+        raw = arguments.get(f"{side}_team")
+        if raw is None:
+            raw = []
+        if not isinstance(raw, list) or not all(isinstance(m, str) for m in raw):
+            raise ChessboardError(f"{side}_team must be a list of player ids")
+        try:
+            members = [registry.player_id_of(m) for m in raw]
+        except registry.RegistryError as exc:
+            raise ChessboardError(f"{side}_team : {exc}") from None
+        if len(set(members)) != len(members):
+            raise ChessboardError(f"{side}_team names a member twice")
+        teams[side] = members
+    if not teams["white"] and not teams["black"]:
+        return [], []
+    try:
+        known = registry.load(games_dir)["players"]
+    except registry.RegistryError as exc:
+        raise ChessboardError(f"player registry unreadable : {exc}") from None
+    names = {side: registry.player_id_of(arguments.get(side)) for side in ("white", "black")}
+    holders = {side: set(teams[side]) | {names[side]} for side in ("white", "black")}
+    both = holders["white"] & holders["black"]
+    if both:
+        raise ChessboardError(f"{sorted(both)} cannot hold both sides")
+    team_names = {names[side] for side in ("white", "black") if teams[side]}
+    for side, members in teams.items():
+        for member in members:
+            if member in team_names:
+                raise ChessboardError(f"{side}_team : {member!r} is a team, not a player")
+            if member not in known:
+                raise ChessboardError(f"{side}_team : unknown player {member!r}")
+    return teams["white"], teams["black"]

@@ -101,27 +101,38 @@ def _game_roles(game_id: object, games_dir: Path) -> dict | None:
 
 def roles_of(state: Any) -> dict:
     """Roles of an **already loaded** game : no second read, so a caller
-    that checks then plays acts on the very position it checked."""
+    that checks then plays acts on the very position it checked.
+
+    ``white`` / ``black`` are the PGN names. ``seats`` gives, per colour,
+    who holds it (#280) : that name, plus the members of its relay team
+    (``WhiteTeam`` / ``BlackTeam``, set at creation). ``players`` and
+    ``to_move`` are sets of identities built from the seats.
+    """
     meta = state.metadata
     white, black = _norm(meta.white), _norm(meta.black)
+    seats = {
+        "white": frozenset({white} | {_norm(m) for m in meta.white_team}),
+        "black": frozenset({black} | {_norm(m) for m in meta.black_team}),
+    }
     return {
         "white": white,
         "black": black,
-        "players": {white, black},
+        "seats": seats,
+        "players": seats["white"] | seats["black"],
         "arbiter": _norm(meta.arbiter),
         "spectators": {_norm(s) for s in meta.spectators},
-        "to_move": white if state.board.turn else black,
+        "to_move": seats["white"] if state.board.turn else seats["black"],
     }
 
 
-def _by_player(by: object, roles: dict | None) -> str:
-    """``by`` as a player id : ``white`` / ``black`` resolve through the PGN."""
+def _by_players(by: object, roles: dict | None) -> frozenset[str]:
+    """Identities ``by`` names : ``white`` / ``black`` resolve to that seat."""
     if not isinstance(by, str) or not by.strip():
-        return ""
+        return frozenset()
     side = by.strip().lower()
     if roles is not None and side in ("white", "black"):
-        return str(roles[side])
-    return _norm(by)
+        return frozenset(roles["seats"][side])
+    return frozenset({_norm(by)})
 
 
 def evaluate(tool: str, arguments: dict, who: str | None, roles: dict | None) -> str | None:
@@ -139,11 +150,14 @@ def evaluate(tool: str, arguments: dict, who: str | None, roles: dict | None) ->
         return None if _norm(arguments.get("player")) == who else "NOT_YOUR_ACCOUNT"
     if rule == _CREATOR:
         allowed = {_norm(arguments.get(k)) for k in ("white", "black", "arbiter")}
+        for key in ("white_team", "black_team"):  # a relay member creates too (#280)
+            members = arguments.get(key)
+            allowed |= {_norm(m) for m in members} if isinstance(members, list) else set()
         return None if who in allowed else "NOT_A_PLAYER"
     if roles is None:
         return None
     if rule == _TURN:
-        if who == roles["to_move"]:
+        if who in roles["to_move"]:
             return None
         return "NOT_YOUR_TURN" if who in roles["players"] else "NOT_A_PLAYER"
     if rule == _PLAYERS:
@@ -201,7 +215,7 @@ def observe(
         code = "REGISTRY_UNREADABLE" if auth == "registry_error" else None
         code = code or evaluate(tool, arguments, who, roles)
         by = arguments.get("by")
-        by_player = _by_player(by, roles)
+        by_players = _by_players(by, roles)
         entry = {
             "ts": datetime.now(UTC).isoformat(timespec="seconds"),
             "transport": transport,
@@ -210,7 +224,7 @@ def observe(
             "caller": who,
             "auth": auth,
             "by": by if isinstance(by, str) else None,
-            "by_matches": None if who is None or not by_player else by_player == who,
+            "by_matches": None if who is None or not by_players else who in by_players,
             "verdict": "would_refuse" if code else "allow",
             "code": code,
         }

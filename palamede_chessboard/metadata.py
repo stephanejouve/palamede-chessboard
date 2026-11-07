@@ -94,6 +94,11 @@ class GameMetadata:
     black: str = ""
     arbiter: str | None = None
     spectators: list[str] = field(default_factory=list)
+    #: Relay teams (#280) : the registry ids that hold each side, written
+    #: ``WhiteTeam`` / ``BlackTeam``. ``white`` / ``black`` stay the team's
+    #: shown name. Set at creation only ; empty for a game between two players.
+    white_team: list[str] = field(default_factory=list)
+    black_team: list[str] = field(default_factory=list)
     time_control: TimeControl = field(default_factory=TimeControl)
     result: str = "*"
     annotator: str | None = None
@@ -139,6 +144,10 @@ class GameMetadata:
             headers["Arbiter"] = self.arbiter
         if self.spectators:
             headers["Spectators"] = ",".join(self.spectators)
+        if self.white_team:
+            headers["WhiteTeam"] = ",".join(self.white_team)
+        if self.black_team:
+            headers["BlackTeam"] = ",".join(self.black_team)
         clock = parse_time_control(self.time_control)
         if clock is not None:
             # The PGN standard counts seconds (#151) ; the unit tag tells

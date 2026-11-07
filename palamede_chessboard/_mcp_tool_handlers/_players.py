@@ -96,8 +96,8 @@ async def _handle_chess_seat(arguments: dict, games_dir: Path) -> dict:
         state = GameState.load(game_id, games_dir=games_dir)
     except GameNotFoundError:
         return {"status": "error", "code": "GAME_NOT_FOUND", "game_id": game_id}
-    roles = roles_of(state)
-    colors = [color for color in ("white", "black") if roles[color] == normalize_identity(who)]
+    seats = roles_of(state)["seats"]  # a relay team's members included (#280)
+    colors = [color for color in ("white", "black") if normalize_identity(who) in seats[color]]
     if not colors:
         return {"status": "error", "code": "NOT_A_PLAYER", "game_id": game_id, "player": who}
     return {"status": "ok", "game_id": game_id, "player": who, "colors": colors}
