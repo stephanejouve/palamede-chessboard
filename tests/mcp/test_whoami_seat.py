@@ -144,6 +144,21 @@ async def test_seat_without_a_valid_token_is_unauthenticated(tokens, as_token) -
     assert answer["status"] == "error" and answer["code"] == "UNAUTHENTICATED"
 
 
+async def test_seat_with_an_unreadable_registry_is_an_error(tokens, as_token, monkeypatch) -> None:
+    """Like whoami : REGISTRY_UNREADABLE, not a generic INTERNAL (review Junior #272)."""
+    game_id = await _game()
+
+    def broken(*_args, **_kwargs):
+        raise registry.RegistryError("illisible")
+
+    monkeypatch.setattr(registry, "verify_token", broken)
+    as_token(tokens["leader"])
+    assert await _call("chess_seat", {"game_id": game_id}) == {
+        "status": "error",
+        "code": "REGISTRY_UNREADABLE",
+    }
+
+
 async def test_seat_of_an_unknown_game(tokens, as_token) -> None:
     as_token(tokens["stephane"])
     answer = await _call("chess_seat", {"game_id": "absente"})
