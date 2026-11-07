@@ -278,3 +278,11 @@ def test_a_refusal_carrying_a_game_id_opens_nothing(monkeypatch) -> None:
         chess.WHITE,
         "Exercice non ouvert (HTTP 500).",
     )
+
+
+def test_a_game_s_refused_move_is_silent(monkeypatch) -> None:
+    """The guard before « no » too (review Junior #293) : only an exercise beeps."""
+    bridge = _exercise_bridge(monkeypatch, ("Coup refusé (ILLEGAL)", True))
+    bridge.exercise = None
+    asyncio.run(bridge._play(chess.Move.from_uci("e2e4")))
+    assert bridge.sound == [] and bridge.refused is not None
