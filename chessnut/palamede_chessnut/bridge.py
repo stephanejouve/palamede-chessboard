@@ -28,24 +28,22 @@ import logging
 import signal
 import threading
 import time
-import urllib.request
 from typing import Any
 from urllib.parse import quote
 
 import chess
 
-from palamede_chessnut import clock_hold, config, exercise, leds, token_light, transport, viewer
+from palamede_chessnut import clock_hold, config, exercise, leds, token_light, transport
 from palamede_chessnut.decide import decide
 from palamede_chessnut.moves import only_king_lifted, relayed
 from palamede_chessnut.protocol import UnknownPieceCode, decode_board, led_frame
+from palamede_chessnut.server import GameServer, ViewerServer
 
 log = logging.getLogger(__name__)
 
 #: Long enough for a king held in hand while thinking (arbitration of Stéphane, #75).
 RESIGN_SECONDS = 5.0
 TICK_SECONDS = 0.1
-#: Above the viewer's 15 s SSE keepalive : a silent stream is a dead one.
-SSE_READ_TIMEOUT = 45.0
 RETRY_SECONDS = 3.0
 
 
@@ -66,6 +64,9 @@ class Bridge:
         self.game_id = game_id
         self.player = player
         self._token = token
+        #: Where the game lives (#84) : ``None`` for the palamède viewer, built
+        #: from the attributes above at each call (see :attr:`server`).
+        self.game_server: GameServer | None = None
         #: The token's light and account (#78, step A) : see :mod:`.token_light`.
         self.token_print = token_light.fingerprint(token)
         self.token_light = "checking"
@@ -119,6 +120,13 @@ class Bridge:
 
     # ---- viewer side ------------------------------------------------------
 
+    @property
+    def server(self) -> GameServer:
+        """The game's server (#84) : the viewer unless another one was given."""
+        if self.game_server is not None:
+            return self.game_server
+        return ViewerServer(self.viewer, self.game_id, self._token)
+
     def apply_stream(self, payload: dict[str, Any]) -> None:
         """New snapshot from the SSE stream (shape : ``_game_stream_payload``)."""
         game = chess.Board(payload["fen"])
@@ -161,11 +169,10 @@ class Bridge:
 
     def _follow_stream(self, loop: asyncio.AbstractEventLoop) -> None:
         """Blocking SSE reader (own thread), reconnecting until :attr:`stopped`."""
-        url = f"{self.viewer}/api/games/{quote(self.game_id)}/stream"
         lost = False
         while not self.stopped.is_set():
             try:
-                with urllib.request.urlopen(url, timeout=SSE_READ_TIMEOUT) as response:
+                with self.server.open_stream() as response:
                     loop.call_soon_threadsafe(self.stream_opened, lost)
                     lost = False
                     for raw in response:
@@ -193,29 +200,27 @@ class Bridge:
         error or a 5xx says nothing about the move, which is tried again. A
         3xx means a wrong ``--viewer`` : the bridge stops (review Admin #71).
         """
-        url = f"{self.viewer}/api/games/{quote(self.game_id)}/move"
-        status, text = viewer.post(url, self._token, {"uci": uci})
+        status, text = self.server.post_move(uci)
         if status is not None and 200 <= status < 300:
             return None, False
         if status == 401:
             self.token_light = "refused"
         if status is not None and 300 <= status < 400:
+            url = f"{self.viewer}/api/games/{quote(self.game_id)}/move"
             log.error("the viewer redirects %s (HTTP %s) : check --viewer", url, status)
             self.stopped.set()
         message = f"HTTP {status} {text}" if status is not None else text
         return message, status is not None and 400 <= status < 500
 
     def _post_resign(self) -> tuple[int | None, str]:
-        return viewer.post(f"{self.viewer}/api/games/{quote(self.game_id)}/resign", self._token)
+        return self.server.post_resign()
 
     def seat(self) -> tuple[int | None, Any]:
-        return viewer.get_with_token(
-            f"{self.viewer}/api/games/{quote(self.game_id)}/seat", self._token
-        )
+        return self.server.seat()
 
     def server_position(self) -> dict[str, Any] | None:
-        """The viewer's position as a stream snapshot (:func:`viewer.position`)."""
-        return viewer.position(self.viewer, self.game_id)
+        """The server's position as a stream snapshot (:meth:`.GameServer.position`)."""
+        return self.server.position()
 
     # ---- board side -------------------------------------------------------
 
