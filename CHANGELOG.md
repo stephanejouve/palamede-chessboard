@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.23.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.22.0...v0.23.0) (2026-11-07)
+
+
+### Features
+
+* **players:** one-off backfill of the relay teams ([#284](https://github.com/stephanejouve/palamede-chessboard/issues/284)) ([b0ce7d0](https://github.com/stephanejouve/palamede-chessboard/commit/b0ce7d0080014eef85e37e573c9dfe1a4aa9d856))
+* **players:** relay teams declared per game ([#281](https://github.com/stephanejouve/palamede-chessboard/issues/281)) ([665f6c9](https://github.com/stephanejouve/palamede-chessboard/commit/665f6c9a77cb426109c5ab986d60c42b0a9e1572))
+
 ## [0.22.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.21.0...v0.22.0) (2026-11-07)
 
 
