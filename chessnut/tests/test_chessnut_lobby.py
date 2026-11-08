@@ -381,7 +381,9 @@ def test_both_knights_off_say_both_parts() -> None:
         knight(chess.G1, None),
         knight(chess.G1, chess.H5),  # off its rank : still on its way, chooses nothing
         knight(chess.B1, chess.C3),
-        lifted(chess.G1, chess.B1),  # both lifted
+        lifted(chess.G1, chess.B1),  # both lifted : the lesson (#186)
+        lifted(chess.C1, chess.F1),  # the two bishops : the exercise (#186)
+        lifted(chess.F1),  # one bishop, the other on its way
     ],
 )
 def test_a_choosing_knight_off_keeps_the_lobby_armed(placement) -> None:
@@ -391,7 +393,6 @@ def test_a_choosing_knight_off_keeps_the_lobby_armed(placement) -> None:
 @pytest.mark.parametrize(
     "placement",
     [
-        lifted(chess.C1, chess.F1),  # the two bishops : the problem, later
         lifted(chess.G1, chess.F1),  # the notches of #189 are gone
         lifted(chess.G8),  # a black knight
     ],

@@ -35,6 +35,12 @@ does not change). The knights go home before the rooks' gesture. The clock
 lives as long as the app : it does not rewrite the settings file, which
 also says where the token is sent.
 
+The white bishops lifted together open the exercise the coach suggests,
+the white knights the lesson of the day, not there yet : see
+:mod:`.coach_gestures` (#186, step 2). Each gesture taken is said by the
+board's sound code (:mod:`.sounds`) : two high beeps, two low ones for a
+refusal.
+
 A lobby that follows a finished game keeps that game's name and moves on
 screen ; the board drawn is the one read, where the pieces of the next game
 are set up, not the finished game's last position (#261).
@@ -51,7 +57,7 @@ from typing import Any
 
 import chess
 
-from palamede_chessnut import config, leds, viewer
+from palamede_chessnut import coach_gestures, config, leds, viewer
 from palamede_chessnut.bridge import RESIGN_SECONDS, Bridge, cancel_on_sigterm
 
 log = logging.getLogger(__name__)
@@ -152,9 +158,10 @@ def choices(observed: chess.BaseBoard) -> tuple[Choice, ...]:
 
 def on_the_way(observed: chess.BaseBoard) -> bool:
     """The starting position, one or both rooks of a side lifted, knights off : the gestures' states."""
+    pairs = (*GESTURES.values(), coach_gestures.PAIRS[coach_gestures.EXERCISE])
     return knights_off(observed) is not None or any(
         observed == _without(lifted)
-        for squares in GESTURES.values()
+        for squares in pairs
         for lifted in ((), squares[:1], squares[1:], squares)
     )
 
@@ -238,6 +245,8 @@ class Lobby(Bridge):
         #: The new game, once opened : handed over after the chaser.
         self.created: str | None = None
         self.counting: chess.Color | None = None
+        #: The coach's gesture held (:data:`.coach_gestures.PAIRS`).
+        self.pairing: str | None = None
         #: The knights' new choices waiting for :data:`CHOICE_SECONDS`.
         self.choosing: tuple[Choice, ...] = ()
         #: The squares whose choice is taken : not again while the knight stays.
@@ -261,8 +270,13 @@ class Lobby(Bridge):
             return "Création de la partie…"
         if self.refused_text is not None:
             return self.refused_text
-        if self.counting is not None:
+        if self.counting is not None or self.pairing is not None:
             left = max(GESTURE_SECONDS - (time.monotonic() - self.settled_since), 0.0)
+            if self.pairing == coach_gestures.EXERCISE:
+                return f"Exercice dans {left:.0f} s…"
+            if self.pairing == coach_gestures.LESSON:
+                return f"Leçon du jour dans {left:.0f} s…"
+            assert self.counting is not None
             return f"Nouvelle partie avec les {SIDES[self.counting]} dans {left:.0f} s…"
         clock = self.new_game["time_control"]
         if self.clash:
@@ -314,6 +328,7 @@ class Lobby(Bridge):
                 )
             self.armed = False
         side = gesture_side(self.observed, self.emptied)
+        pair = coach_gestures.pair_gesture(self.observed) if self.armed else None
         standing = choices(self.observed) if self.armed else ()
         # A knight gone forgets its square ; one still there is not taken again.
         self.taken &= {square for _part, _value, square in standing}
@@ -329,30 +344,36 @@ class Lobby(Bridge):
         tried = self.tried == self.settled_since or (
             bool(corners) and corners == self.tried_corners
         )
-        if (side is None and not picked) or tried:
-            if side is None and not picked:
+        if (side is None and not picked and pair is None) or tried:
+            if side is None and not picked and pair is None:
                 self.refused_text = None  # the pieces are back : a new try may come
-            self.counting, self.choosing = None, ()
+            self.counting, self.choosing, self.pairing = None, (), None
             await self._show(write, frozenset())
             return
         self.counting, self.choosing = side, picked
+        self.pairing = pair if side is None and not picked else None
         self.refused_text = None
         held = time.monotonic() - self.settled_since
         wait, squares = (
             (CHOICE_SECONDS, frozenset(square for _part, _value, square in picked))
             if picked
-            else (GESTURE_SECONDS, frozenset(GESTURES[side]) if side is not None else frozenset())
+            else (GESTURE_SECONDS, frozenset(GESTURES[side]))
+            if side is not None
+            else (GESTURE_SECONDS, frozenset(coach_gestures.PAIRS[pair]) if pair else frozenset())
         )
         if held < wait:
             await self._show(write, leds.blink(squares, held))
             return
         self.tried, self.counting, self.choosing = self.settled_since, None, ()
+        self.pairing = None
         await self._show(write, frozenset())
         if picked:
             self._choose(picked)
         elif side is not None:
             self.tried_corners = corners
             await self._create(side)
+        elif pair is not None:
+            await self._coach(pair)
 
     def _watch_corners(self, observed: chess.BaseBoard) -> None:
         """Notes when each corner, once seen occupied, was emptied : when its placement appeared."""
@@ -387,6 +408,7 @@ class Lobby(Bridge):
         self.new_game["time_control"] = clock
         self.taken |= squares
         self.animation = leds.chosen(squares)
+        self.say("ok")
 
     async def _create(self, side: chess.Color) -> None:
         self.creating = True
@@ -409,11 +431,38 @@ class Lobby(Bridge):
             log.info("game %s opened", game_id)
             self.player, self.created = side, game_id
             self.animation = leds.chaser(0 if side == chess.WHITE else 7)
+            self.say("ok")
             return
         if status == 401:
             self.token_light = "refused"
         self.refused_text = refusal(status, body)
+        self.say("no")
         log.warning("new game refused : HTTP %s %s", status, self.refused_text)
+
+    async def _coach(self, pair: str) -> None:
+        """The coach's gesture taken : the suggested exercise opened, or the lesson said to come."""
+        if pair == coach_gestures.LESSON:
+            log.info("two knights lifted : lessons are not there yet")
+            self.refused_text = coach_gestures.SOON
+            self.say("no")
+            return
+        log.info("two bishops lifted : the exercise the coach suggests")
+        self.creating = True
+        try:
+            game_id, side, refused = await asyncio.to_thread(
+                coach_gestures.start_exercise, self.viewer, self._token
+            )
+        finally:
+            self.creating = False
+        if game_id is None:
+            self.refused_text = refused
+            self.say("no")
+            log.warning("exercise not opened : %s", refused)
+            return
+        log.info("exercise %s opened", game_id)
+        self.player, self.created = side, game_id
+        self.animation = leds.chaser(0 if side == chess.WHITE else 7)
+        self.say("ok")
 
     def _hand_over(self) -> None:
         """Off the board's loop : the session stops this lobby to start the new game's bridge."""

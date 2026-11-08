@@ -11,7 +11,8 @@ import types
 
 import chess
 import pytest
-from palamede_chessnut import transport
+from palamede_chessnut import bridge as bridge_module
+from palamede_chessnut import sounds, transport
 from palamede_chessnut.bridge import Bridge
 from palamede_chessnut.cli import bridge_from_args
 from palamede_chessnut.protocol import ENABLE_REPORTING, decode_board, led_frame
@@ -587,3 +588,20 @@ def test_red_goes_back_to_orange_once_the_error_is_over(monkeypatch) -> None:
     bridge = Bridge("https://viewer.test", "g1", chess.WHITE, "x", board_transport="ble")
     asyncio.run(asyncio.wait_for(bridge.run_board(), 5))
     assert lights == ["searching", "searching", "failing", "searching"]
+
+
+def test_the_sound_code_reaches_the_board_through_the_loop(monkeypatch) -> None:
+    """#186 : the board's loop sends a series' beeps, one per tick, as the LEDs."""
+    monkeypatch.setattr(bridge_module, "TICK_SECONDS", 0.0)
+    device = FakeUsb([BATTERY, START])
+    bridge = usb_bridge(monkeypatch, device)
+    bridge.say("ok")
+
+    async def tick(self, write) -> None:
+        if not self.sound:
+            self.stopped.set()
+
+    monkeypatch.setattr(Bridge, "tick", tick)
+    asyncio.run(asyncio.wait_for(bridge.run_board(), 5))
+    beeps = [w for w in device.written if w[:2] == sounds.BEEP_HEADER]
+    assert beeps == [sounds.beep(2000, 80)] * 2
