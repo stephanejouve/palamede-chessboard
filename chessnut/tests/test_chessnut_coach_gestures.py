@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 import chess
@@ -286,3 +287,15 @@ def test_a_game_s_refused_move_is_silent(monkeypatch) -> None:
     bridge.exercise = None
     asyncio.run(bridge._play(chess.Move.from_uci("e2e4")))
     assert bridge.sound == [] and bridge.refused is not None
+
+
+async def test_the_series_sent_is_in_the_log(monkeypatch, caplog) -> None:
+    """S2 step 4 (08/11) : two high beeps heard where « no » is sent ; the log says which."""
+    Coach(monkeypatch)
+    board = new_lobby()
+    held(board, lifted(chess.B1, chess.G1), GESTURE_SECONDS)
+    with caplog.at_level(logging.INFO):
+        await board.tick(Board())
+    assert [r.getMessage() for r in caplog.records if r.getMessage().startswith("sound")] == [
+        "sound no"
+    ]

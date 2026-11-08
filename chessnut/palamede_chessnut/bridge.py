@@ -240,7 +240,11 @@ class Bridge:
             self.settled_since = time.monotonic()
 
     def say(self, series: str) -> None:
-        """Play a series of :data:`.sounds.SERIES` on the board : ``"ok"``, ``"no"``…"""
+        """Play a series of :data:`.sounds.SERIES` on the board : ``"ok"``, ``"no"``…
+
+        Logged : the smoke can tell the series sent from the one heard (S2, 08/11).
+        """
+        log.info("sound %s", series)
         self.sound = sounds.frames(series)
 
     async def _beep(self, write: Any) -> None:
