@@ -15,12 +15,14 @@ byte of the Bluetooth frame : ``01`` placement, ``2a`` battery ; ``21`` and
 * Linux : the ``/dev/hidrawN`` node, read and written as a file ; no extra
   package, but the session user needs access to it (udev rule, README).
 * macOS, Windows : ``hidapi`` (extra ``usb``). On macOS the board is also
-  a keyboard, held by the system : it is opened non-exclusively.
+  a keyboard, held by the system : it is opened non-exclusively. hidapi's
+  device manager is reached from one thread only, see :func:`on_hid_thread`.
 """
 
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import contextlib
 import logging
 import os
@@ -30,7 +32,7 @@ import threading
 import time
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
 
 from palamede_chessnut.protocol import (
     BOARD_HEADER,
@@ -52,6 +54,7 @@ READ_SECONDS = 0.5
 MISSING_HIDAPI = "USB on this system needs hidapi : install palamede-chessnut[usb]"
 
 OnFrame = Callable[[Any, bytearray], None]
+T = TypeVar("T")
 
 
 class BoardNotFound(Exception):
@@ -114,6 +117,23 @@ def ble_errors() -> tuple[type[BaseException], ...]:
 
 
 # ---- USB ---------------------------------------------------------------------
+
+#: hidapi on macOS ties its device manager to the run loop of the thread that
+#: first calls it. Each session runs on its own thread : once the first one
+#: was gone, the next ``hid_enumerate`` met a freed run loop and the process
+#: died on SIGILL, at each lobby ↔ game change and at a cable plugged in while
+#: on Bluetooth (crash reports of 08/11, #296). One worker, never stopped.
+_HID_EXECUTOR = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="hidapi")
+
+
+def on_hid_thread(call: Callable[..., T], *args: Any) -> T:
+    """``call(*args)`` on the one thread that reaches hidapi's manager (enumerate, open, close).
+
+    Reads and writes stay on the session's threads : they use the device's
+    own run loop, not the manager's, and a read waits :data:`READ_SECONDS`.
+    Never called from that thread itself : it would wait for itself.
+    """
+    return _HID_EXECUTOR.submit(call, *args).result()
 
 
 class UsbDevice(Protocol):
@@ -183,7 +203,7 @@ class HidapiDevice:
             raise OSError("USB write refused")
 
     def close(self) -> None:
-        self._device.close()
+        on_hid_thread(self._device.close)
 
 
 def _non_exclusive(hid: Any) -> None:
@@ -197,6 +217,10 @@ def _non_exclusive(hid: Any) -> None:
 
 
 def open_hidapi() -> HidapiDevice:
+    return on_hid_thread(_open_hidapi)
+
+
+def _open_hidapi() -> HidapiDevice:
     try:
         import hid
     except ImportError:
@@ -287,9 +311,20 @@ def usb_present() -> bool:
         except BoardNotFound:
             return False
         return True
+    return on_hid_thread(_vendor_present)
+
+
+#: :data:`MISSING_HIDAPI` already logged : ``auto`` looks every 2 s (#295).
+_missing_said: list[bool] = []
+
+
+def _vendor_present() -> bool:
     try:
         import hid
     except ImportError:
+        if not _missing_said:
+            _missing_said.append(True)
+            log.warning("%s : the cable is not looked for, Bluetooth only", MISSING_HIDAPI)
         return False
     return any(
         d.get("usage_page") == VENDOR_USAGE_PAGE for d in hid.enumerate(USB_VENDOR, USB_PRODUCT)
