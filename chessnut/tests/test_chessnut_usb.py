@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import sys
+import threading
 import types
 
 import chess
@@ -133,6 +135,88 @@ def test_macos_asks_for_a_non_exclusive_open(monkeypatch, caplog) -> None:
         transport.open_hidapi()
     assert "non-exclusive" in caplog.text
     assert opened == [b"vendor"]
+
+
+def _threads_of(calls: list) -> types.ModuleType:
+    """A hidapi that notes which thread reached its manager : enumerate, open, close."""
+    vendor = [{"usage_page": 0xFF00, "usage": 0xFF00, "path": b"vendor"}]
+    module = fake_hid(vendor, [])
+
+    def enumerate_(vid, pid):
+        calls.append(("enumerate", threading.get_ident()))
+        return vendor
+
+    class Device(module.device):  # type: ignore[name-defined,misc]
+        def open_path(self, path) -> None:
+            calls.append(("open", threading.get_ident()))
+
+        def close(self) -> None:
+            calls.append(("close", threading.get_ident()))
+
+    module.enumerate = enumerate_  # type: ignore[attr-defined]
+    module.device = Device  # type: ignore[attr-defined]
+    return module
+
+
+def test_hidapi_is_reached_from_one_thread_across_sessions(monkeypatch) -> None:
+    """Each session's thread dies with it : hidapi's manager must not follow it (#296).
+
+    The macOS crash of 08/11 : a cable looked for on Bluetooth, then a game
+    opened after the lobby, each from a new thread, the first one gone.
+    """
+    calls: list = []
+    monkeypatch.setitem(sys.modules, "hid", _threads_of(calls))
+    monkeypatch.setattr(transport.sys, "platform", "darwin")
+    callers = []
+
+    def session() -> None:
+        callers.append(threading.get_ident())
+        assert transport.usb_present()
+        transport.open_hidapi().close()
+
+    for _ in range(2):  # the lobby, then the game, each on its own thread
+        worker = threading.Thread(target=session)
+        worker.start()
+        worker.join()
+    assert [name for name, _ in calls] == ["enumerate", "enumerate", "open", "close"] * 2
+    assert len({thread for _, thread in calls}) == 1
+    assert not {thread for _, thread in calls} & set(callers)
+
+
+def test_two_sessions_at_once_still_reach_hidapi_from_one_thread(monkeypatch) -> None:
+    """A second worker would let two threads into hidapi's manager (review Junior #297)."""
+    calls: list = []
+    module = _threads_of(calls)
+    inside = threading.Barrier(2, timeout=0.5)
+    looking = module.enumerate
+
+    def slow_enumerate(vid, pid):
+        with contextlib.suppress(threading.BrokenBarrierError):
+            inside.wait()  # a second thread inside at the same time : the barrier opens
+        return looking(vid, pid)
+
+    module.enumerate = slow_enumerate  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "hid", module)
+    monkeypatch.setattr(transport.sys, "platform", "darwin")
+    sessions = [threading.Thread(target=transport.usb_present) for _ in range(2)]
+    for session in sessions:
+        session.start()
+    for session in sessions:
+        session.join()
+    assert len(calls) == 2
+    assert len({thread for _, thread in calls}) == 1
+
+
+def test_missing_hidapi_is_said_once_in_auto(monkeypatch, caplog) -> None:
+    """``auto`` looks for the cable every 2 s : without hidapi, one line, not silence (#295)."""
+    monkeypatch.setitem(sys.modules, "hid", None)
+    monkeypatch.setattr(transport.sys, "platform", "darwin")
+    monkeypatch.setattr(transport, "_missing_said", [])
+    with caplog.at_level(logging.WARNING):
+        assert not transport.usb_present()
+        assert not transport.usb_present()
+    said = [r for r in caplog.records if "palamede-chessnut[usb]" in r.getMessage()]
+    assert len(said) == 1
 
 
 def test_refused_hidapi_write_is_a_lost_link() -> None:

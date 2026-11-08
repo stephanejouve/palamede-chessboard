@@ -134,8 +134,12 @@ Install it once, with [uv](https://docs.astral.sh/uv/) (on Ubuntu Desktop,
 `sudo apt install curl git` first) :
 
 ```
-uv tool install 'palamede-chessnut[app] @ git+https://github.com/stephanejouve/palamede-chessboard#subdirectory=chessnut'
+uv tool install 'palamede-chessnut[app,usb] @ git+https://github.com/stephanejouve/palamede-chessboard#subdirectory=chessnut'
 ```
+
+Keep both extras on every reinstall : `uv tool install` rebuilds the
+environment, and an extra left out is removed. Without `usb`, the cable is
+not looked for on macOS and Windows, and the log says so once (#295).
 
 Then, with the viewer and the token file in the settings file (above) :
 
