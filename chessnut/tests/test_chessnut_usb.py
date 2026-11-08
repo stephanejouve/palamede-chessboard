@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import sys
 import threading
@@ -180,6 +181,30 @@ def test_hidapi_is_reached_from_one_thread_across_sessions(monkeypatch) -> None:
     assert [name for name, _ in calls] == ["enumerate", "enumerate", "open", "close"] * 2
     assert len({thread for _, thread in calls}) == 1
     assert not {thread for _, thread in calls} & set(callers)
+
+
+def test_two_sessions_at_once_still_reach_hidapi_from_one_thread(monkeypatch) -> None:
+    """A second worker would let two threads into hidapi's manager (review Junior #297)."""
+    calls: list = []
+    module = _threads_of(calls)
+    inside = threading.Barrier(2, timeout=0.5)
+    looking = module.enumerate
+
+    def slow_enumerate(vid, pid):
+        with contextlib.suppress(threading.BrokenBarrierError):
+            inside.wait()  # a second thread inside at the same time : the barrier opens
+        return looking(vid, pid)
+
+    module.enumerate = slow_enumerate  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "hid", module)
+    monkeypatch.setattr(transport.sys, "platform", "darwin")
+    sessions = [threading.Thread(target=transport.usb_present) for _ in range(2)]
+    for session in sessions:
+        session.start()
+    for session in sessions:
+        session.join()
+    assert len(calls) == 2
+    assert len({thread for _, thread in calls}) == 1
 
 
 def test_missing_hidapi_is_said_once_in_auto(monkeypatch, caplog) -> None:
