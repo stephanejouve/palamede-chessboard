@@ -30,6 +30,9 @@ TOKEN_ROUTES = {
     ("post", "/api/games"),
     ("post", "/api/games/{game_id}/move"),
     ("post", "/api/games/{game_id}/resign"),
+    ("post", "/api/games/{game_id}/draw/offer"),
+    ("post", "/api/games/{game_id}/draw/accept"),
+    ("post", "/api/games/{game_id}/draw/decline"),
     ("get", "/api/games/{game_id}/seat"),
     ("post", "/api/games/{game_id}/board"),
     ("post", "/api/games/{game_id}/synced"),
@@ -73,6 +76,22 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
     ("post", "/api/games/{game_id}/resign"): (
         "Abandonner",
         "Abandon du camp du joueur du jeton. 409 si la partie est déjà finie.",
+        "parties",
+    ),
+    ("post", "/api/games/{game_id}/draw/offer"): (
+        "Proposer la nulle",
+        "Offre du camp du joueur du jeton, portée par le flux. 409 si la partie est finie "
+        "ou si l'adversaire a déjà une offre en cours.",
+        "parties",
+    ),
+    ("post", "/api/games/{game_id}/draw/accept"): (
+        "Accepter la nulle",
+        "Termine la partie sur 1/2-1/2. 409 sans offre de l'adversaire.",
+        "parties",
+    ),
+    ("post", "/api/games/{game_id}/draw/decline"): (
+        "Refuser la nulle",
+        "Retire l'offre, la partie continue. 409 sans offre de l'adversaire.",
         "parties",
     ),
     ("get", "/api/games/{game_id}/seat"): (
@@ -207,6 +226,9 @@ EXTRA_ERRORS = {
     ("post", "/api/games"): ["400", "422", "429"],
     ("post", "/api/games/{game_id}/move"): ["400", "404", "409", "422"],
     ("post", "/api/games/{game_id}/resign"): ["404", "409"],
+    ("post", "/api/games/{game_id}/draw/offer"): ["404", "409"],
+    ("post", "/api/games/{game_id}/draw/accept"): ["404", "409"],
+    ("post", "/api/games/{game_id}/draw/decline"): ["404", "409"],
     ("get", "/api/games/{game_id}/seat"): ["404"],
     ("post", "/api/games/{game_id}/board"): ["404"],
     ("post", "/api/games/{game_id}/synced"): ["404"],
