@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import chess
 import pytest
 from palamede_chessnut import exercise, viewer
@@ -47,7 +49,7 @@ def test_the_family_is_read_with_the_player_s_token(gets) -> None:
     assert exercise.read(bridge) == {"id": "b", "kind": "attacked", "motif": "ignored_threat"}
     assert gets == [("https://viewer.test/api/coach/exercises", "t")]
     assert page_state(bridge)["exercise"] == {
-        "title": "Menace ignorée · Cases attaquées",
+        "title": "Cases attaquées",
         "context": "Dans votre partie, une de vos pièces était déjà en prise ici, "
         "et le coup joué ne l'a pas sauvée.",
         "text": exercise.BANNERS["attacked"][1],
@@ -65,7 +67,7 @@ def test_a_find_move_says_to_play_on_the_board(gets) -> None:
     bridge = exo_bridge("exo.p.1")
     exercise.read(bridge)
     shown = page_state(bridge)["exercise"]
-    assert shown["title"] == "Mat manqué · Trouvez le bon coup"
+    assert shown["title"] == "Trouvez le bon coup"
     assert shown["text"].startswith(
         "Trouvez le meilleur coup dans cette position, dans l'app Tablier "
         "ou à la souris dans la visionneuse."
@@ -77,6 +79,33 @@ def test_without_a_motif_the_family_alone(gets) -> None:
     exercise.read(bridge)
     shown = page_state(bridge)["exercise"]
     assert (shown["title"], shown["context"]) == ("Trouvez le bon coup", "")
+
+
+@pytest.mark.parametrize("kind", ["find_move", "attacked"])
+@pytest.mark.parametrize(
+    ("motif", "words"),
+    [
+        ("missed_mate", ("mat manqué", "mat forcé")),
+        ("hanging_piece", ("laissée en prise", "en prise")),
+        ("ignored_threat", ("menace ignorée", "en prise")),
+    ],
+)
+def test_the_order_never_says_the_mistake_of_the_game(
+    kind: str, motif: str, words: tuple[str, str]
+) -> None:
+    # #301 : « Pièce laissée en prise » was read as what to find on the board.
+    bridge = exo_bridge("exo.p.1")
+    bridge.exercise = {"kind": kind, "motif": motif}
+    shown = page_state(bridge)["exercise"]
+    assert shown["title"] == exercise.BANNERS[kind][0]
+    assert words[0] not in shown["title"].lower()
+    assert shown["context"].startswith("Dans votre partie, ") and words[1] in shown["context"]
+    assert words[1] not in shown["title"].lower()
+
+
+def test_the_order_comes_before_the_context_on_the_page() -> None:
+    page = (Path(exercise.__file__).parent / "web" / "index.html").read_text(encoding="utf-8")
+    assert page.index('id="exercise-text"') < page.index('id="exercise-context"')
 
 
 def test_a_game_that_is_no_exercise_asks_nothing(gets) -> None:

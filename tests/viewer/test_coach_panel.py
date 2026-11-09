@@ -203,12 +203,20 @@ def test_the_band_says_why_this_position_from_the_motif() -> None:
     assert "start.dataset.kind, start.dataset.motif);" in COACH_JS
     for motif in ("missed_mate", "hanging_piece", "ignored_threat"):
         assert f"  {motif}: " in COACH_JS[COACH_JS.index("const EXERCISE_CONTEXTS") :]
-    # Without a known motif, no « undefined · … » : the family alone (Leader, #239).
-    assert (
-        "const title = context ? motifLabel(motif) + ' · ' + texts.title : texts.title;" in COACH_JS
-    )
-    assert "'<div class=\"band-title\">' + escapeHtml(title)" in COACH_JS
     assert "(context ? '<div class=\"band-context\">' + escapeHtml(context)" in COACH_JS
+
+
+def test_the_band_gives_the_order_first_and_the_mistake_apart() -> None:
+    # #301 : « Pièce laissée en prise » in the title was read as what to find.
+    body = COACH_JS[COACH_JS.index("function showExerciseBand(") :]
+    body = body[: body.index("\n}\n")]
+    assert "'<div class=\"band-title\">' + escapeHtml(texts.title)" in body
+    assert "motifLabel" not in body
+    assert body.index('class="band-title"') < body.index('class="band-rule"')
+    assert body.index('class="band-rule"') < body.index('class="band-context"')
+    contexts = COACH_JS[COACH_JS.index("const EXERCISE_CONTEXTS") :]
+    contexts = contexts[: contexts.index("};")]
+    assert contexts.count("Dans votre partie, ") == 3
 
 
 def test_each_line_says_where_the_player_stands_in_colour_and_words() -> None:
