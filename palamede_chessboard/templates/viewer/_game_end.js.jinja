@@ -1,0 +1,73 @@
+// Ending a game with the mouse (#275) : a draw offered, accepted or declined,
+// and a resignation. Shown only to a player of the game : the seat comes from
+// the token, the offer from the stream, the same one for every kind of player.
+const gameEndBox = document.getElementById('game-end');
+let GAME_END = { colors: [], data: null, note: '' };
+
+function gameEndButtons(colors, offer) {
+  const resign = '<button type="button" data-end="resign">Abandonner</button>';
+  if (offer && !colors.includes(offer.by)) {
+    return '<span>Votre adversaire propose la nulle.</span>'
+      + '<button type="button" data-end="draw/accept">Accepter</button>'
+      + '<button type="button" data-end="draw/decline">Refuser</button>' + resign;
+  }
+  if (offer) return '<span>Nulle proposée, en attente de réponse.</span>' + resign;
+  // An exercise has no opponent to answer an offer.
+  if (gameId().startsWith('exo.')) return resign;
+  return '<button type="button" data-end="draw/offer">Proposer la nulle</button>' + resign;
+}
+
+function renderGameEnd() {
+  const { colors, data, note } = GAME_END;
+  const live = data && data.result === '*' && !data.is_game_over;
+  gameEndBox.hidden = !colors.length || !live;
+  if (gameEndBox.hidden) return;
+  gameEndBox.innerHTML = gameEndButtons(colors, data.draw_offer)
+    + '<span class="game-end-note">' + escapeHtml(note) + '</span>';
+}
+
+// Every stream event carries the offer in progress, an opponent's included.
+function updateGameEnd(data) {
+  GAME_END.data = data;
+  renderGameEnd();
+}
+
+async function refreshGameEnd() {
+  const game = gameId();
+  GAME_END = { colors: [], data: null, note: '' };
+  renderGameEnd();
+  if (!game || !playerToken()) return;
+  try {
+    const r = await fetch('/api/games/' + encodeURIComponent(game) + '/seat', {
+      cache: 'no-store', headers: { 'Authorization': 'Bearer ' + playerToken() },
+    });
+    if (!r.ok || gameId() !== game) return;
+    GAME_END.colors = (await r.json()).colors || [];
+    renderGameEnd();
+  } catch (_) { /* no buttons : the game still shows */ }
+}
+
+async function endAction(action) {
+  GAME_END.note = '';
+  try {
+    const r = await fetch('/api/games/' + encodeURIComponent(gameId()) + '/' + action, {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + playerToken() },
+    });
+    if (!r.ok) {
+      let body = {};
+      try { body = await r.json(); } catch (_) { /* no body */ }
+      GAME_END.note = typeof body.detail === 'string' ? body.detail : 'Refusé (HTTP ' + r.status + ').';
+    }
+  } catch (_) {
+    GAME_END.note = 'Serveur injoignable.';
+  }
+  renderGameEnd();  // the stream brings the new state
+}
+
+gameEndBox.addEventListener('click', ev => {
+  const button = ev.target.closest('[data-end]');
+  if (!button) return;
+  if (button.dataset.end === 'resign' && !window.confirm('Abandonner cette partie ?')) return;
+  endAction(button.dataset.end);
+});
+document.getElementById('key-btn').addEventListener('click', refreshGameEnd);

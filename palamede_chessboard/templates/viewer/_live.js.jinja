@@ -15,6 +15,7 @@ let evtSource = null;
 
 function startEventStream() {
   if (evtSource) { evtSource.close(); evtSource = null; }
+  refreshGameEnd();
   if (!gameId() || !window.EventSource) return;
   try {
     evtSource = new EventSource('/api/games/' + encodeURIComponent(gameId()) + '/stream');
@@ -23,6 +24,7 @@ function startEventStream() {
     let data;
     try { data = JSON.parse(e.data); } catch (_) { return; }
     if (data && data.error) { setOffline(data.error); return; }
+    updateGameEnd(data);
     // Full refresh — the SSE payload is a change notification, not a
     // replacement for /api/positions (which has the full replay data
     // the moves-list UI needs).

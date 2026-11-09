@@ -135,4 +135,6 @@ def _game_stream_payload(state: GameState) -> dict[str, Any]:
         # Tablier replays the moves from it to list the captured pieces.
         "start_fen": state.board.root().fen(),
         "is_game_over": state.board.is_game_over() or state.metadata.result != "*",
+        # {"by", "ply"} of the draw offered, for every client of the stream (#275).
+        "draw_offer": state.metadata.draw_offer,
     }

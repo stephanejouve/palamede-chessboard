@@ -123,6 +123,8 @@ def build_games_router() -> APIRouter:
         """Resignation of the token's player ; see :func:`resign_from_viewer`."""
         return resign_from_viewer(game_id, request)
 
+    _add_draw_routes(router)
+
     @router.get("/api/games/{game_id}/seat")
     def game_seat(game_id: str, request: Request, response: Response) -> dict:
         """The token's player and their side(s) ; see :func:`seat_of_token`."""
@@ -138,6 +140,23 @@ def build_games_router() -> APIRouter:
         return synced_of_token(game_id, payload, request)
 
     return router
+
+
+def _add_draw_routes(router: APIRouter) -> None:
+    @router.post("/api/games/{game_id}/draw/offer")
+    def game_draw_offer(game_id: str, request: Request) -> dict:
+        """Draw offered by the token's player ; see :func:`draw_from_viewer`."""
+        return draw_from_viewer(game_id, request, "offer")
+
+    @router.post("/api/games/{game_id}/draw/accept")
+    def game_draw_accept(game_id: str, request: Request) -> dict:
+        """The opponent's offer accepted ; see :func:`draw_from_viewer`."""
+        return draw_from_viewer(game_id, request, "agree")
+
+    @router.post("/api/games/{game_id}/draw/decline")
+    def game_draw_decline(game_id: str, request: Request) -> dict:
+        """The opponent's offer declined ; see :func:`draw_from_viewer`."""
+        return draw_from_viewer(game_id, request, "decline")
 
 
 def board_of_token(game_id: str, payload: BoardPayload, request: Request) -> dict:
@@ -198,6 +217,37 @@ def seat_of_token(game_id: str, request: Request) -> dict:
     return {"game_id": game_id, "player": who, "colors": colors}
 
 
+def _side_of(state: GameState, who: str) -> str:
+    """The side ``who`` acts for ; holding both, the one to move."""
+    seats = roles_of(state)["seats"]
+    if who in seats["white"] and who in seats["black"]:
+        return "white" if state.board.turn else "black"
+    return "white" if who in seats["white"] else "black"
+
+
+def draw_from_viewer(game_id: str, request: Request, action: str) -> dict:
+    """Offer, agree or decline a draw : the state machine of the MCP tools (#275).
+
+    Same rule as ``chess_offer_draw`` and its pair : either player, under the
+    token. 409 for what the state machine refuses.
+    """
+    gdir = _games_dir()
+    try:
+        with game_lock(game_id, gdir):
+            state = GameState.load(game_id, games_dir=gdir)
+            who = _authorized_mover(request, state, gdir, tool=f"chess_{action}_draw")
+            side = _side_of(state, who)
+            try:
+                result = getattr(state, f"{action}_draw")(by=side)
+            except InvalidGameStateError as exc:
+                raise HTTPException(409, str(exc)) from exc
+            if action == "agree":
+                stop_clock_locked(game_id, gdir)  # an agreed draw ends it too (#287)
+    except GameNotFoundError as exc:
+        raise HTTPException(404, _not_found_detail(game_id)) from exc
+    return {"status": "ok", action: result, "state": state.to_state_dict()}
+
+
 def resign_from_viewer(game_id: str, request: Request) -> dict:
     """Resign the side of the token's player through ``GameState.resign()``.
 
@@ -212,11 +262,7 @@ def resign_from_viewer(game_id: str, request: Request) -> dict:
         with game_lock(game_id, gdir):
             state = GameState.load(game_id, games_dir=gdir)
             who = _authorized_mover(request, state, gdir, tool="chess_resign")
-            seats = roles_of(state)["seats"]
-            if who in seats["white"] and who in seats["black"]:
-                side = "white" if state.board.turn else "black"
-            else:
-                side = "white" if who in seats["white"] else "black"
+            side = _side_of(state, who)
             try:
                 result = state.resign(by=side)
             except InvalidGameStateError as exc:
