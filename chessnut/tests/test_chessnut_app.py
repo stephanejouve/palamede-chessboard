@@ -637,6 +637,7 @@ def test_the_window_allows_text_selection(window_app) -> None:
     webview.start = lambda **_k: None
     app_module.main(argv)
     assert seen["text_select"] is True
+    assert seen["min_size"] == (600, 520)  # smaller, the clock's values overlap
 
 
 def test_closing_the_window_stops_the_bridge(window_app) -> None:
