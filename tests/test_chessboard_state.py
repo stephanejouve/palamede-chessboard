@@ -154,6 +154,52 @@ class TestExpectedPly:
         assert exc_info.value.expected_ply == 2
 
 
+class TestNoMoveAfterTheEnd:
+    """A finished game takes no move, and its result cannot be overturned (#299)."""
+
+    @staticmethod
+    def _before_mate(tmp_path: Path) -> GameState:
+        """Black has ``Qh4#`` to play, the position is not over on the board."""
+        state = GameState.create(_meta("over"), games_dir=tmp_path)
+        for san in ("f3", "e5", "g4"):
+            state.play_move(san)
+        return state
+
+    def test_a_mate_after_a_resignation_does_not_overturn_the_result(self, tmp_path: Path) -> None:
+        state = self._before_mate(tmp_path)
+        state.resign(by="black")
+        with pytest.raises(InvalidGameStateError, match="already ended"):
+            state.play_move("Qh4#")
+        assert state.metadata.result == "1-0"
+        assert state.board.ply() == 3
+        reloaded = GameState.load("over", games_dir=tmp_path)
+        assert reloaded.metadata.result == "1-0"
+        assert reloaded.san_history == ["f3", "e5", "g4"]
+
+    def test_no_move_after_an_agreed_draw(self, tmp_path: Path) -> None:
+        state = self._before_mate(tmp_path)
+        state.offer_draw(by="black")
+        state.agree_draw(by="white")
+        with pytest.raises(InvalidGameStateError):
+            state.play_move("Qh4#")
+        assert state.metadata.result == "1/2-1/2"
+        assert state.board.ply() == 3
+
+    def test_no_move_after_a_mate_on_the_board(self, tmp_path: Path) -> None:
+        state = self._before_mate(tmp_path)
+        state.play_move("Qh4#")
+        with pytest.raises(InvalidGameStateError):
+            state.play_move("a3")
+        assert state.metadata.result == "0-1"
+
+    def test_a_game_over_board_with_no_result_recorded_is_refused(self, tmp_path: Path) -> None:
+        state = self._before_mate(tmp_path)
+        state.play_move("Qh4#")
+        state.metadata.result = "*"  # the second half of the guard, alone
+        with pytest.raises(InvalidGameStateError):
+            state.play_move("a3")
+
+
 class TestPgnPersistence:
     def test_save_writes_headers_and_moves(self, tmp_path: Path) -> None:
         state = GameState.create(_meta(), games_dir=tmp_path)
