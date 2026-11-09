@@ -26,6 +26,7 @@ DESCRIPTION = (
 TAGS = ["parties", "Tablier", "coach", "joueurs", "analyse", "rendu", "viewer"]
 
 TOKEN_ROUTES = {
+    ("post", "/api/commentary"),
     ("post", "/api/games"),
     ("post", "/api/games/{game_id}/move"),
     ("post", "/api/games/{game_id}/resign"),
@@ -131,7 +132,8 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
     ),
     ("post", "/api/commentary"): (
         "Ajouter un commentaire",
-        "Commentaire sur un demi-coup (`ply`, `source`, `text`). Sans jeton à ce jour.",
+        "Commentaire sur un demi-coup (`ply`, `source`, `text`). Jeton d'un joueur, de "
+        "l'arbitre ou d'un spectateur déclaré de la partie.",
         "analyse",
     ),
     ("get", "/api/elo"): ("Classement Elo", "Le classement Elo courant.", "joueurs"),

@@ -126,6 +126,11 @@ main {
 .cg-wrap.orientation-black coords.ranks coord:nth-child(odd) {
   color: rgba(50, 50, 50, 0.95);
 }
+/* The file letters touched the base of the pieces on rank 1, and chessground's
+   fixed 24 px pushed them onto the next square on a small board (Stéphane, 09/11) :
+   in the bottom right corner of their own square, whatever its size. */
+#board coords.files { bottom: -6px; left: 0; text-align: right; }
+#board coords.files coord { flex: 1 1 0; padding-right: 3px; }
 /* The promotion (#150) : over the board, in the same grid cell, the board
    dimmed ; the four pieces in a column from the square reached, the queen on it. */
 #promo {
@@ -363,6 +368,10 @@ cg-board square.led::after {
   border-radius: 50%;
   background: radial-gradient(circle at 35% 35%, #ff9a8f, #e5392f 55%, #8c1a14);
   box-shadow: 0 0 6px 2px rgba(229, 57, 47, 0.65);
+}
+cg-board square.led.picked::after {
+  background: radial-gradient(circle at 35% 35%, #a6f0a0, #2fae3c 55%, #14651d);
+  box-shadow: 0 0 6px 2px rgba(47, 174, 60, 0.65);
 }
 /* « Fichier ▸ Ouvrir » (#90) : the player's games in progress, above the status. */
 #picker {

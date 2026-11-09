@@ -162,7 +162,7 @@ def refused_text(bridge: Bridge) -> str | None:
     the board alone only blinks its squares (Stéphane, 05/11).
     """
     if bridge.refused is None:
-        return None
+        return bridge.designation.note  # the answer given on the board (#237)
     return f"{refusal_said(bridge.refused_reason)}. Remettez la pièce."
 
 
@@ -251,6 +251,7 @@ def snapshot(bridge: Bridge, recent: RecentLog | None = None) -> dict[str, Any]:
         # An exo.* game : its family and how to answer it (#237).
         "exercise": banner(bridge),
         "differing": differing,
+        "designated": bridge.designation.names(),
         "setup": (
             setup_steps(chess.BaseBoard(game.board_fen()), observed)
             if compared and game is not None and observed is not None

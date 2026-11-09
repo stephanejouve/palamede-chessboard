@@ -35,6 +35,7 @@ def decide(
     synced: bool = True,
     pending: bool = False,
     refused: chess.Move | None = None,
+    moves: bool = True,
 ) -> Decision | None:
     """What to do with a placement still for ``settled_for`` seconds (``None`` : wait).
 
@@ -46,6 +47,8 @@ def decide(
     ``refused`` : the viewer rejected that move from this position ; it is
     not posted again, and its squares blink until it is taken back : steady,
     they would read as the opponent's move to replicate (Stéphane, 05/11).
+    ``moves`` : ``False`` when squares answer the exercise : a move is no
+    answer, it is not posted and its squares light up until it is taken back (#237).
     """
     if settled_for < SETTLE_SECONDS:
         return None
@@ -54,6 +57,8 @@ def decide(
         return Decision(frozenset())
     if live and synced and game.turn == player:
         move = find_move(game, observed)
+        if move is not None and not moves:
+            return Decision(frozenset(differing_squares(expected, observed)))
         if move is not None and move == refused:
             return Decision(
                 leds.blink(frozenset(differing_squares(expected, observed)), settled_for)
