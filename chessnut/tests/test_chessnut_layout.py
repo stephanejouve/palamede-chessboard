@@ -98,6 +98,11 @@ def test_a_coordinate_takes_the_colour_opposite_to_its_square() -> None:
         assert {("white", axis, "even"), ("black", axis, "odd")} <= dark
 
 
+def test_the_file_letters_clear_the_base_of_the_pieces() -> None:
+    # Lower than chessground's -4px, and an id : the rule must win over the vendor's.
+    assert "#board coords.files { bottom: -6px; }" in (PAGE / "app.css").read_text("utf-8")
+
+
 def test_without_a_game_the_gestures_are_said_under_the_board() -> None:
     """The lobby's text in the tray, where the notes will come ; the panel keeps a short status (Stéphane, 03/11)."""
     parents = Parents()

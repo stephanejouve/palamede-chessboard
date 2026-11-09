@@ -123,6 +123,8 @@ main {
 .cg-wrap.orientation-black coords.ranks coord:nth-child(odd) {
   color: rgba(50, 50, 50, 0.95);
 }
+/* The file letters touched the base of the pieces on rank 1 (Stéphane, 09/11). */
+#board coords.files { bottom: -6px; }
 /* The promotion (#150) : over the board, in the same grid cell, the board
    dimmed ; the four pieces in a column from the square reached, the queen on it. */
 #promo {
