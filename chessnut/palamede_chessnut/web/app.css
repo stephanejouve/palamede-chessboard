@@ -361,6 +361,10 @@ cg-board square.led::after {
   background: radial-gradient(circle at 35% 35%, #ff9a8f, #e5392f 55%, #8c1a14);
   box-shadow: 0 0 6px 2px rgba(229, 57, 47, 0.65);
 }
+cg-board square.led.picked::after {
+  background: radial-gradient(circle at 35% 35%, #a6f0a0, #2fae3c 55%, #14651d);
+  box-shadow: 0 0 6px 2px rgba(47, 174, 60, 0.65);
+}
 /* « Fichier ▸ Ouvrir » (#90) : the player's games in progress, above the status. */
 #picker {
   background: var(--panel);

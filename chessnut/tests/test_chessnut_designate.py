@@ -146,6 +146,17 @@ def test_another_piece_lifted_without_the_board_matching_designates_nothing() ->
     assert hand.names() == []
 
 
+def test_the_delay_runs_between_the_lifts_not_during_the_second() -> None:
+    # Smoke of #308 (09/11) : lifted at 16:01:12 and 16:01:14, nothing sent.
+    hand = Hand()
+    hand.tap(chess.E1, held=1.0)
+    hand.see(without(chess.E1), 1.0)
+    hand.see(without(chess.E1), 1.0)  # still in the air, 2 s after the first put back
+    hand.see(without(chess.E1), 0.2)
+    hand.see(START, 0.2)
+    assert hand.validated == 1
+
+
 def test_two_lifts_too_far_apart_do_not_validate() -> None:
     hand = Hand()
     hand.tap(chess.E1)
@@ -387,5 +398,10 @@ def test_the_exercise_keeps_its_id(monkeypatch) -> None:
 
 
 def test_the_window_draws_the_designated_squares() -> None:
-    page = Path(designate.__file__).parent / "web" / "app.js"
-    assert "renderLeds([...state.differing, ...state.designated]);" in page.read_text("utf-8")
+    web = Path(designate.__file__).parent / "web"
+    script = (web / "app.js").read_text("utf-8")
+    assert "renderLeds(state.differing, state.designated);" in script
+    assert "designated.map((square) => [square, 'led picked'])" in script
+    assert "${designated.join()}" in script  # a change of the set redraws
+    style = (web / "app.css").read_text("utf-8")
+    assert "cg-board square.led.picked::after" in style

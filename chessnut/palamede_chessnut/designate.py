@@ -7,8 +7,8 @@ counts : any other difference (two pieces up, a piece moved) designates
 nothing until the board matches the game again.
 
 No beep while designating : two high ones for a right answer, two low ones
-for a wrong one. The Air+ has no colour to command (:mod:`.sounds`) : red is
-the window's, the board lights its own.
+for a wrong one. The Air+ has no colour to command (:mod:`.sounds`) : green is
+the window's (owner, 09/11), the board lights its own.
 """
 
 from __future__ import annotations
@@ -54,8 +54,6 @@ class Designation:
         self, expected: chess.BaseBoard, observed: chess.BaseBoard, player: chess.Color, now: float
     ) -> bool:
         """Follow the board ; ``True`` when the king has just validated."""
-        if self._taps and now - self._last_tap > KING_HOLD_SECONDS:
-            self._taps = 0
         differing = differing_squares(expected, observed)
         if not differing:
             return self._put_back(expected, player, now)
@@ -70,6 +68,8 @@ class Designation:
         ):
             self._lifted, self._armed, self._taps = None, False, 0
         elif self._lifted is None:
+            if now - self._last_tap > KING_HOLD_SECONDS:  # from put back to next lift only
+                self._taps = 0
             self._lifted, self._since = square, now
         return False
 
