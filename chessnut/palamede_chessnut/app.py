@@ -194,9 +194,10 @@ def main(argv: list[str] | None = None) -> None:
     session.start()
     try:
         # text_select : pywebview disables selection by default, and the FEN or the
-        # journal could not be selected (review of Stéphane, 28/10).
+        # journal could not be selected (review of Stéphane, 28/10). min_size : smaller,
+        # the clock's values overlap on the board (smoke of Stéphane, 09/11).
         window = webview.create_window(
-            title(bridge), page.url, width=900, height=640, text_select=True
+            title(bridge), page.url, width=900, height=640, min_size=(600, 520), text_select=True
         )
         page.ask_path = save_dialog(webview, window)
 
