@@ -448,6 +448,31 @@ class TestCommentary:
             post_commentary("test-game", ply=ply, source=source, text=text, games_dir=tmp_path)
         assert get_commentary("test-game", games_dir=tmp_path) == []
 
+    @pytest.mark.parametrize(
+        ("ply", "source", "text"),
+        [(1.5, "a", "x"), (True, "a", "x"), ("3", "a", "x"), (1, 7, "x"), (1, "a", 7)],
+    )
+    def test_out_of_schema_types_are_refused(
+        self, tmp_path: Path, ply: object, source: object, text: object
+    ) -> None:
+        GameState.create(_meta(), games_dir=tmp_path)
+        with pytest.raises(CommentaryRefusedError):
+            post_commentary("test-game", ply=ply, source=source, text=text, games_dir=tmp_path)
+        assert get_commentary("test-game", games_dir=tmp_path) == []
+
+    def test_text_is_bounded_in_characters_and_the_side_car_in_bytes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        GameState.create(_meta(), games_dir=tmp_path)
+        text = "é" * MAX_TEXT_CHARS
+        post_commentary("test-game", ply=1, source="a", text=text, games_dir=tmp_path)
+        path = tmp_path / COMMENTARY_DIR_NAME / "test-game.jsonl"
+        size = path.stat().st_size
+        assert size > 2 * MAX_TEXT_CHARS
+        monkeypatch.setattr(commentary, "MAX_SIDECAR_BYTES", size + MAX_TEXT_CHARS + 100)
+        with pytest.raises(CommentaryRefusedError, match="full"):
+            post_commentary("test-game", ply=1, source="a", text=text, games_dir=tmp_path)
+
     def test_the_bounds_themselves_are_accepted(self, tmp_path: Path) -> None:
         GameState.create(_meta(), games_dir=tmp_path)
         source, text = "a" * MAX_SOURCE_CHARS, "x" * MAX_TEXT_CHARS

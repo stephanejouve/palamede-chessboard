@@ -38,6 +38,7 @@ from palamede_chessboard.chessboard_state import (
 )
 from palamede_chessboard.clock_moves import settle_flag
 from palamede_chessboard.errors import CommentaryRefusedError
+from palamede_chessboard.players.observe import authorize_move
 from palamede_chessboard.viewer.models import (
     ACCEPTED_VIEWERS,
     DEPTH_OPTIONS,
@@ -49,6 +50,12 @@ from palamede_chessboard.viewer.models import (
     _not_found_detail,
 )
 
+#: Refusal code of ``POST /api/commentary`` → (HTTP status, message).
+_COMMENT_REFUSALS = {
+    "UNAUTHENTICATED": (401, "Jeton de joueur requis ou invalide (bouton 🔑)"),
+    "NOT_ALLOWED": (403, "Vous n'êtes ni joueur, ni arbitre, ni spectateur de cette partie"),
+    "REGISTRY_UNREADABLE": (503, "Registre des joueurs illisible : commentaire refusé"),
+}
 #: The guarded tool the viewer's live evaluation counts as, in the guard and the log.
 ENGINE_TOOL = "chess_analyze_position"
 #: ``caller`` of the viewer's lines in the engine log.
@@ -133,21 +140,36 @@ def build_realtime_router() -> APIRouter:
         return {"game_id": game_id, "count": len(entries), "entries": entries}
 
     @router.post("/api/commentary")
-    def commentary_post(game_id: str, payload: CommentaryPayload) -> dict:
-        return {"status": "ok", "entry": _post_commentary(game_id, payload)}
+    def commentary_post(game_id: str, payload: CommentaryPayload, request: Request) -> dict:
+        return {"status": "ok", "entry": _post_commentary(game_id, payload, request)}
 
     return router
 
 
-def _post_commentary(game_id: str, payload: CommentaryPayload) -> dict:
+def _refuse_unless_commenter(state: GameState, request: Request) -> None:
+    """:class:`HTTPException` unless the token may comment on ``state``.
+
+    Same rule as the MCP tool : a player, the arbiter or a declared spectator.
+    """
+    _, code = authorize_move(request.headers, state, _games_dir(), "chess_post_commentary")
+    if code is None:
+        return
+    status, message = _COMMENT_REFUSALS.get(code, (403, "Commentaire refusé"))
+    headers = {"WWW-Authenticate": "Bearer"} if status == 401 else None
+    raise HTTPException(status, f"{message} ({code})", headers=headers)
+
+
+def _post_commentary(game_id: str, payload: CommentaryPayload, request: Request) -> dict:
     """The line appended to the game's side-car ; the refusals as HTTP errors."""
+    gdir = _games_dir()
     try:
+        _refuse_unless_commenter(GameState.load(game_id, games_dir=gdir), request)
         return post_commentary(
             game_id,
             ply=payload.ply,
             source=payload.source,
             text=payload.text,
-            games_dir=_games_dir(),
+            games_dir=gdir,
         )
     except GameNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
