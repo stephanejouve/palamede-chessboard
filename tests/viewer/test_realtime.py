@@ -219,6 +219,39 @@ class TestCommentary:
         assert body["count"] == 1
         assert body["entries"][0]["text"] == "ok"
 
+    def test_post_on_a_ghost_game_is_404_and_creates_nothing(
+        self, client: TestClient, games_dir: Path
+    ) -> None:
+        r = client.post(
+            "/api/commentary?game_id=ghost-game",
+            json={"ply": 1, "source": "spectator", "text": "x" * 100_000},
+        )
+        assert r.status_code == 404
+        assert not (games_dir / "commentary" / "ghost-game.jsonl").exists()
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"ply": -5, "source": "s", "text": "ok"},
+            {"ply": 1, "source": "s", "text": "x" * 100_000},
+            {"ply": 1, "source": "s" * 100_000, "text": "ok"},
+        ],
+    )
+    def test_post_out_of_bounds_is_422(
+        self, client: TestClient, games_dir: Path, payload: dict
+    ) -> None:
+        _create_game(games_dir)
+        r = client.post("/api/commentary?game_id=viewer-test", json=payload)
+        assert r.status_code == 422
+        assert client.get("/api/commentary?game_id=viewer-test").json()["count"] == 0
+
+    def test_post_with_a_malformed_id_is_400(self, client: TestClient, games_dir: Path) -> None:
+        r = client.post(
+            "/api/commentary?game_id=bad%20id",
+            json={"ply": 1, "source": "s", "text": "ok"},
+        )
+        assert r.status_code == 400
+
     def test_commentary_filter_by_ply(self, client: TestClient, games_dir: Path) -> None:
         _create_game(games_dir)
         client.post(

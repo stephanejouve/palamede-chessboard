@@ -127,6 +127,29 @@ async def test_view_state_missing_game(games_dir: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_commentary_on_a_ghost_game_is_game_not_found(games_dir: Path) -> None:
+    out = _decode(
+        await call_tool(
+            "chess_post_commentary",
+            {"game_id": "ghost", "ply": 1, "source": "a", "text": "x"},
+        )
+    )
+    assert (out["status"], out["code"]) == ("error", "GAME_NOT_FOUND")
+
+
+@pytest.mark.asyncio
+async def test_commentary_out_of_bounds_is_refused(games_dir: Path) -> None:
+    await call_tool("chess_create_game", {"game_id": "com", "white": "w", "black": "b"})
+    out = _decode(
+        await call_tool(
+            "chess_post_commentary",
+            {"game_id": "com", "ply": 1, "source": "a", "text": "x" * 100_000},
+        )
+    )
+    assert out["status"] == "error"
+
+
+@pytest.mark.asyncio
 async def test_commentary_round_trip(games_dir: Path) -> None:
     await call_tool("chess_create_game", {"game_id": "com", "white": "w", "black": "b"})
     post = _decode(
