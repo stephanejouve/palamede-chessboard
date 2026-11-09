@@ -6,7 +6,40 @@ import chess
 import pytest
 
 from palamede_chessboard.chessboard_engine import GameWalkEntry
-from palamede_chessboard.coach.motifs import HEURISTIC_MOTIFS, MOTIFS, motif_of
+from palamede_chessboard.coach.motifs import HEURISTIC_MOTIFS, MOTIFS, _hanging, motif_of
+
+
+@pytest.mark.parametrize(
+    ("fen", "expected"),
+    [
+        # Exercise 4e90 (#303) : g5 attacked three times, defended once ; d5 falls to
+        # exd5 Nxd5 Rxd5 ; h3 is simply undefended.
+        ("2kr3r/pp2bnpp/4p3/2pP2P1/8/2Np2qP/PP6/R1B2K2 w - - 0 1", {"d5", "g5", "h3"}),
+        # Attacked by a knight, defended by a pawn : capturing loses the knight.
+        ("4k3/8/6n1/4P3/3P4/8/8/4K3 w - - 0 1", set()),
+        # A lower-value attacker wins even against a defender.
+        ("4k3/8/8/2p5/1N6/P7/8/4K3 w - - 0 1", {"b4"}),
+        # Undefended : taken for free.
+        ("4k3/8/6n1/4P3/8/8/8/4K3 w - - 0 1", {"e5"}),
+        # Two rooks in line, but the pawn takes the first one : the exchange loses.
+        ("3rk3/3r4/8/3P4/2P5/8/8/4K3 w - - 0 1", set()),
+        # An attacker lined up behind another joins the attack.
+        ("3rk3/3r4/8/3P4/8/8/3R4/4K3 w - - 0 1", {"d5"}),
+        # Pinned to its king, the knight cannot capture.
+        ("4k3/4n3/8/3P4/8/8/4R3/4K3 w - - 0 1", set()),
+        # Bxd4 cxd4, and Black stops : Qxd4 exd4 would lose the queen.
+        ("3qk3/8/1b6/8/3R4/2P1P3/8/4K3 w - - 0 1", {"d4"}),
+        # A king captures only what nothing would take back.
+        ("8/8/8/3k4/3P4/4P3/8/4K3 w - - 0 1", set()),
+        ("8/8/8/3k4/3P4/8/8/4K3 w - - 0 1", {"d4"}),
+    ],
+)
+def test_en_prise_is_the_exchange_on_the_square(fen: str, expected: set[str]) -> None:
+    assert _hanging(chess.Board(fen), "white") == expected
+
+
+def test_a_king_is_never_en_prise() -> None:
+    assert _hanging(chess.Board("4r1k1/8/8/8/8/8/8/4K3 w - - 0 1"), "white") == set()
 
 
 def _entry(fen: str, san: str, missed_mate: int | None = None) -> GameWalkEntry:
