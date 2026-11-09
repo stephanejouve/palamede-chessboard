@@ -48,11 +48,13 @@ let switching = false;
 // Squares to fix : a red LED in the corner, as on the eBoard (review of
 // Stéphane, 28/10), rather than drawn circles. Set only when they change.
 let lastLeds = null;
-function renderLeds(squares) {
-  const key = squares.join();
+function renderLeds(squares, designated) {
+  const key = `${squares.join()}|${designated.join()}`;
   if (key === lastLeds) return;
   lastLeds = key;
-  cg.set({ highlight: { custom: new Map(squares.map((square) => [square, 'led'])) } });
+  // A designated square of an exercise is green (#237) : only the window has colours.
+  const lit = [...squares.map((square) => [square, 'led']), ...designated.map((square) => [square, 'led picked'])];
+  cg.set({ highlight: { custom: new Map(lit) } });
 }
 
 // Without a game, each knight's square says its value (smoke of Stéphane,
@@ -439,7 +441,7 @@ function render(state) {
   }
   renderMouse(state);
   renderSwitch(state);
-  renderLeds(state.differing);
+  renderLeds(state.differing, state.designated);
   renderTips(state.tips || {});
   setLight('bluetooth', state.lights.bluetooth);
   el('light-bluetooth').textContent = state.transport === 'usb' ? 'USB' : 'Bluetooth';

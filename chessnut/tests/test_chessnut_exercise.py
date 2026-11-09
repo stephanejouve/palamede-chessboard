@@ -44,14 +44,21 @@ def gets(monkeypatch) -> list[tuple[str, str]]:
 
 def test_the_family_is_read_with_the_player_s_token(gets) -> None:
     bridge = exo_bridge("exo.p.3")
-    assert exercise.read(bridge) == {"kind": "attacked", "motif": "ignored_threat"}
+    assert exercise.read(bridge) == {"id": "b", "kind": "attacked", "motif": "ignored_threat"}
     assert gets == [("https://viewer.test/api/coach/exercises", "t")]
     assert page_state(bridge)["exercise"] == {
         "title": "Menace ignorée · Cases attaquées",
         "context": "Dans votre partie, une de vos pièces était déjà en prise ici, "
         "et le coup joué ne l'a pas sauvée.",
-        "text": "Cet exercice se fait dans la visionneuse : le Tablier n'envoie que des coups.",
+        "text": exercise.BANNERS["attacked"][1],
     }
+
+
+def test_without_a_board_cases_attaquees_stays_in_the_viewer(gets) -> None:
+    bridge = exo_bridge("exo.p.3")
+    bridge.with_board = False
+    exercise.read(bridge)
+    assert page_state(bridge)["exercise"]["text"] == exercise.ATTACKED_WITHOUT_BOARD
 
 
 def test_a_find_move_says_to_play_on_the_board(gets) -> None:
