@@ -15,16 +15,17 @@ in this order :
 6. ``other``.
 
 The two heuristics are in the report, marked as such, but give no
-exercise until they are validated (Leader, #95). « En prise » is the
-``hanging`` of ``chess_board_facts`` : attacked and undefended, or
-attacked by a piece of lower value.
+exercise until they are validated (Leader, #95). « En prise » : the
+opponent wins material by the exchange on the square, attackers and
+defenders counted (#303). Stricter for a beginner than the ``hanging`` of
+``chess_board_facts``, which calls a piece defended once safe.
 """
 
 from __future__ import annotations
 
 import chess
 
-from palamede_chessboard._mcp_shared import _compute_board_facts
+from palamede_chessboard._mcp_shared import _PIECE_VALUES
 from palamede_chessboard.chessboard_engine import GameWalkEntry
 
 MOTIFS = (
@@ -49,8 +50,53 @@ _MINOR_HOMES = {
 }
 
 
+def _next_capturer(board: chess.Board, side: chess.Color, square: int) -> int | None:
+    """The cheapest piece of ``side`` able to capture on ``square``, the king last.
+
+    A pinned piece captures only along its pin ; the king only where nothing
+    would take it back.
+    """
+    able = [a for a in board.attackers(side, square) if square in board.pin(side, a)]
+    pieces = sorted(
+        (a for a in able if a != board.king(side)),
+        key=lambda a: _PIECE_VALUES[board.piece_type_at(a)],  # type: ignore[index]
+    )
+    if pieces:
+        return pieces[0]
+    king = board.king(side)
+    if king in able and not board.attackers(not side, square):
+        return king
+    return None
+
+
+def _exchange_gain(board: chess.Board, side: chess.Color, square: int, target: int) -> int:
+    """What ``side`` wins by capturing first on ``square``, free to stop at any time.
+
+    ``board`` is consumed : each capturer leaves its square, which lets the
+    pieces lined up behind it join the exchange.
+    """
+    capturer = _next_capturer(board, side, square)
+    if capturer is None:
+        return 0
+    value = _PIECE_VALUES[board.piece_type_at(capturer)]  # type: ignore[index]
+    board.remove_piece_at(capturer)
+    return max(0, target - _exchange_gain(board, not side, square, value))
+
+
 def _hanging(board: chess.Board, color: str) -> set[str]:
-    return {h["square"] for h in _compute_board_facts(board)["hanging"] if h["color"] == color}
+    """Squares of ``color``'s pieces the opponent wins material by capturing (#303)."""
+    mine = color == "white"
+    return {
+        chess.square_name(square)
+        for square in chess.SquareSet(board.occupied_co[mine])
+        if _exchange_gain(
+            board.copy(stack=False),
+            not mine,
+            square,
+            _PIECE_VALUES[board.piece_type_at(square)],  # type: ignore[index]
+        )
+        > 0
+    }
 
 
 def _lone_queen(before: chess.Board, move: chess.Move) -> bool:

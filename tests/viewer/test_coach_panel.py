@@ -165,6 +165,12 @@ def test_the_band_says_the_family_and_its_rule() -> None:
     assert "showExerciseBand(id, kind, motif, body.game_id);" in COACH_JS
 
 
+def test_the_rule_of_en_prise_counts_the_exchange() -> None:
+    # #303 : « défendue = sauvée » taught a wrong lesson.
+    assert "une fois comptés attaquants et défenseurs" in COACH_JS
+    assert "moindre valeur" not in COACH_JS
+
+
 def test_the_answer_box_is_a_form_enter_answers_and_takes_the_focus() -> None:
     assert "(kind === 'attacked'\n      ? '<form id=\"band-answer\">" in COACH_JS
     assert '<button type="submit">Répondre</button></form>' in COACH_JS

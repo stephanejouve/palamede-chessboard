@@ -40,7 +40,9 @@ class FakeEngine:
         self.table = table
         self.calls = 0
 
-    def analyse(self, board: chess.Board, limit: object) -> dict:
+    def analyse(self, board: chess.Board, limit: object, multipv: int | None = None):
+        if multipv is not None:  # asked for an exercise : no line, so no find_move
+            return []
         self.calls += 1
         if board.is_checkmate():
             return {"score": chess.engine.PovScore(chess.engine.Mate(0), board.turn)}
@@ -279,7 +281,8 @@ def _log_lines(engine_log: Path) -> list[dict]:
 def test_each_analysis_is_in_the_engine_log(gdir: Path, popen, engine_log: Path) -> None:
     _game(gdir, "g1", SCHOLAR)
     assert run_once(gdir, engine_path="/fake")["diagnosed"] == ["g1"]
-    [line] = _log_lines(engine_log)
+    first = _log_lines(engine_log)
+    line = first[0]  # then one line per exercise position (#303 : 3...Nf6 leaves f7 en prise)
     assert (line["tool"], line["game_id"], line["caller"]) == (
         "chess_get_my_mistakes",
         "g1",
@@ -287,7 +290,7 @@ def test_each_analysis_is_in_the_engine_log(gdir: Path, popen, engine_log: Path)
     )
     assert line["decision"] == "allowed" and "masked_plies" not in line
     run_once(gdir, engine_path="/fake")  # already reported : no engine, no line
-    assert len(_log_lines(engine_log)) == 1
+    assert len(_log_lines(engine_log)) == len(first)
 
 
 def test_a_refusal_of_the_guard_is_logged_and_waits(
