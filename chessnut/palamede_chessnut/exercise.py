@@ -37,20 +37,14 @@ BANNERS: dict[str, tuple[str, str]] = {
 }
 
 
-#: The motif's name and why the position was chosen, as in the viewer.
-MOTIFS: dict[str, tuple[str, str]] = {
-    "missed_mate": (
-        "Mat manqué",
-        "Dans votre partie, un mat forcé était possible ici, et il a été manqué.",
-    ),
-    "hanging_piece": (
-        "Pièce laissée en prise",
-        "Dans votre partie, le coup joué ici a laissé une de vos pièces en prise.",
-    ),
+#: Why the position was chosen, as in the viewer : never in the title, read
+#: as an order to find that mistake on the board (#301).
+CONTEXTS: dict[str, str] = {
+    "missed_mate": "Dans votre partie, un mat forcé était possible ici, et il a été manqué.",
+    "hanging_piece": "Dans votre partie, le coup joué ici a laissé une de vos pièces en prise.",
     "ignored_threat": (
-        "Menace ignorée",
         "Dans votre partie, une de vos pièces était déjà en prise ici, "
-        "et le coup joué ne l'a pas sauvée.",
+        "et le coup joué ne l'a pas sauvée."
     ),
 }
 
@@ -85,7 +79,4 @@ def banner(bridge: Bridge) -> dict[str, str] | None:
     if bridge.exercise is None or bridge.exercise["kind"] not in BANNERS:
         return None
     title, text = BANNERS[bridge.exercise["kind"]]
-    motif = MOTIFS.get(bridge.exercise["motif"])
-    if motif is None:
-        return {"title": title, "context": "", "text": text}
-    return {"title": f"{motif[0]} · {title}", "context": motif[1], "text": text}
+    return {"title": title, "context": CONTEXTS.get(bridge.exercise["motif"], ""), "text": text}

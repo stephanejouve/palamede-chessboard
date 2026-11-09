@@ -243,11 +243,11 @@ function showExerciseBand(id, kind, motif, game) {
   if (!texts) return;
   exerciseBand.dataset.exercise = id;
   const context = EXERCISE_CONTEXTS[motif];
-  // Without a known motif, the family alone — as the Tablier (exercise.py).
-  const title = context ? motifLabel(motif) + ' · ' + texts.title : texts.title;
-  exerciseBand.innerHTML = '<div class="band-title">' + escapeHtml(title) + '</div>'
-    + (context ? '<div class="band-context">' + escapeHtml(context) + '</div>' : '')
+  // The order first, the mistake of the game after it and never in the
+  // title : read as what to find on the board (#301). As the Tablier (exercise.py).
+  exerciseBand.innerHTML = '<div class="band-title">' + escapeHtml(texts.title) + '</div>'
     + '<div class="band-rule">' + escapeHtml(texts.rule) + '</div>'
+    + (context ? '<div class="band-context">' + escapeHtml(context) + '</div>' : '')
     + (kind === 'attacked'
       ? '<form id="band-answer"><label>Cases (ex. f6 e4) : <input type="text" id="coach-squares" autocomplete="off"></label>'
         + ' <button type="submit">Répondre</button></form>'
