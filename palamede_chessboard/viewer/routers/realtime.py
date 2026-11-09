@@ -37,6 +37,7 @@ from palamede_chessboard.chessboard_state import (
     post_commentary,
 )
 from palamede_chessboard.clock_moves import settle_flag
+from palamede_chessboard.errors import CommentaryRefusedError
 from palamede_chessboard.viewer.models import (
     ACCEPTED_VIEWERS,
     DEPTH_OPTIONS,
@@ -133,16 +134,27 @@ def build_realtime_router() -> APIRouter:
 
     @router.post("/api/commentary")
     def commentary_post(game_id: str, payload: CommentaryPayload) -> dict:
-        entry = post_commentary(
+        return {"status": "ok", "entry": _post_commentary(game_id, payload)}
+
+    return router
+
+
+def _post_commentary(game_id: str, payload: CommentaryPayload) -> dict:
+    """The line appended to the game's side-car ; the refusals as HTTP errors."""
+    try:
+        return post_commentary(
             game_id,
             ply=payload.ply,
             source=payload.source,
             text=payload.text,
             games_dir=_games_dir(),
         )
-        return {"status": "ok", "entry": entry}
-
-    return router
+    except GameNotFoundError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except CommentaryRefusedError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except ChessboardError as exc:  # malformed id : 400, not 500
+        raise HTTPException(400, str(exc)) from exc
 
 
 def _valid_fen(fen: str) -> str:
