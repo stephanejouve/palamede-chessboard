@@ -172,9 +172,19 @@ class GameState:
         advanced the state), :class:`StalePlyError` is raised **before**
         validation so the caller can re-read and retry. Default
         ``None`` preserves backward-compatible behaviour (no check).
+
+        Refuses if the game is already over, as :meth:`resign` does : after a
+        resignation, an agreed draw or a fallen flag the board still has legal
+        moves, and a mate played then would overturn the result (#299). The
+        ply guard fires first, so a stale caller still gets
+        :class:`StalePlyError`.
         """
         if expected_ply is not None and expected_ply != self.board.ply():
             raise StalePlyError(current_ply=self.board.ply(), expected_ply=expected_ply)
+        if self.metadata.result != "*" or self.board.is_game_over():
+            raise InvalidGameStateError(
+                f"Cannot play {move_san!r}: game already ended (result={self.metadata.result!r})"
+            )
 
         strict = validate_san_strict(self.board, move_san)
         if not strict.ok:
