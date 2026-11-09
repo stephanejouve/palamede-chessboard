@@ -63,7 +63,12 @@ import chess
 
 from palamede_chessboard._atomic import fsync_dir
 from palamede_chessboard.chess_arbiter import move_request_context, validate_san_strict
-from palamede_chessboard.chessboard_state import GAMES_DIR, GameState, IllegalMoveError
+from palamede_chessboard.chessboard_state import (
+    GAMES_DIR,
+    GameState,
+    IllegalMoveError,
+    InvalidGameStateError,
+)
 from palamede_chessboard.paths import resolve_games_dir
 
 log = logging.getLogger("chess_arbiter_daemon")
@@ -222,7 +227,7 @@ class ArbiterDaemon:
             return self._reject_strict(player, state, san, actor_id, strict.reason)
         try:
             outcome = state.play_move(san, by=actor_id)
-        except IllegalMoveError as exc:
+        except (IllegalMoveError, InvalidGameStateError) as exc:
             return f"reject:{exc}"
         if outcome["is_game_over"]:
             return self._handle_game_over(san, actor_id, outcome)

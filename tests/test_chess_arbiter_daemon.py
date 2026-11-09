@@ -115,6 +115,15 @@ def test_skip_no_san(daemon: ArbiterDaemon) -> None:
     assert daemon.captured == []
 
 
+def test_a_move_after_a_resignation_is_rejected_not_a_crash(
+    daemon: ArbiterDaemon, game: GameState, games_dir: Path
+) -> None:
+    game.resign(by="black")  # #299 : legal on the board, the game is over
+    outcome = daemon.process_message(_msg("admin", "Coup 1 : **e4**"))
+    assert outcome.startswith("reject:") and "already ended" in outcome
+    assert GameState.load(game.metadata.game_id, games_dir=games_dir).board.ply() == 0
+
+
 def test_apply_legal_first_move_notifies_black(daemon: ArbiterDaemon) -> None:
     outcome = daemon.process_message(_msg("admin", "Coup 1 : **e4**"))
     assert outcome == "apply"
