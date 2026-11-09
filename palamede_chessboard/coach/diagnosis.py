@@ -53,6 +53,7 @@ from palamede_chessboard.coach import CALLER
 from palamede_chessboard.coach.exercises import exercises_of
 from palamede_chessboard.coach.motifs import HEURISTIC_MOTIFS, motif_of
 from palamede_chessboard.coach.progress import complete_report, game_date, plies_of
+from palamede_chessboard.coach.recompute import recompute_attacked
 from palamede_chessboard.coach.rounds import DEFAULT_INTERVAL, RoundMemory, Wait, mtime_ns
 from palamede_chessboard.coach.store import add_exercises, game_key, read_report, write_report
 from palamede_chessboard.paths import resolve_games_dir
@@ -302,18 +303,26 @@ def run_forever(
 
 
 def main(argv: list[str] | None = None) -> int:
-    """``palamede-coach once`` or ``run`` over the games directory."""
+    """``palamede-coach once``, ``run`` or ``recompute-attacked`` over the games directory."""
     parser = argparse.ArgumentParser(prog="palamede-coach", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     once = sub.add_parser("once", help="diagnose the finished games and draw exercises once")
     run = sub.add_parser("run", help="a round every --interval seconds, until SIGTERM")
     run.add_argument("--interval", type=float, default=DEFAULT_INTERVAL)
+    recompute = sub.add_parser(
+        "recompute-attacked", help="the stored answers under the current rule (#303), dry run"
+    )
+    recompute.add_argument("--apply", action="store_true", help="write the new answers")
+    recompute.add_argument("--games-dir", type=Path, default=None)
     for command in (once, run):
         command.add_argument("--games-dir", type=Path, default=None)
         command.add_argument("--depth", type=int, default=DEFAULT_DEPTH)
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     games_dir = args.games_dir or resolve_games_dir()
+    if args.command == "recompute-attacked":
+        print(json.dumps(recompute_attacked(games_dir, apply=args.apply), indent=2))
+        return 0
     if args.command == "run":
         stop = threading.Event()
         signal.signal(signal.SIGTERM, lambda *_: stop.set())
