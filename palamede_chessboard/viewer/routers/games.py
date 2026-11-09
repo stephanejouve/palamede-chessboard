@@ -267,6 +267,8 @@ def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> di
             move_result = _play(state, who, san_to_play, gdir)
         except IllegalMoveError as exc:
             raise HTTPException(422, str(exc)) from exc
+        except InvalidGameStateError as exc:  # the game is over (#299)
+            raise HTTPException(409, str(exc)) from exc
         # Same clock as chess_play_move (#135) : the board, the mouse and Maia
         # play through here.
         clock = clock_after_move(state, mover, gdir)

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from palamede_chessboard import commentary
 from palamede_chessboard.chessboard_state import (
     ChessboardError,
     GameAlreadyExistsError,
@@ -20,6 +21,9 @@ from palamede_chessboard.chessboard_state import (
     list_games,
     post_commentary,
 )
+from palamede_chessboard.commentary import MAX_PLY, MAX_SOURCE_CHARS, MAX_TEXT_CHARS
+from palamede_chessboard.errors import CommentaryRefusedError
+from palamede_chessboard.paths import COMMENTARY_DIR_NAME
 
 
 def _meta(game_id: str = "test-game") -> GameMetadata:
@@ -152,6 +156,52 @@ class TestExpectedPly:
             state.play_move("d4", expected_ply=2)
         assert exc_info.value.current_ply == 4
         assert exc_info.value.expected_ply == 2
+
+
+class TestNoMoveAfterTheEnd:
+    """A finished game takes no move, and its result cannot be overturned (#299)."""
+
+    @staticmethod
+    def _before_mate(tmp_path: Path) -> GameState:
+        """Black has ``Qh4#`` to play, the position is not over on the board."""
+        state = GameState.create(_meta("over"), games_dir=tmp_path)
+        for san in ("f3", "e5", "g4"):
+            state.play_move(san)
+        return state
+
+    def test_a_mate_after_a_resignation_does_not_overturn_the_result(self, tmp_path: Path) -> None:
+        state = self._before_mate(tmp_path)
+        state.resign(by="black")
+        with pytest.raises(InvalidGameStateError, match="already ended"):
+            state.play_move("Qh4#")
+        assert state.metadata.result == "1-0"
+        assert state.board.ply() == 3
+        reloaded = GameState.load("over", games_dir=tmp_path)
+        assert reloaded.metadata.result == "1-0"
+        assert reloaded.san_history == ["f3", "e5", "g4"]
+
+    def test_no_move_after_an_agreed_draw(self, tmp_path: Path) -> None:
+        state = self._before_mate(tmp_path)
+        state.offer_draw(by="black")
+        state.agree_draw(by="white")
+        with pytest.raises(InvalidGameStateError):
+            state.play_move("Qh4#")
+        assert state.metadata.result == "1/2-1/2"
+        assert state.board.ply() == 3
+
+    def test_no_move_after_a_mate_on_the_board(self, tmp_path: Path) -> None:
+        state = self._before_mate(tmp_path)
+        state.play_move("Qh4#")
+        with pytest.raises(InvalidGameStateError):
+            state.play_move("a3")
+        assert state.metadata.result == "0-1"
+
+    def test_a_game_over_board_with_no_result_recorded_is_refused(self, tmp_path: Path) -> None:
+        state = self._before_mate(tmp_path)
+        state.play_move("Qh4#")
+        state.metadata.result = "*"  # the second half of the guard, alone
+        with pytest.raises(InvalidGameStateError):
+            state.play_move("a3")
 
 
 class TestPgnPersistence:
@@ -343,6 +393,7 @@ class TestDrawOffer:
 
 class TestCommentary:
     def test_post_then_read(self, tmp_path: Path) -> None:
+        GameState.create(_meta(), games_dir=tmp_path)
         post_commentary(
             "test-game",
             ply=3,
@@ -372,6 +423,76 @@ class TestCommentary:
 
     def test_get_unknown_game_empty(self, tmp_path: Path) -> None:
         assert get_commentary("never-created", games_dir=tmp_path) == []
+
+    def test_post_on_an_unknown_game_creates_nothing(self, tmp_path: Path) -> None:
+        with pytest.raises(GameNotFoundError):
+            post_commentary("ghost", ply=1, source="a", text="x", games_dir=tmp_path)
+        assert not (tmp_path / COMMENTARY_DIR_NAME).exists()
+
+    @pytest.mark.parametrize(
+        "ply, source, text",
+        [
+            (-1, "a", "x"),
+            (MAX_PLY + 1, "a", "x"),
+            (1, "", "x"),
+            (1, "a" * (MAX_SOURCE_CHARS + 1), "x"),
+            (1, "a", ""),
+            (1, "a", "x" * (MAX_TEXT_CHARS + 1)),
+        ],
+    )
+    def test_out_of_bounds_refused_and_nothing_written(
+        self, tmp_path: Path, ply: int, source: str, text: str
+    ) -> None:
+        GameState.create(_meta(), games_dir=tmp_path)
+        with pytest.raises(CommentaryRefusedError):
+            post_commentary("test-game", ply=ply, source=source, text=text, games_dir=tmp_path)
+        assert get_commentary("test-game", games_dir=tmp_path) == []
+
+    @pytest.mark.parametrize(
+        ("ply", "source", "text"),
+        [(1.5, "a", "x"), (True, "a", "x"), ("3", "a", "x"), (1, 7, "x"), (1, "a", 7)],
+    )
+    def test_out_of_schema_types_are_refused(
+        self, tmp_path: Path, ply: object, source: object, text: object
+    ) -> None:
+        GameState.create(_meta(), games_dir=tmp_path)
+        with pytest.raises(CommentaryRefusedError):
+            post_commentary("test-game", ply=ply, source=source, text=text, games_dir=tmp_path)
+        assert get_commentary("test-game", games_dir=tmp_path) == []
+
+    def test_text_is_bounded_in_characters_and_the_side_car_in_bytes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        GameState.create(_meta(), games_dir=tmp_path)
+        text = "é" * MAX_TEXT_CHARS
+        post_commentary("test-game", ply=1, source="a", text=text, games_dir=tmp_path)
+        path = tmp_path / COMMENTARY_DIR_NAME / "test-game.jsonl"
+        size = path.stat().st_size
+        assert size > 2 * MAX_TEXT_CHARS
+        monkeypatch.setattr(commentary, "MAX_SIDECAR_BYTES", size + MAX_TEXT_CHARS + 100)
+        with pytest.raises(CommentaryRefusedError, match="full"):
+            post_commentary("test-game", ply=1, source="a", text=text, games_dir=tmp_path)
+
+    def test_the_bounds_themselves_are_accepted(self, tmp_path: Path) -> None:
+        GameState.create(_meta(), games_dir=tmp_path)
+        source, text = "a" * MAX_SOURCE_CHARS, "x" * MAX_TEXT_CHARS
+        for ply in (0, MAX_PLY):
+            post_commentary("test-game", ply=ply, source=source, text=text, games_dir=tmp_path)
+        assert len(get_commentary("test-game", games_dir=tmp_path)) == 2
+
+    def test_a_full_side_car_refuses_the_next_line(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        GameState.create(_meta(), games_dir=tmp_path)
+        post_commentary("test-game", ply=1, source="a", text="x", games_dir=tmp_path)
+        path = tmp_path / COMMENTARY_DIR_NAME / "test-game.jsonl"
+        size = path.stat().st_size
+        monkeypatch.setattr(commentary, "MAX_SIDECAR_BYTES", 2 * size)
+        post_commentary("test-game", ply=1, source="a", text="x", games_dir=tmp_path)  # just fits
+        assert path.stat().st_size == 2 * size
+        with pytest.raises(CommentaryRefusedError, match="full"):
+            post_commentary("test-game", ply=1, source="a", text="x", games_dir=tmp_path)
+        assert path.stat().st_size == 2 * size
 
 
 class TestListGames:

@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from palamede_chessboard.chessboard_state import GameMetadata, GameState, TimeControl
+from palamede_chessboard.players import registry
 from palamede_chessboard.viewer.models import DEPTH_OPTIONS, VIEWER_ROLES
 from palamede_chessboard.viewer.routers.realtime import ENGINE_REFUSED, MAX_DEPTH
 from tests.viewer.conftest import _create_game
@@ -204,7 +205,75 @@ class TestEngineLive:
         assert r.status_code == 400
 
 
+def _token(games_dir: Path, player: str) -> dict[str, str]:
+    registry.add_player(games_dir, player, kind="agent")
+    return {"Authorization": f"Bearer {registry.issue_token(games_dir, player, label='tests')}"}
+
+
+class TestCommentaryToken:
+    URL = "/api/commentary?game_id=viewer-test"
+    LINE = {"ply": 1, "source": "s", "text": "ok"}  # noqa: RUF012
+
+    @pytest.fixture(autouse=True)
+    def _game(self, games_dir: Path) -> None:
+        meta = GameMetadata(
+            game_id="viewer-test",
+            white="leader",
+            black="junior",
+            arbiter="admin",
+            spectators=["cd"],
+            time_control=TimeControl(format="unrated"),
+        )
+        GameState.create(meta, games_dir=games_dir)
+
+    def _count(self, client: TestClient) -> int:
+        return client.get(self.URL).json()["count"]
+
+    @pytest.mark.parametrize("player", ["leader", "junior", "admin", "cd"])
+    def test_players_arbiter_and_spectators_may_comment(
+        self, client: TestClient, games_dir: Path, player: str
+    ) -> None:
+        assert client.post(self.URL, json=self.LINE, headers=_token(games_dir, player)).is_success
+        assert self._count(client) == 1
+
+    def test_no_token_is_401_and_writes_nothing(self, client: TestClient) -> None:
+        r = client.post(self.URL, json=self.LINE)
+        assert r.status_code == 401
+        assert r.headers["WWW-Authenticate"] == "Bearer"
+        assert self._count(client) == 0
+
+    def test_an_unknown_token_is_401(self, client: TestClient) -> None:
+        r = client.post(self.URL, json=self.LINE, headers={"Authorization": "Bearer nope"})
+        assert r.status_code == 401
+        assert self._count(client) == 0
+
+    def test_a_stranger_to_the_game_is_403(self, client: TestClient, games_dir: Path) -> None:
+        r = client.post(self.URL, json=self.LINE, headers=_token(games_dir, "patrice"))
+        assert r.status_code == 403
+        assert "NOT_ALLOWED" in r.json()["detail"]
+        assert self._count(client) == 0
+
+    def test_an_unreadable_registry_refuses(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def unreadable(*_: object) -> None:
+            raise registry.RegistryError("unreadable")
+
+        monkeypatch.setattr(registry, "verify_token", unreadable)
+        r = client.post(self.URL, json=self.LINE, headers={"Authorization": "Bearer x"})
+        assert r.status_code == 503
+        assert self._count(client) == 0
+
+    def test_the_token_comes_before_the_bounds(self, client: TestClient) -> None:
+        r = client.post(self.URL, json={"ply": 1, "source": "s", "text": "x" * 100_000})
+        assert r.status_code == 401
+
+
 class TestCommentary:
+    @pytest.fixture(autouse=True)
+    def _authenticated(self, client: TestClient, games_dir: Path) -> None:
+        client.headers.update(_token(games_dir, "w"))
+
     def test_post_then_get(self, client: TestClient, games_dir: Path) -> None:
         _create_game(games_dir)
         r = client.post(
@@ -218,6 +287,39 @@ class TestCommentary:
         body = listed.json()
         assert body["count"] == 1
         assert body["entries"][0]["text"] == "ok"
+
+    def test_post_on_a_ghost_game_is_404_and_creates_nothing(
+        self, client: TestClient, games_dir: Path
+    ) -> None:
+        r = client.post(
+            "/api/commentary?game_id=ghost-game",
+            json={"ply": 1, "source": "spectator", "text": "x" * 100_000},
+        )
+        assert r.status_code == 404
+        assert not (games_dir / "commentary" / "ghost-game.jsonl").exists()
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"ply": -5, "source": "s", "text": "ok"},
+            {"ply": 1, "source": "s", "text": "x" * 100_000},
+            {"ply": 1, "source": "s" * 100_000, "text": "ok"},
+        ],
+    )
+    def test_post_out_of_bounds_is_422(
+        self, client: TestClient, games_dir: Path, payload: dict
+    ) -> None:
+        _create_game(games_dir)
+        r = client.post("/api/commentary?game_id=viewer-test", json=payload)
+        assert r.status_code == 422
+        assert client.get("/api/commentary?game_id=viewer-test").json()["count"] == 0
+
+    def test_post_with_a_malformed_id_is_400(self, client: TestClient, games_dir: Path) -> None:
+        r = client.post(
+            "/api/commentary?game_id=bad%20id",
+            json={"ply": 1, "source": "s", "text": "ok"},
+        )
+        assert r.status_code == 400
 
     def test_commentary_filter_by_ply(self, client: TestClient, games_dir: Path) -> None:
         _create_game(games_dir)
