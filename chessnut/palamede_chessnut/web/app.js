@@ -439,7 +439,7 @@ function render(state) {
   }
   renderMouse(state);
   renderSwitch(state);
-  renderLeds(state.differing);
+  renderLeds([...state.differing, ...state.designated]);  // the red of a designated square (#237)
   renderTips(state.tips || {});
   setLight('bluetooth', state.lights.bluetooth);
   el('light-bluetooth').textContent = state.transport === 'usb' ? 'USB' : 'Bluetooth';

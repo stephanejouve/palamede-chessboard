@@ -35,6 +35,7 @@ import chess
 
 from palamede_chessnut import clock_hold, config, exercise, leds, sounds, token_light, transport
 from palamede_chessnut.decide import decide
+from palamede_chessnut.designate import KING_HOLD_SECONDS, Designation, follow
 from palamede_chessnut.moves import only_king_lifted, relayed
 from palamede_chessnut.protocol import UnknownPieceCode, decode_board, led_frame
 from palamede_chessnut.server import GameServer, ViewerServer
@@ -115,6 +116,7 @@ class Bridge:
         self.new_game = dict(config.NEW_GAME)
         #: ``{"kind", "motif"}`` of an ``exo.*`` game, read from the coach (#237).
         self.exercise: dict[str, str] | None = None
+        self.designation = Designation()
 
     def lobby_text(self) -> str | None:
         """What the page says instead of the game's status : only a lobby has something (#167)."""
@@ -277,6 +279,7 @@ class Bridge:
             self.animation = leds.ready_sweep()
             log.info("the board matches the game : moves count from now on")
             log.info("FEN %s", self.game.fen())
+        await follow(self, time.monotonic())
         if await self._resign_gesture(write):
             return
         decision = decide(
@@ -293,7 +296,7 @@ class Bridge:
         if self.animation:
             await self._show(write, self.animation.pop(0))
         elif decision is not None:
-            await self._show(write, decision.leds)
+            await self._show(write, decision.leds | self.designation.squares)
         if decision is not None and decision.move is not None and time.monotonic() >= self.retry_at:
             await self._play(decision.move)
 
@@ -314,7 +317,7 @@ class Bridge:
                     await self._show(write, decision.leds)
                 return
             self.finished = True
-            self.animation = leds.finished_blink()
+            self.animation += leds.finished_blink()  # after a right answer's blink (#237)
             log.info("game %s over", self.game_id)
         if self.animation:
             await self._show(write, self.animation.pop(0))
@@ -337,15 +340,22 @@ class Bridge:
             return False
         now = time.monotonic()
         if self.king_gone_since is None:
-            self.king_gone_since = now
+            # In an exercise, a short lift may be the validation (owner, 09/11).
+            hold = KING_HOLD_SECONDS if self.exercise is not None else 0.0
+            self.king_gone_since = now + hold
             log.info(
-                "king off the board : resigning in %.0f s unless it comes back", RESIGN_SECONDS
+                "king off the board : resigning in %.0f s unless it comes back",
+                RESIGN_SECONDS + hold,
             )
         elapsed = now - self.king_gone_since
+        if elapsed < 0:
+            return False
         if self.resign_state is None and elapsed >= RESIGN_SECONDS and now >= self.retry_at:
             await self._resign()
         self.animation = []
-        await self._show(write, leds.countdown(self.game.king(self.player), elapsed))
+        await self._show(
+            write, leds.countdown(self.game.king(self.player), elapsed) | self.designation.squares
+        )
         return True
 
     async def _resign(self) -> None:
