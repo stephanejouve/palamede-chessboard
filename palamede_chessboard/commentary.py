@@ -25,17 +25,19 @@ from pathlib import Path
 from palamede_chessboard.errors import CommentaryRefusedError, GameNotFoundError
 from palamede_chessboard.paths import GAMES_DIR, _commentary_path, _pgn_path, _validate_game_id
 
-#: Bounds of one line, and of a game's side-car : the route takes no token yet,
-#: and an unbounded append fills the disk (audit of 08/11, C3).
+#: Bounds of one line, and of a game's side-car : even with a token, an
+#: unbounded append fills the disk (audit of 08/11, C3).
 MAX_PLY = 2000
 MAX_SOURCE_CHARS = 64
 MAX_TEXT_CHARS = 8000
 MAX_SIDECAR_BYTES = 2 * 1024 * 1024
 
 
-def _refuse_out_of_bounds(ply: int, source: str, text: str) -> None:
+def _refuse_out_of_bounds(ply: object, source: object, text: object) -> None:
     """:class:`CommentaryRefusedError` unless the line is within its bounds."""
-    if not 0 <= int(ply) <= MAX_PLY:
+    if not isinstance(source, str) or not isinstance(text, str):
+        raise CommentaryRefusedError("source and text must be strings")
+    if not isinstance(ply, int) or isinstance(ply, bool) or not 0 <= ply <= MAX_PLY:
         raise CommentaryRefusedError(f"ply must be between 0 and {MAX_PLY}")
     if not source or len(source) > MAX_SOURCE_CHARS:
         raise CommentaryRefusedError(f"source must be 1 to {MAX_SOURCE_CHARS} characters")
