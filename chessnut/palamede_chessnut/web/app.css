@@ -96,7 +96,10 @@ main {
 }
 @media (max-width: 760px) {
   main {
-    grid-template-columns: minmax(0, 520px);
+    /* The same board as just above the threshold : following the window's
+       height, at most 760 - page's padding, gap and panel. Reducing the window
+       no longer makes it grow (Stéphane, 09/11). */
+    grid-template-columns: minmax(0, min(472px, max(240px, calc(100vh - 150px))));
     grid-template-areas: "stage" "side";
   }
 }
@@ -123,6 +126,11 @@ main {
 .cg-wrap.orientation-black coords.ranks coord:nth-child(odd) {
   color: rgba(50, 50, 50, 0.95);
 }
+/* The file letters touched the base of the pieces on rank 1, and chessground's
+   fixed 24 px pushed them onto the next square on a small board (Stéphane, 09/11) :
+   in the bottom right corner of their own square, whatever its size. */
+#board coords.files { bottom: -6px; left: 0; text-align: right; }
+#board coords.files coord { flex: 1 1 0; padding-right: 3px; }
 /* The promotion (#150) : over the board, in the same grid cell, the board
    dimmed ; the four pieces in a column from the square reached, the queen on it. */
 #promo {

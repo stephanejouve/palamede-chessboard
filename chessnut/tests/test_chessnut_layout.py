@@ -83,6 +83,13 @@ def test_the_captured_pieces_are_a_quarter_of_a_square() -> None:
     assert "max(calc(var(--square, 40px) / 4), 22px)" in piece.group(1)
 
 
+def test_reducing_the_window_does_not_make_the_board_grow() -> None:
+    # Below the threshold, the same height rule as above it, and its largest width.
+    css = (PAGE / "app.css").read_text("utf-8")
+    assert "minmax(0, min(472px, max(240px, calc(100vh - 150px))))" in css
+    assert "minmax(0, 520px)" not in css
+
+
 def test_a_coordinate_takes_the_colour_opposite_to_its_square() -> None:
     """a1 dark : rank 1 and file a light on a white board, reversed when flipped (smoke 03/11)."""
     css = (PAGE / "app.css").read_text(encoding="utf-8")
@@ -96,6 +103,18 @@ def test_a_coordinate_takes_the_colour_opposite_to_its_square() -> None:
     for axis in ("files", "ranks"):
         assert {("white", axis, "odd"), ("black", axis, "even")} <= light
         assert {("white", axis, "even"), ("black", axis, "odd")} <= dark
+
+
+def test_the_file_letters_clear_the_base_of_the_pieces() -> None:
+    # Lower than chessground's -4px, and an id : the rule must win over the vendor's.
+    css = (PAGE / "app.css").read_text("utf-8")
+    assert "#board coords.files { bottom: -6px; left: 0; text-align: right; }" in css
+
+
+def test_the_file_letters_stay_in_their_square_on_a_small_board() -> None:
+    # Equal cells, not sized by each letter : no drift across the board.
+    css = (PAGE / "app.css").read_text("utf-8")
+    assert "#board coords.files coord { flex: 1 1 0; padding-right: 3px; }" in css
 
 
 def test_without_a_game_the_gestures_are_said_under_the_board() -> None:
