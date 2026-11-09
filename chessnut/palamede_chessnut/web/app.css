@@ -96,7 +96,10 @@ main {
 }
 @media (max-width: 760px) {
   main {
-    grid-template-columns: minmax(0, 520px);
+    /* The same board as just above the threshold : following the window's
+       height, at most 760 - page's padding, gap and panel. Reducing the window
+       no longer makes it grow (Stéphane, 09/11). */
+    grid-template-columns: minmax(0, min(472px, max(240px, calc(100vh - 150px))));
     grid-template-areas: "stage" "side";
   }
 }
