@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.24.0...v0.25.0) (2026-11-09)
+
+
+### Features
+
+* **viewer:** propose, accept or decline a draw and resign with the mouse ([#314](https://github.com/stephanejouve/palamede-chessboard/issues/314)) ([ddbb4a6](https://github.com/stephanejouve/palamede-chessboard/commit/ddbb4a669cfe4bff6544b053fe7a6bd3d3fff873))
+
 ## [0.24.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.23.1...v0.24.0) (2026-11-09)
 
 
