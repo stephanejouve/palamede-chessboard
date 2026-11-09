@@ -92,7 +92,7 @@ class Designation:
         return True
 
 
-def _answers_on_board(bridge: Bridge) -> bool:
+def answers_on_board(bridge: Bridge) -> bool:
     """An « attacked » exercise whose position stands, the player to move."""
     return (
         bridge.ready
@@ -106,7 +106,7 @@ def _answers_on_board(bridge: Bridge) -> bool:
 
 async def follow(bridge: Bridge, now: float) -> None:
     """One tick : read the gesture, and send the answer once it is validated."""
-    if not _answers_on_board(bridge):
+    if not answers_on_board(bridge):
         return
     assert bridge.game is not None and bridge.observed is not None
     expected = chess.BaseBoard(bridge.game.board_fen())

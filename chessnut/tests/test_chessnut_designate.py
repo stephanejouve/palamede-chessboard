@@ -11,7 +11,7 @@ from palamede_chessnut.bridge import RESIGN_SECONDS, Bridge
 from palamede_chessnut.designate import KING_HOLD_SECONDS, MIN_LIFT_SECONDS, Designation
 from palamede_chessnut.protocol import led_frame
 from palamede_chessnut.status import snapshot as page_state
-from test_chessnut import frame, placement, ready_bridge
+from test_chessnut import after, frame, placement, ready_bridge
 
 START = chess.BaseBoard()
 TAP = MIN_LIFT_SECONDS + 0.1
@@ -154,6 +154,14 @@ def test_the_delay_runs_between_the_lifts_not_during_the_second() -> None:
     hand.see(without(chess.E1), 1.0)  # still in the air, 2 s after the first put back
     hand.see(without(chess.E1), 0.2)
     hand.see(START, 0.2)
+    assert hand.validated == 1
+
+
+def test_the_delay_starts_at_the_put_back_not_at_the_lift() -> None:
+    # Review Junior #308 : a normal gesture, lifted 1 s then paused 1.5 s.
+    hand = Hand()
+    hand.tap(chess.E1, held=1.0)
+    hand.tap(chess.E1, gap=1.5)
     assert hand.validated == 1
 
 
@@ -304,6 +312,42 @@ async def test_the_designated_squares_light_up_on_the_board_and_in_the_window(
     assert page_state(bridge)["designated"] == ["e2"]
 
 
+def _spied(bridge: Bridge) -> tuple[list[str], list[str]]:
+    moves: list[str] = []
+    said: list[str] = []
+
+    def post(uci: str) -> tuple[None, bool]:
+        moves.append(uci)
+        return None, False
+
+    bridge.post_move = post  # type: ignore[method-assign]
+    bridge.say = said.append  # type: ignore[method-assign]
+    return moves, said
+
+
+async def test_a_move_is_no_answer_it_lights_up_until_taken_back(clock, posted) -> None:
+    # Smoke of #308 (09/11) : a piece moved was posted at once, then refused.
+    bridge = attacked_bridge()
+    moves, said = _spied(bridge)
+    board = Board(bridge, clock)
+    await board.show(placement(after("e4")), 0.1)
+    await board.show(placement(after("e4")), 1.0)
+    assert moves == [] and said == [] and posted == []
+    assert board.written[-1] == led_frame(frozenset({chess.E2, chess.E4}))
+    await board.show(START, 0.1)
+    await board.show(START, 1.0)
+    assert board.written[-1] == led_frame(frozenset())
+
+
+async def test_a_find_move_still_posts_its_move(clock) -> None:
+    bridge = attacked_bridge("find_move")
+    moves, _said = _spied(bridge)
+    board = Board(bridge, clock)
+    await board.show(placement(after("e4")), 0.1)
+    await board.show(placement(after("e4")), 1.0)
+    assert moves == ["e2e4"]
+
+
 @pytest.mark.parametrize("kind", ["find_move"])
 async def test_a_find_move_designates_nothing(clock, posted, kind) -> None:
     bridge = attacked_bridge(kind)
@@ -327,7 +371,7 @@ async def test_not_the_player_s_turn_designates_nothing(clock, posted) -> None:
 def test_an_answer_without_a_known_id_stays_on_the_viewer() -> None:
     bridge = attacked_bridge()
     bridge.exercise = {"id": "", "kind": "attacked", "motif": ""}
-    assert not designate._answers_on_board(bridge)
+    assert not designate.answers_on_board(bridge)
 
 
 # ---- the king : validation first, resignation after -----------------------

@@ -35,7 +35,7 @@ import chess
 
 from palamede_chessnut import clock_hold, config, exercise, leds, sounds, token_light, transport
 from palamede_chessnut.decide import decide
-from palamede_chessnut.designate import KING_HOLD_SECONDS, Designation, follow
+from palamede_chessnut.designate import KING_HOLD_SECONDS, Designation, answers_on_board, follow
 from palamede_chessnut.moves import only_king_lifted, relayed
 from palamede_chessnut.protocol import UnknownPieceCode, decode_board, led_frame
 from palamede_chessnut.server import GameServer, ViewerServer
@@ -290,6 +290,7 @@ class Bridge:
             synced=self.synced,
             pending=self.pending is not None,
             refused=self.refused,
+            moves=not answers_on_board(self),
         )
         if decision is not None and (decision.leds or decision.move):
             self.animation = []
