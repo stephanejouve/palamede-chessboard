@@ -158,3 +158,57 @@ def test_the_clock_of_a_game_in_progress_replays_no_move(
     assert _read(client, game_id)["active"] == "black"
     clock = load_clock(game_id, games_dir=games_dir)
     assert clock is not None and clock.active == "black"
+
+
+def test_a_viewer_move_after_a_resignation_is_refused(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    """Legal on the board, but the game is over : 409, nothing changes (#299)."""
+    game_id = _game(client, tokens)
+    _move(client, game_id, tokens["stephane"], "e2e4")
+    assert client.post(f"/api/games/{game_id}/resign", headers=_auth(tokens["stephane"])).is_success
+    r = client.post(
+        f"/api/games/{game_id}/move",
+        json={"uci": "e7e5"},
+        headers=_auth(tokens["bot-maia-1100"]),
+    )
+    assert r.status_code == 409, r.text
+    state = GameState.load(game_id, games_dir=games_dir)
+    assert state.metadata.result == "0-1"
+    assert state.board.ply() == 1
+
+
+def test_a_viewer_move_after_the_flag_fell_is_refused(
+    client: TestClient, tokens: dict, games_dir: Path, wall
+) -> None:
+    game_id = _game(client, tokens)
+    _move(client, game_id, tokens["stephane"], "e2e4")
+    wall.advance(16 * 60)
+    clock = client.get(f"/api/clock?game_id={game_id}", headers=_auth(tokens["stephane"])).json()
+    assert clock["clock"]["flag_fall"] == "black"
+    r = client.post(
+        f"/api/games/{game_id}/move",
+        json={"uci": "e7e5"},
+        headers=_auth(tokens["bot-maia-1100"]),
+    )
+    assert r.status_code == 409, r.text
+    state = GameState.load(game_id, games_dir=games_dir)
+    assert state.metadata.result == "1-0"
+    assert state.metadata.termination == "time forfeit"
+    assert state.board.ply() == 1
+
+
+@pytest.mark.asyncio
+async def test_an_mcp_move_after_a_resignation_is_invalid_state(
+    client: TestClient,
+    tokens: dict,
+    games_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("MCP_CHESSBOARD_GAMES_DIR", str(games_dir))
+    game_id = _game(client, tokens)
+    _move(client, game_id, tokens["stephane"], "e2e4")
+    await call_tool("chess_resign", {"game_id": game_id, "by": "white"})
+    out = _decode(await call_tool("chess_play_move", {"game_id": game_id, "move_san": "e5"}))
+    assert (out["status"], out["code"]) == ("error", "INVALID_STATE")
+    assert GameState.load(game_id, games_dir=games_dir).board.ply() == 1

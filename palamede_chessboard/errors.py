@@ -32,6 +32,10 @@ class InvalidGameStateError(ChessboardError):
     """
 
 
+class CommentaryRefusedError(ChessboardError):
+    """Raised when a commentary line is out of bounds, or its side-car is full."""
+
+
 class StalePlyError(ChessboardError):
     """Raised when ``play_move(expected_ply=…)`` is given but the board
     is no longer at that ply (another player — or the same agent in a

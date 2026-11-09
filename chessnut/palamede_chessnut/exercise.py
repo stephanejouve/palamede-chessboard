@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 from palamede_chessnut import viewer
 
@@ -32,9 +33,15 @@ BANNERS: dict[str, tuple[str, str]] = {
     ),
     "attacked": (
         "Cases attaquées",
-        "Cet exercice se fait dans la visionneuse : le Tablier n'envoie que des coups.",
+        "Levez puis reposez chacune de vos pièces en prise : sa case s'allume, "
+        "le même geste l'enlève. Validez en levant puis reposant votre roi deux fois, "
+        "même s'il n'y a aucune pièce en prise. La visionneuse accepte aussi la réponse.",
     ),
 }
+#: Without a board, nothing designates squares : the mouse only plays moves (#92).
+ATTACKED_WITHOUT_BOARD = (
+    "Cet exercice se fait dans la visionneuse : la souris ne joue ici que des coups."
+)
 
 
 #: Why the position was chosen, as in the viewer : never in the title, read
@@ -50,15 +57,23 @@ CONTEXTS: dict[str, str] = {
 
 
 def found(exercises: Any, game_id: str) -> dict[str, str] | None:
-    """``{"kind", "motif"}`` of the exercise played in ``game_id``, or ``None``."""
+    """``{"id", "kind", "motif"}`` of the exercise played in ``game_id``, or ``None``."""
     if not isinstance(exercises, dict) or not isinstance(exercises.get("exercises"), list):
         return None
     for exercise in exercises["exercises"]:
         if isinstance(exercise, dict) and game_id in (exercise.get("game_ids") or []):
-            kind, motif = exercise.get("kind"), exercise.get("motif")
+            kind, motif, exercise_id = (
+                exercise.get("kind"),
+                exercise.get("motif"),
+                exercise.get("id"),
+            )
             if not isinstance(kind, str):
                 return None
-            return {"kind": kind, "motif": motif if isinstance(motif, str) else ""}
+            return {
+                "id": exercise_id if isinstance(exercise_id, str) else "",
+                "kind": kind,
+                "motif": motif if isinstance(motif, str) else "",
+            }
     return None
 
 
@@ -74,9 +89,19 @@ def read(bridge: Bridge) -> dict[str, str] | None:
     return bridge.exercise
 
 
+def answer(bridge: Bridge, squares: list[str]) -> tuple[int | None, Any]:
+    """Post the squares designated on the board : ``(status, JSON body or None)``."""
+    assert bridge.exercise is not None
+    exercise_id = quote(bridge.exercise["id"], safe="")
+    url = f"{bridge.viewer}/api/coach/exercises/{exercise_id}/answer"
+    return viewer.post_json(url, bridge._token, {"squares": squares})
+
+
 def banner(bridge: Bridge) -> dict[str, str] | None:
     """``{"title", "context", "text"}`` for the page, or ``None`` : no exercise, or an unknown family."""
     if bridge.exercise is None or bridge.exercise["kind"] not in BANNERS:
         return None
     title, text = BANNERS[bridge.exercise["kind"]]
+    if bridge.exercise["kind"] == "attacked" and not bridge.with_board:
+        text = ATTACKED_WITHOUT_BOARD
     return {"title": title, "context": CONTEXTS.get(bridge.exercise["motif"], ""), "text": text}
