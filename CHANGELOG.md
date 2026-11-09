@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.24.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.23.1...v0.24.0) (2026-11-09)
+
+
+### Features
+
+* **coach:** recompute the stored attacked exercises ([#313](https://github.com/stephanejouve/palamede-chessboard/issues/313)) ([cd46f1f](https://github.com/stephanejouve/palamede-chessboard/commit/cd46f1f7eab407d373f31df84c7054000c5a574e))
+
+
+### Bug Fixes
+
+* **clock:** resign and agreed draw under the game lock, result header read alone ([#291](https://github.com/stephanejouve/palamede-chessboard/issues/291)) ([374a81d](https://github.com/stephanejouve/palamede-chessboard/commit/374a81dd421ca5a0fee42f87a1dc6fcc085c6351))
+* **coach:** « en prise » évalue l'échange sur la case ([811b505](https://github.com/stephanejouve/palamede-chessboard/commit/811b5053dbe3395ce77c5be5f762352c8a34981d))
+* **coach:** en prise is the exchange on the square ([3f3a8ea](https://github.com/stephanejouve/palamede-chessboard/commit/3f3a8eaabc7bda879cdcdef8c1b556fb84ba0d48))
+* **commentary:** borner le side-car et refuser les parties inconnues ([6545bb8](https://github.com/stephanejouve/palamede-chessboard/commit/6545bb85ff2ee3b281ca6684b981d5f63a8b636e))
+* **commentary:** bound the side-car and refuse unknown games ([3a4c0fb](https://github.com/stephanejouve/palamede-chessboard/commit/3a4c0fbeb2e390357e274a60a13366e6d1d5b487))
+* **commentary:** exiger un jeton de joueur sur POST /api/commentary ([1656a29](https://github.com/stephanejouve/palamede-chessboard/commit/1656a29d548af88121d9f018481592b5afc1a353))
+* **commentary:** require a player token on POST /api/commentary ([76804a4](https://github.com/stephanejouve/palamede-chessboard/commit/76804a43f78766dff8ee132f399ff1a12b7df59c))
+* **exercise:** la consigne d'abord, l'erreur d'origine en contexte ([f505858](https://github.com/stephanejouve/palamede-chessboard/commit/f505858de6ffb486865db249f7bb9848012f81fe))
+* **exercise:** the order first, the mistake of the game as context ([2050e7a](https://github.com/stephanejouve/palamede-chessboard/commit/2050e7a0c57afda446a0a5742becfda5889ec08c))
+* **state:** refuse a move on a finished game ([59bd084](https://github.com/stephanejouve/palamede-chessboard/commit/59bd084455d6b4fdb76861a6253d2fd252c106e1)), closes [#299](https://github.com/stephanejouve/palamede-chessboard/issues/299)
+* **state:** refuser un coup sur une partie terminée ([35ca3e3](https://github.com/stephanejouve/palamede-chessboard/commit/35ca3e3c9052c986d67a212fc949bb4471adc66c))
+
 ## [0.23.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.23.0...v0.23.1) (2026-11-07)
 
 
