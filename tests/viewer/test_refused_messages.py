@@ -15,6 +15,8 @@ from palamede_chessboard.viewer.models import TEMPLATES_DIR
 
 BOARD_JS = (TEMPLATES_DIR / "viewer" / "_board.js.jinja").read_text(encoding="utf-8")
 GAME = "refusals"
+#: White to move and mated (back-rank mate) : no legal move, result not set.
+MATED_WHITE_TO_MOVE = "6k1/8/8/8/8/8/5PPP/r5K1 w - - 0 1"
 
 
 @pytest.fixture
@@ -93,6 +95,24 @@ class TestMoveRefusals:
     ) -> None:
         GameState.load(GAME, games_dir=games_dir).resign(by="black")
         r = _move(client, tokens["alice"], uci="e2e4")
+        assert (r.status_code, r.json()["detail"]) == (409, refusals.GAME_OVER)
+
+    @pytest.mark.parametrize("body", [{"san": "Kh1"}, {"uci": "g1h1"}])
+    def test_a_game_set_up_from_a_mated_position(
+        self, client: TestClient, tokens: dict, games_dir: Path, body: dict
+    ) -> None:
+        # Result still « * », but the board is over : the board decides (review Junior #326).
+        GameState.create(
+            GameMetadata(
+                game_id="mated",
+                white="alice",
+                black="bob",
+                time_control=TimeControl(format="unrated"),
+            ),
+            games_dir=games_dir,
+            starting_fen=MATED_WHITE_TO_MOVE,
+        )
+        r = client.post("/api/games/mated/move", json=body, headers=_bearer(tokens["alice"]))
         assert (r.status_code, r.json()["detail"]) == (409, refusals.GAME_OVER)
 
     def test_the_code_goes_to_a_header_never_to_the_screen(

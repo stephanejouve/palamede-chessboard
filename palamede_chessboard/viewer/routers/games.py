@@ -428,6 +428,10 @@ def _resolve_san(state: GameState, payload: MovePayload) -> str:
     """
     if payload.san:
         return payload.san
+    # A board already over (a game set up from a mated FEN) : said as such,
+    # not as an impossible move (review Junior #326).
+    if refusals.is_over(state.board, state.metadata.result):
+        raise HTTPException(409, refusals.GAME_OVER)
     try:
         move = chess.Move.from_uci(payload.uci or "")
     except (ValueError, chess.InvalidMoveError) as exc:
