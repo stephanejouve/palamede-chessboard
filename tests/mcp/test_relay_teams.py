@@ -210,9 +210,11 @@ async def test_member_out_of_turn_and_outsider_are_refused(
 ) -> None:
     await _relay()
     r = client.post("/api/games/relais/move", json={"san": "e4"}, headers=_bearer(tokens["junior"]))
-    assert r.status_code == 403 and "NOT_YOUR_TURN" in r.json()["detail"]
+    assert r.status_code == 403 and r.headers["x-refusal-code"] == "NOT_YOUR_TURN"
     r = client.post("/api/games/relais/move", json={"san": "e4"}, headers=_bearer(tokens["admin"]))
-    assert r.status_code == 403 and "NOT_A_PLAYER" in r.json()["detail"]  # l'arbitre ne joue pas
+    assert (
+        r.status_code == 403 and r.headers["x-refusal-code"] == "NOT_A_PLAYER"
+    )  # l'arbitre ne joue pas
     assert GameState.load("relais", games_dir=games_dir).san_history == []
 
 

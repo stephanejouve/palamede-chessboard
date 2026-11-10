@@ -46,6 +46,7 @@ from palamede_chessboard.coach import play as exercise_play
 from palamede_chessboard.coach.store import CoachStoreError
 from palamede_chessboard.players import registry
 from palamede_chessboard.players.observe import authorize_move, roles_of
+from palamede_chessboard.viewer import refusals
 from palamede_chessboard.viewer.games_query import (
     DEFAULT_LIMIT,
     MAX_LIMIT,
@@ -277,7 +278,8 @@ def draw_from_viewer(game_id: str, request: Request, action: str) -> dict:
             try:
                 result = getattr(state, f"{action}_draw")(by=side)
             except InvalidGameStateError as exc:
-                raise HTTPException(409, str(exc)) from exc
+                log.info("viewer %s_draw refused on %s : %s", action, game_id, exc)
+                raise HTTPException(409, _end_refused(action, state, side)) from exc
             if action == "agree":
                 stop_clock_locked(game_id, gdir)  # an agreed draw ends it too (#287)
     except GameNotFoundError as exc:
@@ -303,7 +305,8 @@ def resign_from_viewer(game_id: str, request: Request) -> dict:
             try:
                 result = state.resign(by=side)
             except InvalidGameStateError as exc:
-                raise HTTPException(409, str(exc)) from exc
+                log.info("viewer resign refused on %s : %s", game_id, exc)
+                raise HTTPException(409, _end_refused("resign", state, side)) from exc
             stop_clock_locked(game_id, gdir)  # no move ends it : stop it here (#287)
     except GameNotFoundError as exc:
         raise HTTPException(404, _not_found_detail(game_id)) from exc
@@ -329,7 +332,7 @@ def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> di
     ignored.
     """
     if not payload.san and not payload.uci:
-        raise HTTPException(400, "One of {san, uci} is required")
+        raise HTTPException(400, refusals.NO_MOVE)
     gdir = _games_dir()
     # Checked before the lock : a made-up or malformed id creates nothing
     # (review Leader #136).
@@ -350,9 +353,12 @@ def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> di
             check_reply_allowed(state, gdir)  # the reply waits for the clock (#316)
             move_result = _play(state, who, san_to_play, gdir)
         except IllegalMoveError as exc:
-            raise HTTPException(422, str(exc)) from exc
-        except InvalidGameStateError as exc:  # the game is over (#299)
-            raise HTTPException(409, str(exc)) from exc
+            log.info("viewer move %s refused on %s : %s", san_to_play, game_id, exc)
+            detail = refusals.not_possible(refusals.french_san(san_to_play))
+            raise HTTPException(422, detail) from exc
+        except InvalidGameStateError as exc:  # the game is over (#299), the clock (#316)
+            over = refusals.is_over(state.board, state.metadata.result)
+            raise HTTPException(409, refusals.GAME_OVER if over else str(exc)) from exc
         # Same clock as chess_play_move (#135) : the board, the mouse and Maia
         # play through here.
         clock = clock_after_move(state, mover, gdir)
@@ -400,8 +406,17 @@ def _authorized_mover(
         return who
     status, message = _MOVE_REFUSALS.get(code or "", (403, "Coup refusé"))
     log.warning("viewer %s refused on %s : %s (caller %s)", tool, state.metadata.game_id, code, who)
-    headers = {"WWW-Authenticate": "Bearer"} if status == 401 else None
-    raise HTTPException(status, f"{message} ({code})", headers=headers)
+    # The code for programs and tests, never on screen (#322).
+    headers = {"X-Refusal-Code": code or "REFUSED"}
+    if status == 401:
+        headers["WWW-Authenticate"] = "Bearer"
+    raise HTTPException(status, message, headers=headers)
+
+
+def _end_refused(action: str, state: GameState, side: str) -> str:
+    return refusals.end_refused(
+        action, state.board, state.metadata.result, state.metadata.draw_offer, side
+    )
 
 
 def _resolve_san(state: GameState, payload: MovePayload) -> str:
@@ -416,10 +431,10 @@ def _resolve_san(state: GameState, payload: MovePayload) -> str:
     try:
         move = chess.Move.from_uci(payload.uci or "")
     except (ValueError, chess.InvalidMoveError) as exc:
-        raise HTTPException(422, f"Invalid UCI {payload.uci!r}: {exc}") from exc
+        log.info("viewer : unreadable UCI %r (%s)", payload.uci, exc)
+        raise HTTPException(422, refusals.UNREADABLE) from exc
     if move not in state.board.legal_moves:
-        raise HTTPException(
-            422,
-            f"Illegal UCI {payload.uci!r} on ply {state.board.ply()}",
-        )
+        # The technical detail in the log ; the player reads the move the French way (#322).
+        log.info("viewer : illegal UCI %r at ply %d", payload.uci, state.board.ply())
+        raise HTTPException(422, refusals.not_possible(refusals.attempted(state.board, move)))
     return state.board.san(move)

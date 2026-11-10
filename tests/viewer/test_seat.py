@@ -66,7 +66,7 @@ def test_whoever_is_to_move(client: TestClient, tokens: dict, games_dir: Path) -
 def test_not_a_player_is_403(client: TestClient, tokens: dict, games_dir: Path) -> None:
     r = _seat(client, tokens["admin"])
     assert r.status_code == 403
-    assert "NOT_A_PLAYER" in r.json()["detail"]
+    assert r.headers["x-refusal-code"] == "NOT_A_PLAYER"
     assert "admin" not in r.json()["detail"]
 
 
