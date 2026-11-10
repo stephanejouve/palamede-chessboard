@@ -69,6 +69,7 @@ async function pollClock() {
     clockClientTs = Date.now() / 1000;
     document.getElementById('clocks').style.display = CLOCK ? 'grid' : 'none';
     renderClocks();
+    renderClockControl();  // the click that starts it, or who switched it off (#316)
   } catch(e) { /* silent */ }
 }
 

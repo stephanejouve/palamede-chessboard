@@ -72,6 +72,9 @@ class ClockState:
     held: bool = False
     #: The sides dropped from :attr:`board_sides` for a silent bridge (#164a).
     stale_sides: list[str] = field(default_factory=list)
+    #: Who switched the clock off before the first move (#316) : the game is
+    #: played without it, and the opponent reads who decided it.
+    off_by: str | None = None
 
     @classmethod
     def init_from_time_control(cls, game_id: str, tc: TimeControl) -> ClockState | None:
@@ -91,9 +94,9 @@ class ClockState:
             increment_seconds=increment,
         )
 
-    def start(self, *, now: float | None = None) -> ClockState:
-        """Begin counting against ``white`` from ``now``."""
-        self.active = "white"
+    def start(self, *, side: str = "white", now: float | None = None) -> ClockState:
+        """Begin counting against ``side``, the side to move, from ``now``."""
+        self.active = side
         self.last_move_ts = now if now is not None else _now()
         self.started = True
         return self

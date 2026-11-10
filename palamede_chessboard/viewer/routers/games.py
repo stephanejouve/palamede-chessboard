@@ -33,11 +33,14 @@ from palamede_chessboard.chessboard_state import (
 )
 from palamede_chessboard.clock_moves import (
     check_game,
+    check_reply_allowed,
     clock_after_move,
     declare_board,
     game_lock,
     release_on_sync,
+    start_clock,
     stop_clock_locked,
+    switch_clock_off,
 )
 from palamede_chessboard.coach import play as exercise_play
 from palamede_chessboard.coach.store import CoachStoreError
@@ -124,6 +127,7 @@ def build_games_router() -> APIRouter:
         return resign_from_viewer(game_id, request)
 
     _add_draw_routes(router)
+    _add_clock_routes(router)
 
     @router.get("/api/games/{game_id}/seat")
     def game_seat(game_id: str, request: Request, response: Response) -> dict:
@@ -157,6 +161,39 @@ def _add_draw_routes(router: APIRouter) -> None:
     def game_draw_decline(game_id: str, request: Request) -> dict:
         """The opponent's offer declined ; see :func:`draw_from_viewer`."""
         return draw_from_viewer(game_id, request, "decline")
+
+
+def _add_clock_routes(router: APIRouter) -> None:
+    @router.post("/api/games/{game_id}/clock/start")
+    def game_clock_start(game_id: str, request: Request) -> dict:
+        """The click on the clock ; see :func:`clock_from_viewer`."""
+        return clock_from_viewer(game_id, request, "start")
+
+    @router.post("/api/games/{game_id}/clock/off")
+    def game_clock_off(game_id: str, request: Request) -> dict:
+        """The game played without clock ; see :func:`clock_from_viewer`."""
+        return clock_from_viewer(game_id, request, "off")
+
+
+def clock_from_viewer(game_id: str, request: Request, action: str) -> dict:
+    """Start the clock, or switch it off before the first move (#316).
+
+    Same rule as ``chess_clock_start`` : a player of the game or its arbiter,
+    under the token. 409 when the game is over, has no clock, or when the
+    clock can no longer be set that way.
+    """
+    gdir = _games_dir()
+    who = _authorized_mover(request, _load(game_id, gdir), gdir, tool="chess_clock_start")
+    try:
+        if action == "start":
+            clock = start_clock(game_id, gdir)
+        else:
+            clock = switch_clock_off(game_id, who, gdir)
+    except GameNotFoundError as exc:
+        raise HTTPException(404, _not_found_detail(game_id)) from exc
+    except InvalidGameStateError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"status": "ok", "clock": clock.to_dict()}
 
 
 def board_of_token(game_id: str, payload: BoardPayload, request: Request) -> dict:
@@ -310,6 +347,7 @@ def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> di
         mover = "white" if state.board.turn else "black"
 
         try:
+            check_reply_allowed(state, gdir)  # the reply waits for the clock (#316)
             move_result = _play(state, who, san_to_play, gdir)
         except IllegalMoveError as exc:
             raise HTTPException(422, str(exc)) from exc

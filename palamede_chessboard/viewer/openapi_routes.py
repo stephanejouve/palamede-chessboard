@@ -33,6 +33,8 @@ TOKEN_ROUTES = {
     ("post", "/api/games/{game_id}/draw/offer"),
     ("post", "/api/games/{game_id}/draw/accept"),
     ("post", "/api/games/{game_id}/draw/decline"),
+    ("post", "/api/games/{game_id}/clock/start"),
+    ("post", "/api/games/{game_id}/clock/off"),
     ("get", "/api/games/{game_id}/seat"),
     ("post", "/api/games/{game_id}/board"),
     ("post", "/api/games/{game_id}/synced"),
@@ -92,6 +94,19 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
     ("post", "/api/games/{game_id}/draw/decline"): (
         "Refuser la nulle",
         "Retire l'offre, la partie continue. 409 sans offre de l'adversaire.",
+        "parties",
+    ),
+    ("post", "/api/games/{game_id}/clock/start"): (
+        "Lancer la pendule",
+        "Le clic sur la pendule : elle part contre le camp au trait. Hors parties tablier.*, "
+        "la réponse au premier coup l'attend. Déjà lancée : inchangée. 409 si la partie est "
+        "finie, sans pendule, ou si la pendule a été coupée.",
+        "parties",
+    ),
+    ("post", "/api/games/{game_id}/clock/off"): (
+        "Couper la pendule",
+        "La partie se joue sans pendule, définitivement ; off_by dit à l'adversaire qui l'a "
+        "décidé. 409 après le premier coup, pendule lancée, partie finie ou sans pendule.",
         "parties",
     ),
     ("get", "/api/games/{game_id}/seat"): (
@@ -229,6 +244,8 @@ EXTRA_ERRORS = {
     ("post", "/api/games/{game_id}/draw/offer"): ["404", "409"],
     ("post", "/api/games/{game_id}/draw/accept"): ["404", "409"],
     ("post", "/api/games/{game_id}/draw/decline"): ["404", "409"],
+    ("post", "/api/games/{game_id}/clock/start"): ["404", "409"],
+    ("post", "/api/games/{game_id}/clock/off"): ["404", "409"],
     ("get", "/api/games/{game_id}/seat"): ["404"],
     ("post", "/api/games/{game_id}/board"): ["404"],
     ("post", "/api/games/{game_id}/synced"): ["404"],
