@@ -279,6 +279,22 @@ async def test_the_chaser_runs_along_the_rank_in_order_then_goes_dark(monkeypatc
     assert board.leds == frozenset()
 
 
+async def test_no_hand_over_after_the_animation_of_a_clock_choice(monkeypatch) -> None:
+    # The knights' blink ends without a game opened : the session is not told to
+    # move (mutant of _animate without `created is not None`, Leader on #318,
+    # there before the split : the hand-over would assert in its thread).
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    handed = threading.Event()
+    monkeypatch.setattr(board, "_hand_over", handed.set)
+    held(board, knight(chess.G1, chess.F3), CHOICE_SECONDS)
+    await board.tick(write)
+    assert board.animation == leds.chosen(frozenset({chess.F3}))
+    while board.animation:
+        await board.tick(write)
+    assert not handed.wait(0.2) and board.created is None
+
+
 async def test_a_game_opened_but_not_shown_is_said(monkeypatch) -> None:
     Server(monkeypatch)
     board = new_lobby()
