@@ -33,6 +33,31 @@ def f():
     assert size_report.py_loc(text) == 3
 
 
+def test_a_raw_docstring_is_a_docstring_too() -> None:
+    text = (
+        'r"""A raw docstring,\n\nwith a \\d."""\n\n\ndef f():\n    r"""One line."""\n    return 1\n'
+    )
+    assert size_report.py_loc(text) == 2
+
+
+def test_tests_and_vendored_code_are_left_out(tmp_path) -> None:
+    for rel in (
+        "palamede_chessboard/kept.py",
+        "palamede_chessboard/tests/test_left_out.py",
+        "palamede_chessboard/vendor/left_out.py",
+        "palamede_chessboard/__pycache__/left_out.py",
+        "chessnut/palamede_chessnut/kept_too.py",
+        "chessnut/tests/test_left_out.py",
+    ):
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text("x = 1\n", encoding="utf-8")
+    found = [
+        p.relative_to(tmp_path).as_posix()
+        for p in size_report._files(tmp_path, size_report.PY_GLOBS)
+    ]
+    assert found == ["chessnut/palamede_chessnut/kept_too.py", "palamede_chessboard/kept.py"]
+
+
 def test_js_loc_leaves_out_comments_and_jinja_tags() -> None:
     text = """{% include "x" %}
 /* a block
@@ -75,6 +100,16 @@ def _measures(**over) -> dict:
 def test_no_breach_under_the_thresholds() -> None:
     assert size_report.breaches(_measures()) == []
     assert "Aucun dépassement." in size_report.summary(_measures(), [])
+
+
+def test_the_threshold_itself_is_not_a_breach() -> None:
+    measures = _measures(
+        python_files=[{"path": "a.py", "loc": 400}],
+        python_functions=[{"path": "a.py", "line": 3, "name": "f", "complexity": 15}],
+        js_templates=[{"path": "t.js.jinja", "loc": 300}],
+        js_functions=[{"path": "t.js.jinja", "line": 1, "name": "g", "branches": 20, "lines": 3}],
+    )
+    assert size_report.breaches(measures) == []
 
 
 def test_breaches_the_worst_first_on_every_measure() -> None:

@@ -74,9 +74,10 @@ def py_loc(text: str) -> int:
             continue
         if not s or s.startswith("#"):
             continue
-        if s.startswith(('"""', "'''")):
-            if s.count(s[:3]) == 1:
-                in_doc = s[:3]
+        quotes = s.lstrip("rRuU")[:3]  # r""" is a docstring too
+        if quotes in ('"""', "'''") and s.startswith(("r", "R", "u", "U", quotes)):
+            if s.count(quotes) == 1:
+                in_doc = quotes
             continue
         count += 1
     return count
