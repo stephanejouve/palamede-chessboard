@@ -49,14 +49,14 @@ def test_player_to_move_plays_and_is_attributed(
 def test_wrong_side_is_refused(client: TestClient, tokens: dict, games_dir: Path) -> None:
     r = _move(client, tokens["claude-desktop"])  # les Blancs sont au trait
     assert r.status_code == 403
-    assert "NOT_YOUR_TURN" in r.json()["detail"]
+    assert r.headers["x-refusal-code"] == "NOT_YOUR_TURN"
     assert GameState.load("exo", games_dir=games_dir).san_history == []
 
 
 def test_not_a_player_is_refused(client: TestClient, tokens: dict) -> None:
     r = _move(client, tokens["leader"])
     assert r.status_code == 403
-    assert "NOT_A_PLAYER" in r.json()["detail"]
+    assert r.headers["x-refusal-code"] == "NOT_A_PLAYER"
 
 
 @pytest.mark.parametrize(
@@ -70,7 +70,7 @@ def test_missing_or_invalid_token_is_401(
     r = _move(client, token)
     assert r.status_code == 401
     assert r.headers["www-authenticate"] == "Bearer"
-    assert "UNAUTHENTICATED" in r.json()["detail"]
+    assert r.headers["x-refusal-code"] == "UNAUTHENTICATED"
     assert GameState.load("exo", games_dir=games_dir).san_history == []
 
 
@@ -98,7 +98,7 @@ def test_unreadable_registry_refuses_with_503(
     registry.registry_path(games_dir).write_text("{cassé", encoding="utf-8")
     r = _move(client, tokens["stephane"])
     assert r.status_code == 503
-    assert "REGISTRY_UNREADABLE" in r.json()["detail"]
+    assert r.headers["x-refusal-code"] == "REGISTRY_UNREADABLE"
     assert GameState.load("exo", games_dir=games_dir).san_history == []
 
 

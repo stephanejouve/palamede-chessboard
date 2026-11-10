@@ -146,7 +146,7 @@ def test_the_band_sits_under_the_board_outside_the_panel(client: TestClient) -> 
     # box went unseen below the list (Stéphane, 05/11).
     page = client.get("/").text
     assert (
-        '<div id="board"><div id="move-error"></div></div>\n'
+        '<div id="board"></div>\n'
         '      <div class="exercise-band" id="exercise-band" hidden></div>'
     ) in page
     assert "coach-answer" not in COACH_JS.replace("coach-answer-msg", "")

@@ -7,9 +7,8 @@
 import { Chessground } from '/vendor/chessground@{{ chessground_version }}/chessground.min.js';
 
 const boardEl = document.getElementById('board');
+// Above the board, outside it : no square nor coordinate hidden (#322).
 const errorEl = document.getElementById('move-error');
-// Chessground removes children on init, so re-parent the error overlay.
-if (errorEl && errorEl.parentNode === boardEl) boardEl.removeChild(errorEl);
 boardEl.classList.add('cg-wrap');
 
 let cg = null;
@@ -20,11 +19,11 @@ let cgLast = null;  // last [fen, turn, interactive] applied from the server sta
 function showMoveError(msg) {
   if (!errorEl) return;
   errorEl.textContent = msg;
-  errorEl.classList.add('show');
+  errorEl.hidden = false;
 }
 
 function hideMoveError() {
-  if (errorEl) errorEl.classList.remove('show');
+  if (errorEl) errorEl.hidden = true;
 }
 
 // Undo a drop the server refused. chessground already applied it locally :
@@ -66,7 +65,8 @@ async function onUserDrop(from, to) {
       // (401), not this player's turn or game (403).
       restoreBoard();
       const body = await r.json().catch(() => ({}));
-      showMoveError(body.detail || ('HTTP ' + r.status));
+      // The server's words, in French ; never a bare HTTP code (#322).
+      showMoveError(typeof body.detail === 'string' ? body.detail : 'Coup refusé par le serveur.');
       return;
     }
     // Successful move — the SSE stream will push the fresh state, and
@@ -74,7 +74,7 @@ async function onUserDrop(from, to) {
     // update chessground here to avoid double-update flicker.
   } catch (e) {
     restoreBoard();
-    showMoveError('Network error');
+    showMoveError('Serveur injoignable : coup non envoyé.');
   }
 }
 

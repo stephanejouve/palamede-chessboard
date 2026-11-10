@@ -59,7 +59,7 @@ def test_white_resigns_its_own_side(client: TestClient, tokens: dict, games_dir:
 def test_not_a_player_is_refused(client: TestClient, tokens: dict, games_dir: Path) -> None:
     r = _resign(client, tokens["admin"])
     assert r.status_code == 403
-    assert "NOT_A_PLAYER" in r.json()["detail"]
+    assert r.headers["x-refusal-code"] == "NOT_A_PLAYER"
     assert _result(games_dir) == "*"
 
 
