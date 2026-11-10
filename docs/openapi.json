@@ -2238,7 +2238,7 @@
           "parties"
         ],
         "summary": "Lancer la pendule",
-        "description": "Le clic sur la pendule : elle part contre le camp au trait. Hors parties tablier.*, la réponse au premier coup l'attend. Déjà lancée : inchangée. 409 si la partie est finie, sans pendule, ou si la pendule a été coupée.",
+        "description": "Le clic sur la pendule : elle part contre le camp au trait, et la réponse au premier coup l'attend. Déjà lancée : inchangée. 409 si la partie est finie, sans pendule, coupée, ou tablier.* (sa pendule part au premier coup).",
         "operationId": "game_clock_start_api_games__game_id__clock_start_post",
         "parameters": [
           {
@@ -2338,7 +2338,7 @@
           "parties"
         ],
         "summary": "Couper la pendule",
-        "description": "La partie se joue sans pendule, définitivement ; off_by dit à l'adversaire qui l'a décidé. 409 après le premier coup, pendule lancée, partie finie ou sans pendule.",
+        "description": "La partie se joue sans pendule, définitivement ; off_by dit à l'adversaire qui l'a décidé. 409 après le premier coup, pendule lancée, partie finie, sans pendule ou tablier.*.",
         "operationId": "game_clock_off_api_games__game_id__clock_off_post",
         "parameters": [
           {

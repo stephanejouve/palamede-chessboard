@@ -98,15 +98,16 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
     ),
     ("post", "/api/games/{game_id}/clock/start"): (
         "Lancer la pendule",
-        "Le clic sur la pendule : elle part contre le camp au trait. Hors parties tablier.*, "
-        "la réponse au premier coup l'attend. Déjà lancée : inchangée. 409 si la partie est "
-        "finie, sans pendule, ou si la pendule a été coupée.",
+        "Le clic sur la pendule : elle part contre le camp au trait, et la réponse au premier "
+        "coup l'attend. Déjà lancée : inchangée. 409 si la partie est finie, sans pendule, "
+        "coupée, ou tablier.* (sa pendule part au premier coup).",
         "parties",
     ),
     ("post", "/api/games/{game_id}/clock/off"): (
         "Couper la pendule",
         "La partie se joue sans pendule, définitivement ; off_by dit à l'adversaire qui l'a "
-        "décidé. 409 après le premier coup, pendule lancée, partie finie ou sans pendule.",
+        "décidé. 409 après le premier coup, pendule lancée, partie finie, sans pendule "
+        "ou tablier.*.",
         "parties",
     ),
     ("get", "/api/games/{game_id}/seat"): (

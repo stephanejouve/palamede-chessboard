@@ -166,9 +166,9 @@ SCHEMAS: list[Tool] = [
         name="chess_clock_start",
         description=(
             "Start the clock for a game, against the side to move (last_move_ts=now). "
-            "Required before the reply to the first move, except in tablier.* games. "
-            "Already started : unchanged. Error if the game has no clock "
-            "(TimeControl=unrated), is over, or its clock was switched off."
+            "Required before the reply to the first move. Already started : unchanged. "
+            "Error if the game has no clock (TimeControl=unrated), is over, its clock "
+            "was switched off, or is a tablier.* game (its first move starts it)."
         ),
         inputSchema={
             "type": "object",

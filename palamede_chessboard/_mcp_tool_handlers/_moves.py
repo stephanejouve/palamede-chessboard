@@ -7,15 +7,13 @@ from pathlib import Path
 from palamede_chessboard._mcp_shared import (
     REQUEST_HEADERS,
 )
-from palamede_chessboard.chessboard_clock import (
-    load_clock,
-)
 from palamede_chessboard.chessboard_state import (
     GameState,
     get_commentary,
     post_commentary,
 )
 from palamede_chessboard.clock_moves import (
+    NoClockError,
     check_reply_allowed,
     clock_after_move,
     game_lock,
@@ -107,13 +105,13 @@ async def _handle_chess_clock_state(arguments: dict, games_dir: Path) -> dict:
 
 
 async def _handle_chess_clock_start(arguments: dict, games_dir: Path) -> dict:
-    clock = load_clock(arguments["game_id"], games_dir=games_dir)
-    if clock is None:
+    # Under the game lock, against the side to move ; started already : unchanged (#316).
+    try:
+        clock = start_clock(arguments["game_id"], games_dir)
+    except NoClockError:
         return {
             "status": "error",
             "code": "NO_CLOCK",
             "reason": "Game has no clock (TimeControl=unrated).",
         }
-    # Under the game lock, against the side to move ; started already : unchanged (#316).
-    clock = start_clock(arguments["game_id"], games_dir)
     return {"status": "ok", "clock": clock.to_dict()}

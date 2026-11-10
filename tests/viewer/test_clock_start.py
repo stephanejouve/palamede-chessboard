@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from palamede_chessboard import chessboard_clock
 from palamede_chessboard.chessboard_clock import init_and_save_clock, load_clock
 from palamede_chessboard.chessboard_state import GameMetadata, GameState, TimeControl
-from palamede_chessboard.clock_moves import clock_after_move
 from palamede_chessboard.players import registry
 from palamede_chessboard.viewer.models import TEMPLATES_DIR
 
@@ -128,15 +127,16 @@ def test_the_opponent_reads_who_switched_it_off(
     assert seen["off_by"] == "bob"
 
 
-def test_switched_off_a_tablier_game_does_not_start(games_dir: Path, tokens: dict) -> None:
-    _create(games_dir, "tablier.off")
-    clock = _stored(games_dir, "tablier.off")
-    clock.off_by = "alice"
-    chessboard_clock.save_clock(clock, games_dir=games_dir)
-    state = GameState.load("tablier.off", games_dir=games_dir)
-    state.play_move("e4")
-    clock_after_move(state, "white", games_dir)
-    assert _stored(games_dir, "tablier.off").started is False
+@pytest.mark.parametrize("action", ["start", "off"])
+def test_a_tablier_game_s_clock_is_not_set_by_hand(
+    client: TestClient, games_dir: Path, tokens: dict, action: str
+) -> None:
+    # Its first move starts it (review Junior and Admin #317).
+    _create(games_dir, "tablier.by-hand")
+    refused = _clock(client, action, tokens["alice"], game="tablier.by-hand")
+    assert refused.status_code == 409 and "Tablier" in refused.json()["detail"]
+    clock = _stored(games_dir, "tablier.by-hand")
+    assert clock.started is False and clock.off_by is None
 
 
 @pytest.mark.parametrize(
@@ -203,6 +203,7 @@ def test_the_page_has_the_note_and_the_script() -> None:
 
 def test_the_click_is_offered_to_a_player_of_a_live_game_only() -> None:
     assert "!CLOCK.started && !CLOCK.off_by && colors.length && live" in CLOCK_JS
+    assert "&& !gameId().startsWith('tablier.'));" in CLOCK_JS
     assert "if (clockSettable()) clockAction('start');" in CLOCK_JS
 
 

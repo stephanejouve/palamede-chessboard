@@ -16,6 +16,8 @@ Chessnut board, the mouse, the Maia bot) : two copies would drift apart
   viewer's clock, or ``chess_clock_start``). Unless a player switched it
   off before the first move (:func:`switch_clock_off`) : the game is then
   played without it, and ``off_by`` tells the opponent who decided it.
+  Neither applies to ``tablier.*`` games, whose clock starts on the first
+  move (review Junior and Admin #317).
 * **Fischer** afterwards : :meth:`ClockState.on_move_played`, the flag
   checked before the increment (#46).
 * **Flag fall at reading time**, Tablier games only : :func:`settle_flag`
@@ -119,8 +121,8 @@ def clock_after_move(state: GameState, mover: str, games_dir: Path) -> ClockStat
     before the move. ``None`` when the game has no clock.
     """
     clock = load_clock(state.metadata.game_id, games_dir=games_dir)
-    if clock is None or clock.off_by is not None:
-        return clock  # switched off (#316) : no time, no [%clk]
+    if clock is None:
+        return None
     if not clock.started:
         if not state.metadata.game_id.startswith(TABLIER):
             return clock  # the arbiter starts it (chess_clock_start)
@@ -160,13 +162,22 @@ def check_reply_allowed(state: GameState, games_dir: Path) -> None:
         raise InvalidGameStateError("Pendule non démarrée : un joueur la lance avant la réponse")
 
 
+class NoClockError(InvalidGameStateError):
+    """The game has no clock (``TimeControl`` unrated) : nothing to start or switch off."""
+
+
 def _clock_to_set(state: GameState, games_dir: Path) -> ClockState:
-    """The clock of a live game, for a start or a switch-off (#316)."""
+    """The clock of a live game, for a start or a switch-off (#316).
+
+    Not for a ``tablier.*`` game : its first move starts it (owner, 29/10).
+    """
+    if state.metadata.game_id.startswith(TABLIER):
+        raise InvalidGameStateError("Partie du Tablier : la pendule part au premier coup")
     if state.metadata.result != "*" or state.board.is_game_over():
         raise InvalidGameStateError("La partie est terminée")
     clock = load_clock(state.metadata.game_id, games_dir=games_dir)
     if clock is None:
-        raise InvalidGameStateError("Cette partie n'a pas de pendule")
+        raise NoClockError("Cette partie n'a pas de pendule")
     return clock
 
 

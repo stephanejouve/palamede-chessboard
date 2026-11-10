@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 from palamede_chessboard import chessboard_clock, clock_moves
+from palamede_chessboard.chessboard_clock import init_and_save_clock
+from palamede_chessboard.chessboard_state import GameMetadata, GameState, TimeControl
 from palamede_chessboard.mcp_chessboard_server import call_tool
 from tests.mcp.conftest import _decode
 
@@ -73,3 +75,15 @@ async def test_a_finished_game_cannot_start_its_clock(games_dir: Path) -> None:
     await call_tool("chess_resign", {"game_id": "mcp-over", "by": "white"})
     body = _decode(await call_tool("chess_clock_start", {"game_id": "mcp-over"}))
     assert body["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_a_tablier_game_is_not_started_by_hand(games_dir: Path) -> None:
+    # A tablier.* id is reserved to the viewer (#131) : the game is made here.
+    tc = TimeControl(format="15+10")
+    meta = GameMetadata(game_id="tablier.mcp", white="w", black="b", time_control=tc)
+    GameState.create(meta, games_dir=games_dir)
+    init_and_save_clock("tablier.mcp", tc, games_dir=games_dir)
+    body = _decode(await call_tool("chess_clock_start", {"game_id": "tablier.mcp"}))
+    assert body["status"] == "error" and "Tablier" in str(body)
+    assert (await _play("tablier.mcp", "e4"))["clock"]["started"] is True

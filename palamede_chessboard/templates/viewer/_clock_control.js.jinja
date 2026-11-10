@@ -1,7 +1,8 @@
 // Starting the clock with a click, or playing without it (#316). Outside
 // tablier.* games the reply to the first move waits for the clock : a player
 // clicks it, or switches it off before the first move, and the opponent reads
-// who did. The seat and the game come from the game-end band (#275).
+// who did. A tablier.* game's clock starts on its first move : nothing to
+// offer (review Junior #317). The seat and the game come from the game-end band (#275).
 const clocksBox = document.getElementById('clocks');
 const clockNote = document.getElementById('clock-note');
 let CLOCK_NOTE = '';
@@ -9,7 +10,8 @@ let CLOCK_NOTE = '';
 function clockSettable() {
   const { colors, data } = GAME_END;
   const live = data && data.result === '*' && !data.is_game_over;
-  return !!(CLOCK && !CLOCK.started && !CLOCK.off_by && colors.length && live);
+  return !!(CLOCK && !CLOCK.started && !CLOCK.off_by && colors.length && live
+    && !gameId().startsWith('tablier.'));
 }
 
 function clockNoteHtml(settable) {
