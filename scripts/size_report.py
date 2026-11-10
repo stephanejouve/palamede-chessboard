@@ -116,8 +116,13 @@ def js_functions(text: str) -> list[tuple[str, int, int, int]]:
 
 
 def _files(root: Path, globs: tuple[str, ...]) -> list[Path]:
+    """The files surveyed ; ``_LEFT_OUT`` is looked for under ``root`` only, never above it."""
     paths = [p for g in globs for p in root.glob(g)]
-    return sorted(p for p in paths if not any(part in f"/{p.as_posix()}" for part in _LEFT_OUT))
+    return sorted(
+        p
+        for p in paths
+        if not any(part in f"/{p.relative_to(root).as_posix()}" for part in _LEFT_OUT)
+    )
 
 
 def c901(root: Path) -> list[dict]:

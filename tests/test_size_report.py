@@ -58,6 +58,21 @@ def test_tests_and_vendored_code_are_left_out(tmp_path) -> None:
     assert found == ["chessnut/palamede_chessnut/kept_too.py", "palamede_chessboard/kept.py"]
 
 
+@pytest.mark.parametrize("above", ["tests", "vendor", "__pycache__"])
+def test_a_checkout_under_such_a_directory_keeps_its_files(tmp_path, above) -> None:
+    # The exclusion looks under root only : a clone at …/tests/repo loses nothing
+    # (review Leader #319, probe at scratchpad/probe319/tests/repo).
+    root = tmp_path / above / "repo"
+    (root / "palamede_chessboard").mkdir(parents=True)
+    (root / "palamede_chessboard" / "kept.py").write_text("x = 1\n", encoding="utf-8")
+    (root / "palamede_chessboard" / "templates").mkdir()
+    (root / "palamede_chessboard" / "templates" / "t.js.jinja").write_text(
+        "let a = 1;\n", encoding="utf-8"
+    )
+    assert [p.name for p in size_report._files(root, size_report.PY_GLOBS)] == ["kept.py"]
+    assert [p.name for p in size_report._files(root, size_report.JS_GLOBS)] == ["t.js.jinja"]
+
+
 def test_js_loc_leaves_out_comments_and_jinja_tags() -> None:
     text = """{% include "x" %}
 /* a block
