@@ -135,7 +135,7 @@ def test_without_a_game_the_gestures_are_said_under_the_board() -> None:
 
 def test_the_gestures_help_folds_and_says_the_knight_s_ends() -> None:
     """Smaller, folded once learnt ; its ends are those of the lobby's values (Stéphane, 04/11)."""
-    from palamede_chessnut.lobby import CHOICES
+    from palamede_chessnut.clock_choice import CHOICES
 
     page = (PAGE / "index.html").read_text(encoding="utf-8")
     parents = Parents()

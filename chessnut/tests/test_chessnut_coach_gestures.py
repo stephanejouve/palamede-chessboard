@@ -10,9 +10,20 @@ import chess
 import pytest
 from palamede_chessnut import coach_gestures, leds, sounds, viewer
 from palamede_chessnut.bridge import Bridge
+from palamede_chessnut.clock_choice import CHOICE_SECONDS
 from palamede_chessnut.coach_gestures import EXERCISE, LESSON, pair_gesture, start_exercise
-from palamede_chessnut.lobby import CHOICE_SECONDS, GESTURE_SECONDS
-from test_chessnut_lobby import TOKEN, VIEWER, Board, Server, held, knight, lifted, new_lobby
+from palamede_chessnut.lobby import GESTURE_SECONDS
+from test_chessnut_lobby import (
+    TOKEN,
+    VIEWER,
+    Board,
+    Server,
+    held,
+    knight,
+    lifted,
+    new_lobby,
+    two_knights,
+)
 
 EXO = "exo.stephane.20261107-230000-abcd"
 PROGRESS = f"{VIEWER}/api/coach/progress"
@@ -163,6 +174,19 @@ async def test_an_exercise_not_opened_is_said_with_two_low_beeps(
     assert board.sound == sounds.frames("no")
 
 
+async def test_a_refused_exercise_is_not_asked_again_while_the_bishops_stay(monkeypatch) -> None:
+    # The same placement is tried once : no request storm at ten ticks a second.
+    coach = Coach(monkeypatch, progress=(503, {}))
+    board = new_lobby()
+    held(board, lifted(chess.C1, chess.F1), GESTURE_SECONDS)
+    await board.tick(Board())
+    asked = list(coach.calls)
+    assert asked and board.created is None
+    await board.tick(Board())
+    await board.tick(Board())
+    assert coach.calls == asked
+
+
 async def test_the_knights_held_say_the_lessons_are_coming(monkeypatch) -> None:
     coach = Coach(monkeypatch)
     board = new_lobby()
@@ -261,6 +285,19 @@ def test_a_game_s_move_is_silent(monkeypatch) -> None:
     bridge.exercise = None
     asyncio.run(bridge._play(chess.Move.from_uci("e2e4")))
     assert bridge.sound == []
+
+
+async def test_a_knight_s_count_replaces_the_lessons_message(monkeypatch) -> None:
+    # Both knights lifted 5 s : « soon ». The b1 knight then put on a3, g1 still lifted :
+    # the window counts the clock, the refusal is gone.
+    Coach(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, lifted(chess.B1, chess.G1), GESTURE_SECONDS)
+    await board.tick(write)
+    assert board.lobby_text() == coach_gestures.SOON
+    held(board, two_knights(chess.A3, None), 0.4)
+    await board.tick(write)
+    assert board.lobby_text() == "Cadence 3+10 dans 2 s…"
 
 
 async def test_the_message_stays_while_the_knights_are_still_lifted(monkeypatch) -> None:

@@ -10,23 +10,22 @@ import urllib.error
 
 import chess
 import pytest
-from palamede_chessnut import config, leds, lobby, viewer
+from palamede_chessnut import clock_choice, config, leds, lobby, viewer
 from palamede_chessnut.bridge import Bridge
 from palamede_chessnut.cli import bridge_from_args
+from palamede_chessnut.clock_choice import CHOICE_SECONDS, choices, chosen
 from palamede_chessnut.games import NO_GAME, Session, successor
 from palamede_chessnut.lobby import (
-    CHOICE_SECONDS,
     CORNERS,
     GESTURE_SECONDS,
     NO_SERVER,
     TOGETHER_SECONDS,
     Lobby,
-    choices,
-    chosen,
     gesture_side,
     on_the_way,
 )
 from palamede_chessnut.page import PageServer
+from palamede_chessnut.protocol import led_frame
 from palamede_chessnut.status import snapshot, sync_light
 
 TOKEN = "secret-token-never-shown"
@@ -157,13 +156,19 @@ async def test_the_settings_choose_the_opponent_and_the_clock(monkeypatch) -> No
 
 
 async def test_before_5_s_the_rooks_blink_and_nothing_is_asked(monkeypatch) -> None:
+    # A fixed clock : at 2.1 s the two corners are lit (leds.blink), at 2.3 s dark.
+    clock = [1000.0]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
     server = Server(monkeypatch)
     board = new_lobby()
-    held(board, lifted(chess.A1, chess.H1), 2.1)
+    at(board, lifted(chess.A1, chess.H1), clock[0] - 2.1)
     await board.tick(Board())
     assert server.posts == []
-    assert board.leds in (frozenset({chess.A1, chess.H1}), frozenset())
+    assert board.leds == frozenset({chess.A1, chess.H1})
     assert board.lobby_text() == "Nouvelle partie avec les Blancs dans 3 s…"
+    clock[0] += 0.2
+    await board.tick(Board())
+    assert board.leds == frozenset()
 
 
 async def test_the_rooks_back_before_5_s_cancel(monkeypatch) -> None:
@@ -258,6 +263,36 @@ async def test_the_chaser_then_the_window_moves_to_the_new_game(monkeypatch) -> 
         await board.tick(write)
     assert told.wait(2) and opened == [NEW]
     assert board.lobby_text() == f"Partie {NEW} ouverte : la fenêtre la rejoint."
+
+
+async def test_the_chaser_runs_along_the_rank_in_order_then_goes_dark(monkeypatch) -> None:
+    # The frames reach the board first frame first : a1 to h1 twice, then dark, not the
+    # reverse ending with a1 lit (mutant pop() for pop(0) on the split of tick).
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS)
+    await board.tick(write)
+    while board.animation:
+        await board.tick(write)
+    # The board is dark first (its lights unknown before the first frame), then the chaser.
+    assert write.frames == [led_frame(frozenset()), *(led_frame(f) for f in leds.chaser(0))]
+    assert board.leds == frozenset()
+
+
+async def test_no_hand_over_after_the_animation_of_a_clock_choice(monkeypatch) -> None:
+    # The knights' blink ends without a game opened : the session is not told to
+    # move (mutant of _animate without `created is not None`, Leader on #318,
+    # there before the split : the hand-over would assert in its thread).
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    handed = threading.Event()
+    monkeypatch.setattr(board, "_hand_over", handed.set)
+    held(board, knight(chess.G1, chess.F3), CHOICE_SECONDS)
+    await board.tick(write)
+    assert board.animation == leds.chosen(frozenset({chess.F3}))
+    while board.animation:
+        await board.tick(write)
+    assert not handed.wait(0.2) and board.created is None
 
 
 async def test_a_game_opened_but_not_shown_is_said(monkeypatch) -> None:
@@ -740,12 +775,12 @@ def test_a_game_s_bridge_has_no_lobby_text() -> None:
 
 def test_the_screen_s_board_says_what_each_knight_square_chooses() -> None:
     """Smoke of Stéphane, 04/11 : the knight's gesture was not found from the text alone."""
-    assert lobby.tips() == {
+    assert clock_choice.tips() == {
         "a3": "3′", "b3": "5′", "c3": "10′", "d3": "15′", "e3": "25′", "f3": "90′",
         "a4": "+0", "b4": "+2", "c4": "+3", "d4": "+5", "e4": "+10", "f4": "+30",
     }  # fmt: skip
-    for square, value in lobby.tips().items():
-        for home in lobby.KNIGHT_HOMES:
+    for square, value in clock_choice.tips().items():
+        for home in clock_choice.KNIGHT_HOMES:
             (picked,) = choices(knight(home, chess.parse_square(square)))
             assert str(picked[1]) == value.strip("+′"), square
 
