@@ -2231,6 +2231,206 @@
           }
         ]
       }
+    },
+    "/api/games/{game_id}/clock/start": {
+      "post": {
+        "tags": [
+          "parties"
+        ],
+        "summary": "Lancer la pendule",
+        "description": "Le clic sur la pendule : elle part contre le camp au trait, et la réponse au premier coup l'attend. Déjà lancée : inchangée. 409 si la partie est finie, sans pendule, coupée, ou tablier.* (sa pendule part au premier coup).",
+        "operationId": "game_clock_start_api_games__game_id__clock_start_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Game Clock Start Api Games  Game Id  Clock Start Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflit avec l'état de la partie ou de l'exercice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/games/{game_id}/clock/off": {
+      "post": {
+        "tags": [
+          "parties"
+        ],
+        "summary": "Couper la pendule",
+        "description": "La partie se joue sans pendule, définitivement ; off_by dit à l'adversaire qui l'a décidé. 409 après le premier coup, pendule lancée, partie finie, sans pendule ou tablier.*.",
+        "operationId": "game_clock_off_api_games__game_id__clock_off_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Game Clock Off Api Games  Game Id  Clock Off Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflit avec l'état de la partie ou de l'exercice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -2631,6 +2831,17 @@
           "now_ts": {
             "type": "number",
             "description": "heure du serveur, pour le décompte"
+          },
+          "off_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "joueur qui a coupé la pendule avant le premier coup (#316)"
           }
         },
         "required": [

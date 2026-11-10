@@ -1,0 +1,62 @@
+// Starting the clock with a click, or playing without it (#316). Outside
+// tablier.* games the reply to the first move waits for the clock : a player
+// clicks it, or switches it off before the first move, and the opponent reads
+// who did. A tablier.* game's clock starts on its first move : nothing to
+// offer (review Junior #317). The seat and the game come from the game-end band (#275).
+const clocksBox = document.getElementById('clocks');
+const clockNote = document.getElementById('clock-note');
+let CLOCK_NOTE = '';
+
+function clockSettable() {
+  const { colors, data } = GAME_END;
+  const live = data && data.result === '*' && !data.is_game_over;
+  return !!(CLOCK && !CLOCK.started && !CLOCK.off_by && colors.length && live
+    && !gameId().startsWith('tablier.'));
+}
+
+function clockNoteHtml(settable) {
+  if (CLOCK && CLOCK.off_by) {
+    return 'Pendule coupée par <strong>' + escapeHtml(CLOCK.off_by) + '</strong> : partie sans pendule.';
+  }
+  if (!settable) return '';
+  const firstMove = !(GAME_END.data.san_history || []).length;
+  return 'Cliquez la pendule pour la lancer.'
+    + (firstMove ? ' <button type="button" data-clock="off">Jouer sans pendule</button>' : '');
+}
+
+function renderClockControl() {
+  const settable = clockSettable();
+  clocksBox.classList.toggle('startable', settable);
+  clocksBox.classList.toggle('off', !!(CLOCK && CLOCK.off_by));
+  clocksBox.title = settable ? 'Cliquer pour lancer la pendule' : '';
+  const html = clockNoteHtml(settable)
+    + (CLOCK_NOTE ? ' <span class="clock-error">' + escapeHtml(CLOCK_NOTE) + '</span>' : '');
+  clockNote.innerHTML = html;
+  clockNote.hidden = !html;
+}
+
+async function clockAction(action) {
+  CLOCK_NOTE = '';
+  try {
+    const r = await fetch('/api/games/' + encodeURIComponent(gameId()) + '/clock/' + action, {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + playerToken() },
+    });
+    if (!r.ok) {
+      let body = {};
+      try { body = await r.json(); } catch (_) { /* no body */ }
+      CLOCK_NOTE = typeof body.detail === 'string' ? body.detail : 'Refusé (HTTP ' + r.status + ').';
+    }
+  } catch (_) {
+    CLOCK_NOTE = 'Serveur injoignable.';
+  }
+  await pollClock();  // renders the clock and this note
+}
+
+clocksBox.addEventListener('click', () => {
+  if (clockSettable()) clockAction('start');
+});
+clockNote.addEventListener('click', ev => {
+  if (!ev.target.closest('[data-clock="off"]')) return;
+  if (!window.confirm('Jouer cette partie sans pendule ? Ce sera définitif.')) return;
+  clockAction('off');
+});

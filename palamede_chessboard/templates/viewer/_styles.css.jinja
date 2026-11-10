@@ -161,6 +161,11 @@
   .clock.active { background: var(--accent-bg); box-shadow: inset 0 0 0 2px var(--accent); }
   .clock.low { background: rgba(211, 88, 88, 0.18); animation: pulse-low 1s infinite; }
   .clock .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .clocks.startable .clock { cursor: pointer; box-shadow: inset 0 0 0 2px var(--accent); }
+  .clocks.off .time { opacity: 0.4; }
+  .clock-note { margin-top: 6px; font-size: 13px; color: var(--text-muted); }
+  .clock-note button { margin-left: 6px; }
+  .clock-note .clock-error { color: #d35858; }
   .clock .time { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 26px; font-weight: 600; margin-top: 4px; }
   @keyframes pulse-low { 50% { opacity: 0.65; } }
   .moves { padding: 12px; background: var(--surface-2); border-radius: 8px; font-size: 13px; line-height: 1.9; max-height: 200px; overflow-y: auto; }

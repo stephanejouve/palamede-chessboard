@@ -10,6 +10,14 @@ Chessnut board, the mouse, the Maia bot) : two copies would drift apart
   played, like a club clock — the move costs nothing and the other side's
   time starts running. The agents' games (matchmaking, rated) keep the
   arbiter's ``chess_clock_start`` (review Leader #136).
+* **The reply waits for the clock**, other games (owner, 10/11, #316) : the
+  first move may be played with the clock not started, the reply is
+  refused until a player starts it (:func:`start_clock`, the click on the
+  viewer's clock, or ``chess_clock_start``). Unless a player switched it
+  off before the first move (:func:`switch_clock_off`) : the game is then
+  played without it, and ``off_by`` tells the opponent who decided it.
+  Neither applies to ``tablier.*`` games, whose clock starts on the first
+  move (review Junior and Admin #317).
 * **Fischer** afterwards : :meth:`ClockState.on_move_played`, the flag
   checked before the increment (#46).
 * **Flag fall at reading time**, Tablier games only : :func:`settle_flag`
@@ -49,7 +57,11 @@ from palamede_chessboard.chessboard_clock import (
     result_from_flag_fall,
     save_clock,
 )
-from palamede_chessboard.chessboard_state import GameNotFoundError, GameState
+from palamede_chessboard.chessboard_state import (
+    GameNotFoundError,
+    GameState,
+    InvalidGameStateError,
+)
 from palamede_chessboard.paths import _pgn_path, _validate_game_id
 from palamede_chessboard.players.observe import authorize_move
 
@@ -134,6 +146,75 @@ def clock_after_move(state: GameState, mover: str, games_dir: Path) -> ClockStat
     state.clocks[len(state.san_history) - 1] = getattr(clock, f"{mover}_seconds")
     state.save()
     return clock
+
+
+def check_reply_allowed(state: GameState, games_dir: Path) -> None:
+    """The move about to be played on ``state`` may be (#316), under the game lock.
+
+    :class:`InvalidGameStateError` when a move was already played and the
+    clock is neither started nor switched off. ``tablier.*`` games start it
+    on the first move : never refused.
+    """
+    if not state.san_history or state.metadata.game_id.startswith(TABLIER):
+        return
+    clock = load_clock(state.metadata.game_id, games_dir=games_dir)
+    if clock is not None and not clock.started and clock.off_by is None:
+        raise InvalidGameStateError("Pendule non démarrée : un joueur la lance avant la réponse")
+
+
+class NoClockError(InvalidGameStateError):
+    """The game has no clock (``TimeControl`` unrated) : nothing to start or switch off."""
+
+
+def _clock_to_set(state: GameState, games_dir: Path) -> ClockState:
+    """The clock of a live game, for a start or a switch-off (#316).
+
+    Not for a ``tablier.*`` game : its first move starts it (owner, 29/10).
+    """
+    if state.metadata.game_id.startswith(TABLIER):
+        raise InvalidGameStateError("Partie du Tablier : la pendule part au premier coup")
+    if state.metadata.result != "*" or state.board.is_game_over():
+        raise InvalidGameStateError("La partie est terminée")
+    clock = load_clock(state.metadata.game_id, games_dir=games_dir)
+    if clock is None:
+        raise NoClockError("Cette partie n'a pas de pendule")
+    return clock
+
+
+def start_clock(game_id: str, games_dir: Path) -> ClockState:
+    """Start the clock of a live game, against the side to move (#316).
+
+    Already started : left as it is, a second click restarts nothing.
+    Switched off : :class:`InvalidGameStateError`, the game goes on without.
+    """
+    with game_lock(game_id, games_dir):
+        state = GameState.load(game_id, games_dir=games_dir)
+        clock = _clock_to_set(state, games_dir)
+        if clock.started:
+            return clock
+        if clock.off_by is not None:
+            raise InvalidGameStateError("Pendule coupée avant le premier coup")
+        clock.start(side="white" if state.board.turn else "black")
+        save_clock(clock, games_dir=games_dir)
+        return clock
+
+
+def switch_clock_off(game_id: str, by: str, games_dir: Path) -> ClockState:
+    """``by`` plays this game without clock (owner, 10/11, #316).
+
+    Only before the first move and with the clock not started :
+    :class:`InvalidGameStateError` otherwise. Final for the game.
+    """
+    with game_lock(game_id, games_dir):
+        state = GameState.load(game_id, games_dir=games_dir)
+        clock = _clock_to_set(state, games_dir)
+        if clock.off_by is not None:
+            return clock
+        if clock.started or state.san_history:
+            raise InvalidGameStateError("La pendule se coupe avant le premier coup")
+        clock.off_by = by
+        save_clock(clock, games_dir=games_dir)
+        return clock
 
 
 def stop_clock_locked(game_id: str, games_dir: Path) -> ClockState | None:

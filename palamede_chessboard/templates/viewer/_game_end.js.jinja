@@ -18,6 +18,7 @@ function gameEndButtons(colors, offer) {
 }
 
 function renderGameEnd() {
+  renderClockControl();  // the seat and the game decide the clock's click too (#316)
   const { colors, data, note } = GAME_END;
   const live = data && data.result === '*' && !data.is_game_over;
   gameEndBox.hidden = !colors.length || !live;

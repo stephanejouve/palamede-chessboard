@@ -84,6 +84,10 @@ SCHEMAS: dict[str, dict] = {
                 "items": _SIDE,
                 "description": "camps d'un pont muet (#164a)",
             },
+            "off_by": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "joueur qui a coupé la pendule avant le premier coup (#316)",
+            },
             "now_ts": {"type": "number", "description": "heure du serveur, pour le décompte"},
         },
         ["game_id", "white_seconds", "black_seconds", "increment_seconds", "now_ts"],
