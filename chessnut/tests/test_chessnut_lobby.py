@@ -25,6 +25,7 @@ from palamede_chessnut.lobby import (
     on_the_way,
 )
 from palamede_chessnut.page import PageServer
+from palamede_chessnut.protocol import led_frame
 from palamede_chessnut.status import snapshot, sync_light
 
 TOKEN = "secret-token-never-shown"
@@ -155,13 +156,19 @@ async def test_the_settings_choose_the_opponent_and_the_clock(monkeypatch) -> No
 
 
 async def test_before_5_s_the_rooks_blink_and_nothing_is_asked(monkeypatch) -> None:
+    # A fixed clock : at 2.1 s the two corners are lit (leds.blink), at 2.3 s dark.
+    clock = [1000.0]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
     server = Server(monkeypatch)
     board = new_lobby()
-    held(board, lifted(chess.A1, chess.H1), 2.1)
+    at(board, lifted(chess.A1, chess.H1), clock[0] - 2.1)
     await board.tick(Board())
     assert server.posts == []
-    assert board.leds in (frozenset({chess.A1, chess.H1}), frozenset())
+    assert board.leds == frozenset({chess.A1, chess.H1})
     assert board.lobby_text() == "Nouvelle partie avec les Blancs dans 3 s…"
+    clock[0] += 0.2
+    await board.tick(Board())
+    assert board.leds == frozenset()
 
 
 async def test_the_rooks_back_before_5_s_cancel(monkeypatch) -> None:
@@ -256,6 +263,20 @@ async def test_the_chaser_then_the_window_moves_to_the_new_game(monkeypatch) -> 
         await board.tick(write)
     assert told.wait(2) and opened == [NEW]
     assert board.lobby_text() == f"Partie {NEW} ouverte : la fenêtre la rejoint."
+
+
+async def test_the_chaser_runs_along_the_rank_in_order_then_goes_dark(monkeypatch) -> None:
+    # The frames reach the board first frame first : a1 to h1 twice, then dark, not the
+    # reverse ending with a1 lit (mutant pop() for pop(0) on the split of tick).
+    Server(monkeypatch)
+    board, write = new_lobby(), Board()
+    held(board, lifted(chess.A1, chess.H1), GESTURE_SECONDS)
+    await board.tick(write)
+    while board.animation:
+        await board.tick(write)
+    # The board is dark first (its lights unknown before the first frame), then the chaser.
+    assert write.frames == [led_frame(frozenset()), *(led_frame(f) for f in leds.chaser(0))]
+    assert board.leds == frozenset()
 
 
 async def test_a_game_opened_but_not_shown_is_said(monkeypatch) -> None:
