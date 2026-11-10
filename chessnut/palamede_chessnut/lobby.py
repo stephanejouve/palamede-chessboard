@@ -204,6 +204,20 @@ def refusal(status: int | None, body: Any) -> str:
     return REFUSALS.get(status, f"Partie non créée (HTTP {status}).")
 
 
+def gesture_wait(
+    side: chess.Color | None, picked: tuple[Choice, ...], pair: str | None
+) -> tuple[float, frozenset[chess.Square]]:
+    """How long the gesture must hold, and the squares blinking meanwhile.
+
+    The knights' choice first, then the rooks' side, then the coach's pair.
+    """
+    if picked:
+        return CHOICE_SECONDS, frozenset(square for _part, _value, square in picked)
+    if side is not None:
+        return GESTURE_SECONDS, frozenset(GESTURES[side])
+    return GESTURE_SECONDS, (frozenset(coach_gestures.PAIRS[pair]) if pair else frozenset())
+
+
 class Lobby(Bridge):
     """The board without a game : watches for the gesture, opens the game, hands over."""
 
@@ -299,37 +313,72 @@ class Lobby(Bridge):
         await self.run_board()
 
     async def tick(self, write: Any) -> None:
+        """One reading of the board : the gesture held is counted, taken once it has held long enough."""
+        self._follow_link()
+        if self.animation:
+            await self._animate(write)
+            return
+        if self.observed is None or self.creating or self.created is not None:
+            return
+        self._arm(self.observed)
+        side = gesture_side(self.observed, self.emptied)
+        pair = coach_gestures.pair_gesture(self.observed) if self.armed else None
+        picked = self._pick(self.observed)
+        corners = tuple(self.emptied.get(s) for s in GESTURES[side]) if side is not None else ()
+        nothing = side is None and not picked and pair is None
+        if nothing or self._tried(corners):
+            await self._rest(write, nothing)
+            return
+        self.counting, self.choosing = side, picked
+        self.pairing = pair if side is None and not picked else None
+        self.refused_text = None
+        held = time.monotonic() - self.settled_since
+        wait, squares = gesture_wait(side, picked, pair)
+        if held < wait:
+            await self._show(write, leds.blink(squares, held))
+            return
+        self.tried, self.counting, self.choosing = self.settled_since, None, ()
+        self.pairing = None
+        await self._show(write, frozenset())
+        await self._take(side, picked, pair, corners)
+
+    def _follow_link(self) -> None:
+        """Every tick, an animation's too : a lost link forgets the corners, each keeps its own time."""
         now = time.monotonic()
         if self.last_tick is not None and now - self.last_tick > LINK_GAP_SECONDS:
             # The link was lost : corners emptied meanwhile would get one time (review Junior #214).
             self.emptied.clear()
         self.last_tick = now
         if self.observed is not None:
-            # At every tick, an animation's too : each corner keeps its own time.
             self._watch_corners(self.observed)
-        if self.animation:
-            await self._show(write, self.animation.pop(0))
-            if not self.animation and self.created is not None:
-                threading.Thread(target=self._hand_over, daemon=True).start()
-            return
-        if self.observed is None or self.creating or self.created is not None:
-            return
-        # What the board was read as, in the log : the smoke can then tell a
-        # gesture not seen from one not made (smoke of Stéphane, 04/11).
-        if self.observed == chess.BaseBoard():
+
+    async def _animate(self, write: Any) -> None:
+        """The animation's next frame ; after the last one of a game opened, the hand-over."""
+        await self._show(write, self.animation.pop(0))
+        if not self.animation and self.created is not None:
+            threading.Thread(target=self._hand_over, daemon=True).start()
+
+    def _arm(self, observed: chess.BaseBoard) -> None:
+        """The starting position arms the clock gestures ; any other placement disarms them.
+
+        What the board was read as, in the log : the smoke can then tell a
+        gesture not seen from one not made (smoke of Stéphane, 04/11).
+        """
+        if observed == chess.BaseBoard():
             if not self.armed:
                 log.info("starting position on the board : clock gestures armed")
             self.armed = True
-        elif not on_the_way(self.observed):
+        elif not on_the_way(observed):
             if self.armed:
                 log.info(
                     "clock gestures disarmed until the starting position : %s",
-                    self.observed.board_fen(),
+                    observed.board_fen(),
                 )
             self.armed = False
-        side = gesture_side(self.observed, self.emptied)
-        pair = coach_gestures.pair_gesture(self.observed) if self.armed else None
-        standing = choices(self.observed) if self.armed else ()
+
+    def _pick(self, observed: chess.BaseBoard) -> tuple[Choice, ...]:
+        """The knights' new choices on this placement ; two on one rank say nothing (``clash``)."""
+        standing = choices(observed) if self.armed else ()
         # A knight gone forgets its square ; one still there is not taken again.
         self.taken &= {square for _part, _value, square in standing}
         # The knight put last wins its rank (review Admin #191) : only the new
@@ -339,34 +388,28 @@ class Lobby(Bridge):
         picked = tuple(c for c in fresh if parts.count(c[0]) == 1)
         # Said, else nothing seems to happen (review Junior #191).
         self.clash = sorted({CHOICES[part][0] + 1 for part in parts if parts.count(part) > 1})
-        self._note_idle_knights(self.observed, standing)
-        corners = tuple(self.emptied.get(s) for s in GESTURES[side]) if side is not None else ()
-        tried = self.tried == self.settled_since or (
-            bool(corners) and corners == self.tried_corners
-        )
-        if (side is None and not picked and pair is None) or tried:
-            if side is None and not picked and pair is None:
-                self.refused_text = None  # the pieces are back : a new try may come
-            self.counting, self.choosing, self.pairing = None, (), None
-            await self._show(write, frozenset())
-            return
-        self.counting, self.choosing = side, picked
-        self.pairing = pair if side is None and not picked else None
-        self.refused_text = None
-        held = time.monotonic() - self.settled_since
-        wait, squares = (
-            (CHOICE_SECONDS, frozenset(square for _part, _value, square in picked))
-            if picked
-            else (GESTURE_SECONDS, frozenset(GESTURES[side]))
-            if side is not None
-            else (GESTURE_SECONDS, frozenset(coach_gestures.PAIRS[pair]) if pair else frozenset())
-        )
-        if held < wait:
-            await self._show(write, leds.blink(squares, held))
-            return
-        self.tried, self.counting, self.choosing = self.settled_since, None, ()
-        self.pairing = None
+        self._note_idle_knights(observed, standing)
+        return picked
+
+    def _tried(self, corners: tuple[float | None, ...]) -> bool:
+        """This placement, or this gesture of the rooks, was tried already : not again."""
+        return self.tried == self.settled_since or (bool(corners) and corners == self.tried_corners)
+
+    async def _rest(self, write: Any, nothing: bool) -> None:
+        """No gesture to count : no light ; ``nothing`` held at all, a refusal is forgotten."""
+        if nothing:
+            self.refused_text = None  # the pieces are back : a new try may come
+        self.counting, self.choosing, self.pairing = None, (), None
         await self._show(write, frozenset())
+
+    async def _take(
+        self,
+        side: chess.Color | None,
+        picked: tuple[Choice, ...],
+        pair: str | None,
+        corners: tuple[float | None, ...],
+    ) -> None:
+        """The gesture held long enough : the knights' clock, else the rooks' game, else the coach's."""
         if picked:
             self._choose(picked)
         elif side is not None:
