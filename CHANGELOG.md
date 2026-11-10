@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.26.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.25.0...v0.26.0) (2026-11-10)
+
+
+### Features
+
+* **clock:** la réponse attend la pendule, lancée d'un clic ou coupée ([#316](https://github.com/stephanejouve/palamede-chessboard/issues/316)) ([#317](https://github.com/stephanejouve/palamede-chessboard/issues/317)) ([94ceb0b](https://github.com/stephanejouve/palamede-chessboard/commit/94ceb0bda1b3866a35aad77eea1c2323e151b5a6))
+* **viewer:** refused moves said in French, above the board ([#322](https://github.com/stephanejouve/palamede-chessboard/issues/322)) ([#326](https://github.com/stephanejouve/palamede-chessboard/issues/326)) ([77635d4](https://github.com/stephanejouve/palamede-chessboard/commit/77635d40bcd1b796c9b5f8b28fd693c83fedaac2))
+
+
+### Bug Fixes
+
+* **viewer:** a board already over is said as such, a move or its UCI (review [#326](https://github.com/stephanejouve/palamede-chessboard/issues/326)) ([#327](https://github.com/stephanejouve/palamede-chessboard/issues/327)) ([d2f3a39](https://github.com/stephanejouve/palamede-chessboard/commit/d2f3a3971cc9f11aff0254c8f9bb4cd7ac45eb9a))
+
 ## [0.25.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.24.0...v0.25.0) (2026-11-09)
 
 

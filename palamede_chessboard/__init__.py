@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
-__version__ = "0.25.0"  # x-release-please-version
+__version__ = "0.26.0"  # x-release-please-version
 
 __all__ = [
     "DEFAULT_OUTPUT_FILENAME",
