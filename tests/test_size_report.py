@@ -6,6 +6,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("size_report", ROOT / "scripts" / "size_report.py")
 assert _spec is not None and _spec.loader is not None
@@ -152,7 +154,14 @@ def test_json_prints_every_measure(monkeypatch, capsys) -> None:
 
 
 def test_the_workflow_runs_the_job_without_blocking() -> None:
-    text = (ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
-    job = text[text.index("\n  size:\n") :]
-    assert "continue-on-error: true" in job
-    assert "poetry run python scripts/size_report.py" in job
+    # Parsed, not only read : a colon in a step name made the whole file invalid
+    # and the run failed with no job at all (run 703, 10/11).
+    yaml = pytest.importorskip("yaml")
+    workflow = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "tests.yml").read_text(encoding="utf-8")
+    )
+    job = workflow["jobs"]["size"]
+    assert job["continue-on-error"] is True
+    assert any(
+        step.get("run") == "poetry run python scripts/size_report.py" for step in job["steps"]
+    )

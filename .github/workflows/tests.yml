@@ -138,7 +138,7 @@ jobs:
       - name: Install poetry
         run: pipx install poetry
 
-      - name: Install dependencies (dev only : ruff)
+      - name: Install dependencies (dev only, ruff)
         run: poetry install --no-interaction --only=main,dev
 
       - name: size report
