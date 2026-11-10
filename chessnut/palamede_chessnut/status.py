@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any
 
 import chess
 
+from palamede_chessnut.clock_choice import tips
 from palamede_chessnut.exercise import banner
-from palamede_chessnut.lobby import tips
 from palamede_chessnut.mouse import legal_targets
 from palamede_chessnut.moves import differing_squares
 from palamede_chessnut.refusal import refusal_said
