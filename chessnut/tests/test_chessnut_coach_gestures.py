@@ -10,8 +10,9 @@ import chess
 import pytest
 from palamede_chessnut import coach_gestures, leds, sounds, viewer
 from palamede_chessnut.bridge import Bridge
+from palamede_chessnut.clock_choice import CHOICE_SECONDS
 from palamede_chessnut.coach_gestures import EXERCISE, LESSON, pair_gesture, start_exercise
-from palamede_chessnut.lobby import CHOICE_SECONDS, GESTURE_SECONDS
+from palamede_chessnut.lobby import GESTURE_SECONDS
 from test_chessnut_lobby import TOKEN, VIEWER, Board, Server, held, knight, lifted, new_lobby
 
 EXO = "exo.stephane.20261107-230000-abcd"

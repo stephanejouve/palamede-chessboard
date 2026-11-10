@@ -10,19 +10,17 @@ import urllib.error
 
 import chess
 import pytest
-from palamede_chessnut import config, leds, lobby, viewer
+from palamede_chessnut import clock_choice, config, leds, lobby, viewer
 from palamede_chessnut.bridge import Bridge
 from palamede_chessnut.cli import bridge_from_args
+from palamede_chessnut.clock_choice import CHOICE_SECONDS, choices, chosen
 from palamede_chessnut.games import NO_GAME, Session, successor
 from palamede_chessnut.lobby import (
-    CHOICE_SECONDS,
     CORNERS,
     GESTURE_SECONDS,
     NO_SERVER,
     TOGETHER_SECONDS,
     Lobby,
-    choices,
-    chosen,
     gesture_side,
     on_the_way,
 )
@@ -740,12 +738,12 @@ def test_a_game_s_bridge_has_no_lobby_text() -> None:
 
 def test_the_screen_s_board_says_what_each_knight_square_chooses() -> None:
     """Smoke of Stéphane, 04/11 : the knight's gesture was not found from the text alone."""
-    assert lobby.tips() == {
+    assert clock_choice.tips() == {
         "a3": "3′", "b3": "5′", "c3": "10′", "d3": "15′", "e3": "25′", "f3": "90′",
         "a4": "+0", "b4": "+2", "c4": "+3", "d4": "+5", "e4": "+10", "f4": "+30",
     }  # fmt: skip
-    for square, value in lobby.tips().items():
-        for home in lobby.KNIGHT_HOMES:
+    for square, value in clock_choice.tips().items():
+        for home in clock_choice.KNIGHT_HOMES:
             (picked,) = choices(knight(home, chess.parse_square(square)))
             assert str(picked[1]) == value.strip("+′"), square
 
