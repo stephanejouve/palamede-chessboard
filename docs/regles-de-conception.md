@@ -2,6 +2,8 @@
 
 Ce document rassemble les décisions déjà prises par le propriétaire sur la conception de palamede et sur la façon d'y contribuer. Chaque règle renvoie à l'issue ou à la PR qui l'a posée. Une règle nouvelle entre ici par PR, avec cette référence.
 
+Une règle convenue entre contributeurs, sans décision écrite du propriétaire, est marquée *(pratique d'équipe)*. Elle entre ici avec sa référence et cède devant une décision du propriétaire.
+
 ## 1. Une opération, les mêmes règles sur tous les médias (#328)
 
 Partie, exercice et cours sont des **types de session**. Ce type ne dépend pas de l'interface qui l'a ouverte. Chaque interface a sa modalité :
@@ -19,7 +21,7 @@ En pratique :
 - La règle vit dans le domaine (`chessboard_state.py`, `clock_moves.py`, `coach/`…), jamais dans une façade. Le routeur HTTP du viewer et le handler MCP appellent la même fonction et relaient son résultat. Exemple : `create_lesson`, appelée par `chess_create_lesson` et par `POST /api/lessons` (#329).
 - Une fonction nouvelle dit, pour chaque média, comment elle s'y déclenche, ou pourquoi elle n'y est pas.
 - Un test de parité vérifie que deux façades d'une même opération donnent le même résultat et les mêmes refus, mot pour mot.
-- Une PR qui ne couvre qu'une partie des médias le dit, et renvoie à l'issue de suite pour les autres (par exemple #330 pour le serveur et le viewer, #335 pour le Tablier).
+- *(Pratique d'équipe, revue de #342.)* Une PR qui ne couvre qu'une partie des médias le dit, et renvoie à l'issue de suite pour les autres (par exemple #330 pour le serveur et le viewer, #335 pour le Tablier).
 - Une exception propre à un média est une **transition**, pas une règle durable : elle porte la référence de l'issue qui la retire. Ainsi, les parties `tablier.*` gardent le départ de la pendule au premier coup jusqu'à l'étape 1 de #335 (l'entrée de menu).
 - Le préfixe `tablier.` mêle aujourd'hui l'interface d'origine et des règles de jeu. Le découplage est ouvert dans #328 et sa forme n'est pas encore décidée. Ce document ne la fixe pas.
 
@@ -31,7 +33,9 @@ Un refus porte deux choses :
   - en français, en notation française (R, D, T, F, C) ;
   - sans UCI, sans numéro de demi-coup, sans détail interne ;
   - le même sur tous les médias (`detail` en HTTP, `reason` en MCP) ;
-- **un code stable** pour les programmes et les tests : `X-Refusal-Code` en HTTP, `code` en MCP. Un programme teste le code, **jamais le texte**.
+- **un code stable** pour les programmes et les tests. Un programme teste le code, **jamais le texte**.
+  - En MCP, chaque refus porte son `code`.
+  - En HTTP, l'en-tête `X-Refusal-Code` n'est posé aujourd'hui que par les refus d'identité (jeton absent ou invalide, pas votre trait, pas votre partie, registre illisible). Les autres refus du viewer, comme le 409 d'une partie terminée ou le 422 d'un coup illégal, n'ont que leur statut HTTP. L'en-tête n'est pas encore étendu à ces refus, et cette extension n'est pas encore décidée.
 
 Le détail technique (raison de l'arbitre, demi-coup, camp) va au journal.
 
