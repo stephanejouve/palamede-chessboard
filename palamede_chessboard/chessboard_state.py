@@ -193,7 +193,7 @@ class GameState:
         strict = validate_san_strict(self.board, move_san)
         if not strict.ok:
             log.info("%s : %r rejected at ply %d : %s", *self._where(move_san), strict.reason)
-            raise IllegalMoveError(refusals.not_possible(refusals.french_san(move_san)))
+            raise IllegalMoveError(refusals.move_refused(strict.kind, move_san, strict.suggestion))
         mover_side = "white" if self.board.turn == chess.WHITE else "black"
         move = self.board.parse_san(move_san)
         san_normalised = self.board.san(move)

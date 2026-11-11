@@ -231,3 +231,70 @@ async def test_chess_seat_refuses_with_the_viewers_text(
     assert by_http.status_code == status
     assert (by_mcp["status"], by_mcp["code"]) == ("error", code)
     assert by_mcp["reason"] == by_http.json()["detail"]
+
+
+# --- a legal move written wrong is not « impossible » (review Leader #340, point 9.b) ----------
+
+TWO_KNIGHTS_TO_D2 = "rnbqkbnr/pppppppp/8/8/8/5N2/PPP1PPPP/RNBQKB1R w KQkq - 0 1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("moves", "fen", "san", "text"),
+    [
+        (
+            ["e4", "e5", "Nf3", "Nc6"],
+            None,
+            "Ne5",
+            "Coup refusé : Ce5 prend une pièce : écrivez Cxe5.",
+        ),
+        (["e4", "e5"], None, "Nxf3", "Coup refusé : Cxf3 ne prend rien : écrivez Cf3."),
+        (["e4", "f5"], None, "Qh5", "Coup refusé : Dh5 donne échec : écrivez Dh5+."),
+        (["e4", "e5"], None, "Qh5+", "Coup refusé : Dh5+ ne donne pas échec : écrivez Dh5."),
+        (["f3", "e5", "g4"], None, "Qh4", "Coup refusé : Dh4 est mat : écrivez Dh4#."),
+        (["f3", "e5", "g4"], None, "Qh4+", "Coup refusé : Dh4+ est mat : écrivez Dh4#."),
+        (["e4", "e5"], None, "Qh5#", "Coup refusé : Dh5# n'est pas mat : écrivez Dh5."),
+        (
+            [],
+            TWO_KNIGHTS_TO_D2,
+            "Nd2",
+            "Coup refusé : Cd2 est ambigu : précisez la case de départ (Cfd2, Cbd2).",
+        ),
+        ([], None, "Rf1", "Coup refusé : Tf1 n'est pas possible dans cette position."),
+    ],
+)
+async def test_a_legal_move_written_wrong_says_what_to_write(
+    games_dir: Path, moves: list[str], fen: str | None, san: str, text: str
+) -> None:
+    """The strict arbiter refuses the notation of a legal move : the text says the SAN to write,
+    « n'est pas possible » stays for a move that does not exist. Probed by MCP, as an agent does."""
+    state = GameState.create(
+        GameMetadata(
+            game_id=GAME,
+            white="stephane",
+            black="bot-maia-1100",
+            time_control=TimeControl(format="unrated"),
+        ),
+        games_dir=games_dir,
+        starting_fen=fen,
+    )
+    for move in moves:
+        state.play_move(move)
+    body = await _mcp("chess_play_move", move_san=san)
+    assert (body["status"], body["code"]) == ("error", "ILLEGAL_MOVE")
+    assert body["reason"] == text
+    assert GameState.load(GAME, games_dir=games_dir).san_history == state.san_history
+
+
+def test_the_corrected_san_is_then_accepted(games_dir: Path) -> None:
+    """What the text says to write is a move the board takes."""
+    state = _game(games_dir)  # 1.e4 played, Black to move
+    state.play_move("e5")
+    state.play_move("Nf3")
+    state.play_move("Nc6")
+    with pytest.raises(Exception) as caught:
+        state.play_move("Ne5")
+    fix = str(caught.value).split("écrivez ")[1].rstrip(".")
+    assert fix == "Cxe5"
+    state.play_move(fix.replace("C", "N"))  # the English SAN of the French text
+    assert state.san_history[-1] == "Nxe5"

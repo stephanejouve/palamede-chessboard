@@ -74,6 +74,30 @@ def not_possible(what: str) -> str:
     return f"Coup refusé : {what} n'est pas possible dans cette position."
 
 
+#: A **legal** move written wrong (review Leader #340) : the strict arbiter
+#: (:func:`chess_arbiter.validate_san_strict`) refuses it for its notation,
+#: and « n'est pas possible » would send the agent to another move. Keyed by
+#: ``ValidationResult.kind`` ; ``{san}`` what was sent, ``{fix}`` what to
+#: write, both in French notation.
+NOTATION = {
+    "ambiguous": "{san} est ambigu : précisez la case de départ ({fix})",
+    "capture": "{san} ne prend rien : écrivez {fix}",
+    "no_capture": "{san} prend une pièce : écrivez {fix}",
+    "check": "{san} ne donne pas échec : écrivez {fix}",
+    "no_check": "{san} donne échec : écrivez {fix}",
+    "mate": "{san} n'est pas mat : écrivez {fix}",
+    "no_mate": "{san} est mat : écrivez {fix}",
+}
+
+
+def move_refused(kind: str, san: str, suggestion: str = "") -> str:
+    """The text of a refused SAN : by its notation when the move is legal, else :func:`not_possible`."""
+    template = NOTATION.get(kind)
+    if template is None or not suggestion:
+        return not_possible(french_san(san))
+    return "Coup refusé : " + template.format(san=french_san(san), fix=french_san(suggestion)) + "."
+
+
 def refusal_text(code: str | None) -> str:
     """The text of an identity refusal code ; « Coup refusé » for an unknown one."""
     return MOVE_REFUSALS.get(code or "", (403, "Coup refusé"))[1]
