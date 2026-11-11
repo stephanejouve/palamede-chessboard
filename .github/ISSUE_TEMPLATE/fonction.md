@@ -21,8 +21,8 @@ plateau), ou « hors champ : <raison> ». -->
 
 - [ ] MCP (agents) :
 - [ ] viewer :
-- [ ] Tablier avec l'échiquier connecté :
-- [ ] Tablier sans échiquier :
+- [ ] Tablier, entrée de menu (toujours) :
+- [ ] Tablier, bouton de fenêtre ou geste au plateau (si pertinent) :
 
 ## Tests attendus
 

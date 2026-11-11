@@ -8,19 +8,20 @@ Partie, exercice et cours sont des **types de session**. Ce type ne dépend pas 
 
 | Média | Modalité |
 |---|---|
-| Tablier avec l'échiquier connecté | un geste au plateau |
-| Tablier sans échiquier | un menu |
+| Tablier | **toujours une entrée de menu**, même sans échiquier connecté ; en plus, un bouton dans sa fenêtre quand c'est pertinent, et un geste au plateau quand l'échiquier est connecté (#335) |
 | viewer | un bouton ou un menu |
 | agent (LLM) | un outil MCP |
 
-Toutes déclenchent **la même opération serveur**, avec les mêmes règles et les mêmes refus.
+Toutes déclenchent **la même opération serveur**, avec les mêmes règles et les mêmes refus. Exemple : le lancement de la pendule passe par la touche du viewer, par `chess_clock_start`, et, au Tablier, par le menu « Partie ▸ Lancer la pendule », puis par le bouton et le geste (#330, #335).
 
 En pratique :
 
 - La règle vit dans le domaine (`chessboard_state.py`, `clock_moves.py`, `coach/`…), jamais dans une façade. Le routeur HTTP du viewer et le handler MCP appellent la même fonction et relaient son résultat. Exemple : `create_lesson`, appelée par `chess_create_lesson` et par `POST /api/lessons` (#329).
 - Une fonction nouvelle dit, pour chaque média, comment elle s'y déclenche, ou pourquoi elle n'y est pas.
 - Un test de parité vérifie que deux façades d'une même opération donnent le même résultat et les mêmes refus, mot pour mot.
-- Ce qui dépend de l'origine d'une partie (départ de la pendule, partie ouverte par un humain) devient une propriété explicite de la partie, fixée à sa création. Ce n'est pas une conséquence du préfixe de son identifiant. Les parties `tablier.*` existantes gardent leur comportement (#328).
+- Une PR qui ne couvre qu'une partie des médias le dit, et renvoie à l'issue de suite pour les autres (par exemple #330 pour le serveur et le viewer, #335 pour le Tablier).
+- Une exception propre à un média est une **transition**, pas une règle durable : elle porte la référence de l'issue qui la retire. Ainsi, les parties `tablier.*` gardent le départ de la pendule au premier coup jusqu'à l'étape 1 de #335 (l'entrée de menu).
+- Le préfixe `tablier.` mêle aujourd'hui l'interface d'origine et des règles de jeu. Le découplage est ouvert dans #328 et sa forme n'est pas encore décidée. Ce document ne la fixe pas.
 
 ## 2. Les refus : un texte pour le lecteur, un code pour les programmes (#332, #340)
 
@@ -60,4 +61,4 @@ Quand un média n'est pas atteint par les tests, la revue le dit et le sonde. C'
 
 ## 5. Les issues
 
-Les modèles de `.github/ISSUE_TEMPLATE/` demandent, pour une anomalie comme pour une fonction, le média concerné : MCP, viewer, Tablier avec échiquier, Tablier sans échiquier. Chaque case est cochée, ou déclarée hors champ avec la raison (règle 1).
+Les modèles de `.github/ISSUE_TEMPLATE/` demandent, pour une anomalie comme pour une fonction, chaque média : MCP, viewer, l'entrée de menu du Tablier (toujours), et son bouton ou son geste quand c'est pertinent. Chaque case est cochée, ou déclarée hors champ avec la raison (règle 1).
