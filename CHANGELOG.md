@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.27.0...v0.27.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* **clock:** the flag falls at 0:00 in every game, a late move is refused ([#331](https://github.com/stephanejouve/palamede-chessboard/issues/331)) ([#338](https://github.com/stephanejouve/palamede-chessboard/issues/338)) ([c27eaf9](https://github.com/stephanejouve/palamede-chessboard/commit/c27eaf96622c27dd707c7383815a53c7fab0d69e))
+
 ## [0.27.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.26.0...v0.27.0) (2026-11-11)
 
 
