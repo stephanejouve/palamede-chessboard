@@ -153,10 +153,10 @@ async def test_seat_with_an_unreadable_registry_is_an_error(tokens, as_token, mo
 
     monkeypatch.setattr(registry, "verify_token", broken)
     as_token(tokens["leader"])
-    assert await _call("chess_seat", {"game_id": game_id}) == {
-        "status": "error",
-        "code": "REGISTRY_UNREADABLE",
-    }
+    answer = await _call("chess_seat", {"game_id": game_id})
+    assert (answer["status"], answer["code"]) == ("error", "REGISTRY_UNREADABLE")
+    # #332 : the viewer's text rides along, the code stays the contract.
+    assert answer["reason"] == "Registre des joueurs illisible : coup refusé"
 
 
 async def test_seat_of_an_unknown_game(tokens, as_token) -> None:
