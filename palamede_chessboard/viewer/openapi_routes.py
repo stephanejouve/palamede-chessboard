@@ -107,9 +107,11 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
     ),
     ("post", "/api/games/{game_id}/clock/start"): (
         "Lancer la pendule",
-        "Le clic sur la pendule : elle part contre le camp au trait, et la réponse au premier "
-        "coup l'attend. Déjà lancée : inchangée. 409 si la partie est finie, sans pendule, "
-        "coupée, ou tablier.* (sa pendule part au premier coup).",
+        "La touche « Lancer la pendule », geste de l'arbitre (FIDE 6.2.1, #330) : tout joueur "
+        "de la partie, quel que soit son camp. Elle part pour les Blancs avant le premier coup, "
+        "et aucun coup n'est accepté avant (sauf tablier.*, dont le premier coup la lance "
+        "encore, #335). Déjà lancée : inchangée. 409 si la partie est finie, sans pendule "
+        "ou coupée.",
         "parties",
     ),
     ("post", "/api/games/{game_id}/clock/off"): (

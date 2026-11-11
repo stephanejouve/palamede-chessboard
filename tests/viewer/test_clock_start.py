@@ -1,4 +1,5 @@
-"""The reply waits for the clock (#316) : the click that starts it, or the clock switched off."""
+"""No move before the clock (FIDE 6.6 and 6.2.1, #330) : the key that starts it, or the clock
+switched off before the first move (#316)."""
 
 from __future__ import annotations
 
@@ -7,7 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from palamede_chessboard import chessboard_clock
+from palamede_chessboard import chessboard_clock, clock_moves
 from palamede_chessboard.chessboard_clock import init_and_save_clock, load_clock
 from palamede_chessboard.chessboard_state import GameMetadata, GameState, TimeControl
 from palamede_chessboard.players import registry
@@ -50,20 +51,22 @@ def _stored(games_dir: Path, game: str = GAME):
     return load_clock(game, games_dir=games_dir)
 
 
-def test_the_first_move_is_played_but_the_reply_waits(
+def test_no_move_before_the_clock_the_first_one_included(
     client: TestClient, games_dir: Path, tokens: dict
 ) -> None:
+    refused = _move(client, "e4", tokens["alice"])
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == clock_moves.CLOCK_NOT_STARTED
+    assert GameState.load(GAME, games_dir=games_dir).san_history == []
+
+
+@pytest.mark.parametrize("starter", ["alice", "bob"])
+def test_once_started_by_either_player_white_plays(
+    client: TestClient, games_dir: Path, tokens: dict, starter: str
+) -> None:
+    """The arbiter's gesture, open to a participant whatever their side (FIDE 6.2.1)."""
+    assert _clock(client, "start", tokens[starter]).json()["clock"]["active"] == "white"
     assert _move(client, "e4", tokens["alice"]).status_code == 200
-    refused = _move(client, "e5", tokens["bob"])
-    assert refused.status_code == 409 and "Pendule non démarrée" in refused.json()["detail"]
-    assert GameState.load(GAME, games_dir=games_dir).san_history == ["e4"]
-
-
-def test_once_clicked_the_reply_is_played(
-    client: TestClient, games_dir: Path, tokens: dict
-) -> None:
-    _move(client, "e4", tokens["alice"])
-    assert _clock(client, "start", tokens["alice"]).status_code == 200
     assert _move(client, "e5", tokens["bob"]).status_code == 200
 
 
@@ -73,13 +76,6 @@ def test_clicked_before_the_first_move_white_runs(
     body = _clock(client, "start", tokens["alice"]).json()
     assert body["status"] == "ok"
     assert (body["clock"]["started"], body["clock"]["active"]) == (True, "white")
-
-
-def test_clicked_after_the_first_move_the_side_to_move_runs(
-    client: TestClient, games_dir: Path, tokens: dict
-) -> None:
-    _move(client, "e4", tokens["alice"])
-    assert _clock(client, "start", tokens["bob"]).json()["clock"]["active"] == "black"
 
 
 def test_a_second_click_restarts_nothing(
@@ -93,19 +89,29 @@ def test_a_second_click_restarts_nothing(
     assert (again["active"], again["last_move_ts"]) == ("black", 1000.0)
 
 
-def test_a_tablier_game_starts_on_its_first_move(
+def test_a_tablier_game_still_starts_on_its_first_move(
     client: TestClient, games_dir: Path, tokens: dict
 ) -> None:
+    """Transition until the Tablier has its own way to start it (#335)."""
     _create(games_dir, "tablier.clock")
     assert _move(client, "e4", tokens["alice"], game="tablier.clock").status_code == 200
     assert _move(client, "e5", tokens["bob"], game="tablier.clock").status_code == 200
+
+
+def test_a_tablier_game_can_be_started_from_the_viewer(
+    client: TestClient, games_dir: Path, tokens: dict
+) -> None:
+    """The same action as chess_clock_start and, later, the Tablier's menu (#330, #335)."""
+    _create(games_dir, "tablier.key")
+    body = _clock(client, "start", tokens["bob"], game="tablier.key").json()
+    assert (body["status"], body["clock"]["active"]) == ("ok", "white")
 
 
 def test_a_game_without_clock_is_not_held(
     client: TestClient, games_dir: Path, tokens: dict
 ) -> None:
     _create(games_dir, "no-clock", fmt="unrated")
-    _move(client, "e4", tokens["alice"], game="no-clock")
+    assert _move(client, "e4", tokens["alice"], game="no-clock").status_code == 200
     assert _move(client, "e5", tokens["bob"], game="no-clock").status_code == 200
 
 
@@ -127,13 +133,11 @@ def test_the_opponent_reads_who_switched_it_off(
     assert seen["off_by"] == "bob"
 
 
-@pytest.mark.parametrize("action", ["start", "off"])
-def test_a_tablier_game_s_clock_is_not_set_by_hand(
-    client: TestClient, games_dir: Path, tokens: dict, action: str
+def test_a_tablier_game_s_clock_is_never_switched_off(
+    client: TestClient, games_dir: Path, tokens: dict
 ) -> None:
-    # Its first move starts it (review Junior and Admin #317).
     _create(games_dir, "tablier.by-hand")
-    refused = _clock(client, action, tokens["alice"], game="tablier.by-hand")
+    refused = _clock(client, "off", tokens["alice"], game="tablier.by-hand")
     assert refused.status_code == 409 and "Tablier" in refused.json()["detail"]
     clock = _stored(games_dir, "tablier.by-hand")
     assert clock.started is False and clock.off_by is None
@@ -142,7 +146,7 @@ def test_a_tablier_game_s_clock_is_not_set_by_hand(
 @pytest.mark.parametrize(
     ("setup", "action"),
     [
-        ("move", "off"),  # too late : a move was played
+        ("tablier-move", "off"),  # too late : a move was played
         ("start", "off"),  # too late : the clock runs
         ("off", "start"),  # switched off : final
         ("resign", "start"),  # the game is over
@@ -152,8 +156,11 @@ def test_a_tablier_game_s_clock_is_not_set_by_hand(
 def test_what_can_no_longer_be_done_is_409(
     client: TestClient, games_dir: Path, tokens: dict, setup: str, action: str
 ) -> None:
-    if setup == "move":
-        _move(client, "e4", tokens["alice"])
+    if setup == "tablier-move":
+        _create(games_dir, "tablier.late")
+        _move(client, "e4", tokens["alice"], game="tablier.late")
+        assert _clock(client, action, tokens["bob"], game="tablier.late").status_code == 409
+        return
     elif setup == "resign":
         GameState.load(GAME, games_dir=games_dir).resign(by="white")
     else:
@@ -201,14 +208,28 @@ def test_the_page_has_the_note_and_the_script() -> None:
     assert bundle.index("_clock_control.js.jinja") < bundle.index("_live.js.jinja")
 
 
-def test_the_click_is_offered_to_a_player_of_a_live_game_only() -> None:
-    assert "!CLOCK.started && !CLOCK.off_by && colors.length && live" in CLOCK_JS
-    assert "&& !gameId().startsWith('tablier.'));" in CLOCK_JS
-    assert "if (clockSettable()) clockAction('start');" in CLOCK_JS
+def test_the_key_is_offered_to_a_player_of_a_live_game_only() -> None:
+    assert "!CLOCK.started && !CLOCK.off_by && colors.length && live);" in CLOCK_JS
+    assert '<button type="button" data-clock="start">Lancer la pendule</button>' in CLOCK_JS
+    # The key's click starts the clock ; any other data-clock key is the switch-off.
+    assert (
+        "  if (key.dataset.clock === 'start') {\n"
+        "    if (clockSettable()) clockAction('start');\n"
+        "    return;\n"
+        "  }"
+    ) in CLOCK_JS
+
+
+def test_the_clocks_no_longer_start_anything() -> None:
+    """The key replaces the click on the clocks (owner, S12, #330)."""
+    assert "clocksBox.addEventListener('click'" not in CLOCK_JS
+    assert "startable" not in CLOCK_JS
+    css = (TEMPLATES_DIR / "viewer" / "_styles.css.jinja").read_text(encoding="utf-8")
+    assert ".clocks.startable" not in css
 
 
 def test_switching_off_is_offered_before_the_first_move_and_confirmed() -> None:
-    assert 'firstMove ? \' <button type="button" data-clock="off">' in CLOCK_JS
+    assert 'firstMove && !tablier ? \' <button type="button" data-clock="off">' in CLOCK_JS
     assert "window.confirm('Jouer cette partie sans pendule ?" in CLOCK_JS
     assert "Pendule coupée par <strong>' + escapeHtml(CLOCK.off_by)" in CLOCK_JS
 
@@ -228,3 +249,27 @@ def test_the_arbiter_may_start_it(client: TestClient, games_dir: Path, tokens: d
     GameState.create(meta, games_dir=games_dir)
     init_and_save_clock("refereed", tc, games_dir=games_dir)
     assert _clock(client, "start", tokens["carol"], game="refereed").status_code == 200
+
+
+def test_a_game_from_before_the_rule_can_still_start_its_clock(
+    client: TestClient, games_dir: Path, tokens: dict
+) -> None:
+    """Owner's decision on #330 (comment 6803098486) : moves played before the rule,
+    clock never started, the start is accepted and the side to move runs."""
+    state = GameState.load(GAME, games_dir=games_dir)
+    state.play_move("e4", by="alice")  # played before #330, the clock not started
+    body = _clock(client, "start", tokens["bob"]).json()
+    assert (body["status"], body["clock"]["active"]) == ("ok", "black")
+    assert _move(client, "e5", tokens["bob"]).status_code == 200
+
+
+def test_a_second_start_is_a_200_and_changes_nothing(
+    client: TestClient, games_dir: Path, tokens: dict
+) -> None:
+    """Owner's decision on #330 : no 409 « déjà lancée »."""
+    first = _clock(client, "start", tokens["alice"])
+    second = _clock(client, "start", tokens["bob"])
+    assert (first.status_code, second.status_code) == (200, 200)
+    # now_ts is the server's reading time, not the clock's state.
+    kept = [{k: v for k, v in r.json()["clock"].items() if k != "now_ts"} for r in (first, second)]
+    assert kept[0] == kept[1]

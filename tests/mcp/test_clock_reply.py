@@ -1,4 +1,4 @@
-"""The reply waits for the clock (#316), on the MCP side : chess_play_move and chess_clock_start."""
+"""No move before the clock (FIDE 6.6 and 6.2.1, #330), on the MCP side : chess_play_move and chess_clock_start."""
 
 from __future__ import annotations
 
@@ -25,21 +25,31 @@ async def _play(game_id: str, san: str) -> dict:
 
 
 @pytest.mark.asyncio
-async def test_the_reply_is_refused_until_the_clock_starts(games_dir: Path) -> None:
-    await _create("mcp-reply")
-    assert (await _play("mcp-reply", "e4"))["status"] == "ok"
-    refused = await _play("mcp-reply", "e5")
-    assert refused["status"] == "error" and "Pendule non démarrée" in str(refused)
-    await call_tool("chess_clock_start", {"game_id": "mcp-reply"})
-    assert (await _play("mcp-reply", "e5"))["status"] == "ok"
+async def test_no_move_before_the_clock_the_first_one_included(games_dir: Path) -> None:
+    await _create("mcp-fide")
+    refused = await _play("mcp-fide", "e4")
+    assert refused["status"] == "error"
+    assert clock_moves.CLOCK_NOT_STARTED in refused["reason"]
+    assert GameState.load("mcp-fide", games_dir=games_dir).san_history == []
+    await call_tool("chess_clock_start", {"game_id": "mcp-fide"})
+    assert (await _play("mcp-fide", "e4"))["status"] == "ok"
+    assert (await _play("mcp-fide", "e5"))["status"] == "ok"
 
 
 @pytest.mark.asyncio
-async def test_started_after_the_first_move_black_runs(games_dir: Path) -> None:
-    await _create("mcp-late")
-    await _play("mcp-late", "e4")
-    body = _decode(await call_tool("chess_clock_start", {"game_id": "mcp-late"}))
-    assert body["clock"]["active"] == "black"
+async def test_the_start_runs_white(games_dir: Path) -> None:
+    await _create("mcp-white")
+    body = _decode(await call_tool("chess_clock_start", {"game_id": "mcp-white"}))
+    assert (body["clock"]["started"], body["clock"]["active"]) == (True, "white")
+
+
+@pytest.mark.asyncio
+async def test_a_game_without_clock_plays_at_once(games_dir: Path) -> None:
+    await call_tool(
+        "chess_create_game",
+        {"game_id": "mcp-free", "white": "w", "black": "b", "time_control": {"format": "unrated"}},
+    )
+    assert (await _play("mcp-free", "e4"))["status"] == "ok"
 
 
 @pytest.mark.asyncio
@@ -77,13 +87,24 @@ async def test_a_finished_game_cannot_start_its_clock(games_dir: Path) -> None:
     assert body["status"] == "error"
 
 
-@pytest.mark.asyncio
-async def test_a_tablier_game_is_not_started_by_hand(games_dir: Path) -> None:
+def _tablier_game(games_dir: Path, game_id: str) -> None:
     # A tablier.* id is reserved to the viewer (#131) : the game is made here.
     tc = TimeControl(format="15+10")
-    meta = GameMetadata(game_id="tablier.mcp", white="w", black="b", time_control=tc)
+    meta = GameMetadata(game_id=game_id, white="w", black="b", time_control=tc)
     GameState.create(meta, games_dir=games_dir)
-    init_and_save_clock("tablier.mcp", tc, games_dir=games_dir)
-    body = _decode(await call_tool("chess_clock_start", {"game_id": "tablier.mcp"}))
-    assert body["status"] == "error" and "Tablier" in str(body)
+    init_and_save_clock(game_id, tc, games_dir=games_dir)
+
+
+@pytest.mark.asyncio
+async def test_a_tablier_game_still_starts_on_its_first_move(games_dir: Path) -> None:
+    """Transition until the Tablier has its own way to start it (#335)."""
+    _tablier_game(games_dir, "tablier.mcp")
     assert (await _play("tablier.mcp", "e4"))["clock"]["started"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_tablier_game_can_be_started_by_hand(games_dir: Path) -> None:
+    """From chess_clock_start too (#330) : the same action as the viewer's key."""
+    _tablier_game(games_dir, "tablier.mcp2")
+    body = _decode(await call_tool("chess_clock_start", {"game_id": "tablier.mcp2"}))
+    assert (body["status"], body["clock"]["active"]) == ("ok", "white")

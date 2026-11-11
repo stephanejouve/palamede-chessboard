@@ -33,7 +33,7 @@ from palamede_chessboard.chessboard_state import (
 )
 from palamede_chessboard.clock_moves import (
     check_game,
-    check_reply_allowed,
+    check_move_allowed,
     clock_after_move,
     declare_board,
     game_lock,
@@ -177,7 +177,7 @@ def _add_clock_routes(router: APIRouter) -> None:
 
 
 def clock_from_viewer(game_id: str, request: Request, action: str) -> dict:
-    """Start the clock, or switch it off before the first move (#316).
+    """Start the clock (#330), or switch it off before the first move (#316).
 
     Same rule as ``chess_clock_start`` : a player of the game or its arbiter,
     under the token. 409 when the game is over, has no clock, or when the
@@ -350,13 +350,13 @@ def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> di
         mover = "white" if state.board.turn else "black"
 
         try:
-            check_reply_allowed(state, gdir)  # the reply waits for the clock (#316)
+            check_move_allowed(state, gdir)  # no move before the clock (FIDE 6.6, #330)
             move_result = _play(state, who, san_to_play, gdir)
         except IllegalMoveError as exc:
             log.info("viewer move %s refused on %s : %s", san_to_play, game_id, exc)
             detail = refusals.not_possible(refusals.french_san(san_to_play))
             raise HTTPException(422, detail) from exc
-        except InvalidGameStateError as exc:  # the game is over (#299), the clock (#316)
+        except InvalidGameStateError as exc:  # the game is over (#299), the clock (#330)
             over = refusals.is_over(state.board, state.metadata.result)
             raise HTTPException(409, refusals.GAME_OVER if over else str(exc)) from exc
         # Same clock as chess_play_move (#135) : the board, the mouse and Maia

@@ -2315,7 +2315,7 @@
           "parties"
         ],
         "summary": "Lancer la pendule",
-        "description": "Le clic sur la pendule : elle part contre le camp au trait, et la réponse au premier coup l'attend. Déjà lancée : inchangée. 409 si la partie est finie, sans pendule, coupée, ou tablier.* (sa pendule part au premier coup).",
+        "description": "La touche « Lancer la pendule », geste de l'arbitre (FIDE 6.2.1, #330) : tout joueur de la partie, quel que soit son camp. Elle part pour les Blancs avant le premier coup, et aucun coup n'est accepté avant (sauf tablier.*, dont le premier coup la lance encore, #335). Déjà lancée : inchangée. 409 si la partie est finie, sans pendule ou coupée.",
         "operationId": "game_clock_start_api_games__game_id__clock_start_post",
         "parameters": [
           {
