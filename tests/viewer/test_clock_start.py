@@ -249,3 +249,27 @@ def test_the_arbiter_may_start_it(client: TestClient, games_dir: Path, tokens: d
     GameState.create(meta, games_dir=games_dir)
     init_and_save_clock("refereed", tc, games_dir=games_dir)
     assert _clock(client, "start", tokens["carol"], game="refereed").status_code == 200
+
+
+def test_a_game_from_before_the_rule_can_still_start_its_clock(
+    client: TestClient, games_dir: Path, tokens: dict
+) -> None:
+    """Owner's decision on #330 (comment 6803098486) : moves played before the rule,
+    clock never started, the start is accepted and the side to move runs."""
+    state = GameState.load(GAME, games_dir=games_dir)
+    state.play_move("e4", by="alice")  # played before #330, the clock not started
+    body = _clock(client, "start", tokens["bob"]).json()
+    assert (body["status"], body["clock"]["active"]) == ("ok", "black")
+    assert _move(client, "e5", tokens["bob"]).status_code == 200
+
+
+def test_a_second_start_is_a_200_and_changes_nothing(
+    client: TestClient, games_dir: Path, tokens: dict
+) -> None:
+    """Owner's decision on #330 : no 409 « déjà lancée »."""
+    first = _clock(client, "start", tokens["alice"])
+    second = _clock(client, "start", tokens["bob"])
+    assert (first.status_code, second.status_code) == (200, 200)
+    # now_ts is the server's reading time, not the clock's state.
+    kept = [{k: v for k, v in r.json()["clock"].items() if k != "now_ts"} for r in (first, second)]
+    assert kept[0] == kept[1]
