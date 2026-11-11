@@ -185,3 +185,18 @@ def test_a_finished_game_has_no_side_to_move() -> None:
     render = _viewer_js("_render.js.jinja")
     assert "const over = lastResult !== '*' && idx === POS.length - 1;" in render
     assert "textContent = over ? 'Partie terminée' : (next ? 'Trait aux ' + next : '');" in render
+
+
+@pytest.mark.asyncio
+async def test_a_game_already_over_keeps_its_clock(games_dir: Path, wall: list[float]) -> None:
+    """Ended before #287 : its clock still names a side to move. A late move
+    there is the plain « game over » refusal, no flag written."""
+    await _started_game(games_dir, wall)
+    state = GameState.load(GAME, games_dir=games_dir)
+    state.metadata.result, state.metadata.termination = "1-0", "normal"
+    state.save()
+    wall[0] += 3600
+    body = _decode(await call_tool("chess_play_move", {"game_id": GAME, "move_san": "Nf3"}))
+    assert body["status"] == "error" and LOST not in body["reason"]
+    clock = load_clock(GAME, games_dir=games_dir)
+    assert (clock.flag_fall, clock.active) == (None, "white")
