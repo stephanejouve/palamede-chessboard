@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.27.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.26.0...v0.27.0) (2026-11-11)
+
+
+### Features
+
+* **clock:** no move before the clock, FIDE 6.6 and 6.2.1 ([#330](https://github.com/stephanejouve/palamede-chessboard/issues/330)) ([#336](https://github.com/stephanejouve/palamede-chessboard/issues/336)) ([7d9d3b2](https://github.com/stephanejouve/palamede-chessboard/commit/7d9d3b22ba4653f5cdc9bf20f059c72a4f813246))
+* **cours:** lessons created by one server operation, by MCP or HTTP ([#323](https://github.com/stephanejouve/palamede-chessboard/issues/323), step 1) ([#329](https://github.com/stephanejouve/palamede-chessboard/issues/329)) ([4d8834e](https://github.com/stephanejouve/palamede-chessboard/commit/4d8834eebb72758eed9199c0ba8c5713d43368f5))
+
 ## [0.26.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.25.0...v0.26.0) (2026-11-10)
 
 
