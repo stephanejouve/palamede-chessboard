@@ -33,6 +33,7 @@ from pathlib import Path
 
 import chess
 
+from palamede_chessboard import refusals
 from palamede_chessboard.chess_arbiter import validate_san_strict
 from palamede_chessboard.chess_engine_guard import (
     live_game_through,
@@ -220,7 +221,7 @@ def play_move(state: GameState, player_id: str, move_san: str, games_dir: Path) 
     try:
         uci = state.board.parse_san(move_san).uci()
     except ValueError as exc:
-        raise IllegalMoveError(f"Move {move_san!r} rejected: {exc}") from exc
+        raise IllegalMoveError(refusals.not_possible(refusals.french_san(move_san))) from exc
     entry = {"game_id": game_id, "move": uci}
     if uci != exercise["solution_uci"]:
         _attempt(exercise["id"], games_dir, player_id, entry, ok=False)

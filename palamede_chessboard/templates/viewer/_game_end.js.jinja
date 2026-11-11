@@ -37,15 +37,21 @@ async function refreshGameEnd() {
   const game = gameId();
   GAME_END = { colors: [], data: null, note: '' };
   renderGameEnd();
-  if (!game || !playerToken()) return;
+  if (!game) return;
+  if (!playerToken()) { applySeatRole([]); return; }  // no token, no seat (#337)
   try {
     const r = await fetch('/api/games/' + encodeURIComponent(game) + '/seat', {
       cache: 'no-store', headers: { 'Authorization': 'Bearer ' + playerToken() },
     });
-    if (!r.ok || gameId() !== game) return;
-    GAME_END.colors = (await r.json()).colors || [];
+    if (gameId() !== game) return;
+    GAME_END.colors = r.ok ? ((await r.json()).colors || []) : [];
+    applySeatRole(GAME_END.colors);
     renderGameEnd();
-  } catch (_) { /* no buttons : the game still shows */ }
+  } catch (_) {
+    // Seat unreadable (network, restart) : no seat either, never the previous
+    // game's role (review Junior #343). No buttons : the game still shows.
+    if (gameId() === game) applySeatRole([]);
+  }
 }
 
 async function endAction(action) {
