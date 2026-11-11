@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from palamede_chessboard import refusals
 from palamede_chessboard._mcp_shared import REQUEST_HEADERS
 from palamede_chessboard.chess_elo import (
     normalize_identity,
@@ -78,6 +79,17 @@ async def _handle_chess_whoami(arguments: dict, games_dir: Path) -> dict:
     return {"status": "ok", "authenticated": True, "player": who, "kind": kind}
 
 
+def _refused(code: str, game_id: str, **extra: str) -> dict:
+    """An identity refusal : the code for programs, the viewer's text for the reader (#332)."""
+    return {
+        "status": "error",
+        "code": code,
+        "reason": refusals.refusal_text(code),
+        "game_id": game_id,
+        **extra,
+    }
+
+
 async def _handle_chess_seat(arguments: dict, games_dir: Path) -> dict:
     """The MCP twin of ``GET /api/games/{id}/seat`` (#266) : the token's sides.
 
@@ -89,9 +101,9 @@ async def _handle_chess_seat(arguments: dict, games_dir: Path) -> dict:
     try:
         who, _kind = _token_player(games_dir)
     except registry.RegistryError:
-        return {"status": "error", "code": "REGISTRY_UNREADABLE"}
+        return _refused("REGISTRY_UNREADABLE", game_id)
     if who is None:
-        return {"status": "error", "code": "UNAUTHENTICATED", "game_id": game_id}
+        return _refused("UNAUTHENTICATED", game_id)
     try:
         state = GameState.load(game_id, games_dir=games_dir)
     except GameNotFoundError:
@@ -99,5 +111,5 @@ async def _handle_chess_seat(arguments: dict, games_dir: Path) -> dict:
     seats = roles_of(state)["seats"]  # a relay team's members included (#280)
     colors = [color for color in ("white", "black") if normalize_identity(who) in seats[color]]
     if not colors:
-        return {"status": "error", "code": "NOT_A_PLAYER", "game_id": game_id, "player": who}
+        return _refused("NOT_A_PLAYER", game_id, player=who)
     return {"status": "ok", "game_id": game_id, "player": who, "colors": colors}

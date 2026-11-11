@@ -20,7 +20,9 @@ SCHEMAS: list[Tool] = [
             "caller should re-read state and retry. With a clock, a move "
             "before it is started, or once the side to move has run out "
             "(the game then ends on time, the move is not played), is "
-            "rejected with ``code=INVALID_STATE``."
+            "rejected with ``code=INVALID_STATE``. On every refusal ``reason`` "
+            "is the French text the viewer shows for the same case (#332, "
+            "French piece letters : R D T F C) ; test ``code``, not the text."
         ),
         inputSchema={
             "type": "object",
