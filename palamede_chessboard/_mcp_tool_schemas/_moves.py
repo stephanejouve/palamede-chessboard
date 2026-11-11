@@ -17,7 +17,10 @@ SCHEMAS: list[Tool] = [
             "If ``expected_ply`` is supplied and the board has already "
             "advanced past it (concurrent writer), the call is rejected "
             "with ``code=STALE_PLY`` BEFORE the move is applied — the "
-            "caller should re-read state and retry."
+            "caller should re-read state and retry. With a clock, a move "
+            "before it is started, or once the side to move has run out "
+            "(the game then ends on time, the move is not played), is "
+            "rejected with ``code=INVALID_STATE``."
         ),
         inputSchema={
             "type": "object",
@@ -154,7 +157,10 @@ SCHEMAS: list[Tool] = [
         name="chess_clock_state",
         description=(
             "Return the clock snapshot for a game "
-            "(white/black seconds, active side, flag_fall flag)."
+            "(white/black seconds, active side, flag_fall flag). Read with "
+            "the token of a player of the game or of its arbiter, a clock "
+            "at 0:00 ends the game on time ; anyone else's read changes "
+            "nothing."
         ),
         inputSchema={
             "type": "object",

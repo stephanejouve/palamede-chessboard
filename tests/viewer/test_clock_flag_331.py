@@ -137,7 +137,7 @@ async def test_an_mcp_move_after_the_flag_is_refused_and_not_written(
     await _started_game(games_dir, wall)
     wall[0] += 60
     body = _decode(await call_tool("chess_play_move", {"game_id": GAME, "move_san": "Nf3"}))
-    assert body["status"] == "error" and LOST in body["reason"]
+    assert (body["status"], body["code"], body["reason"]) == ("error", "INVALID_STATE", LOST)
     assert GameState.load(GAME, games_dir=games_dir).san_history == ["e4", "e5"]
     assert load_clock(GAME, games_dir=games_dir).white_seconds == 0
     # The game is over : the next attempt is the plain « game over » refusal.
