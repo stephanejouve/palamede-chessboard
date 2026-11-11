@@ -172,7 +172,7 @@ class TestNoMoveAfterTheEnd:
     def test_a_mate_after_a_resignation_does_not_overturn_the_result(self, tmp_path: Path) -> None:
         state = self._before_mate(tmp_path)
         state.resign(by="black")
-        with pytest.raises(InvalidGameStateError, match="already ended"):
+        with pytest.raises(InvalidGameStateError, match="la partie est terminée"):  # #332 : French
             state.play_move("Qh4#")
         assert state.metadata.result == "1-0"
         assert state.board.ply() == 3

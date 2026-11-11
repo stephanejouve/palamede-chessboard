@@ -37,6 +37,8 @@ async def test_create_view_play_flow(games_dir: Path) -> None:
     assert viewed["status"] == "ok"
     assert viewed["state"]["ply"] == 0
 
+    # A game with a clock : no move before it is started (FIDE 6.6, #330).
+    await call_tool("chess_clock_start", {"game_id": "smoke"})
     played = _decode(
         await call_tool(
             "chess_play_move",

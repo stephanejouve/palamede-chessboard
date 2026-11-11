@@ -32,7 +32,7 @@ def test_no_increment_when_black_flag_falls() -> None:
     clock.on_move_played(mover="white", now=1001.0)
     clock.on_move_played(mover="black", now=1400.0)  # 399 s > 303
     assert clock.flag_fall == "black"
-    assert clock.black_seconds == 303 - 399
+    assert clock.black_seconds == 0.0  # never below 0 (#331), no increment either
 
 
 def test_flag_exactly_at_zero_gets_no_increment() -> None:

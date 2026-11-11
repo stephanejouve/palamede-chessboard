@@ -31,6 +31,7 @@ from pathlib import Path
 import chess
 import chess.pgn
 
+from palamede_chessboard import refusals
 from palamede_chessboard._atomic import fsync_dir
 from palamede_chessboard.chess_arbiter import ValidationResult, validate_san_strict
 from palamede_chessboard.commentary import get_commentary, post_commentary
@@ -154,6 +155,10 @@ class GameState:
 
     # ---- mutation -------------------------------------------------------
 
+    def _where(self, move_san: str) -> tuple[str, str, int]:
+        """The game, the move and the ply, for the log of a refusal (#332)."""
+        return self.metadata.game_id, move_san, self.board.ply()
+
     def play_move(
         self,
         move_san: str,
@@ -181,16 +186,14 @@ class GameState:
         """
         if expected_ply is not None and expected_ply != self.board.ply():
             raise StalePlyError(current_ply=self.board.ply(), expected_ply=expected_ply)
+        # The viewer's texts (#332) : the agents read them as is, the detail goes to the log.
         if self.metadata.result != "*" or self.board.is_game_over():
-            raise InvalidGameStateError(
-                f"Cannot play {move_san!r}: game already ended (result={self.metadata.result!r})"
-            )
+            raise InvalidGameStateError(refusals.GAME_OVER)
 
         strict = validate_san_strict(self.board, move_san)
         if not strict.ok:
-            raise IllegalMoveError(
-                f"Move {move_san!r} rejected at ply {self.board.ply()}: {strict.reason}"
-            )
+            log.info("%s : %r rejected at ply %d : %s", *self._where(move_san), strict.reason)
+            raise IllegalMoveError(refusals.move_refused(strict.kind, move_san, strict.suggestion))
         mover_side = "white" if self.board.turn == chess.WHITE else "black"
         move = self.board.parse_san(move_san)
         san_normalised = self.board.san(move)
@@ -240,9 +243,7 @@ class GameState:
         prior resign/draw agreement).
         """
         if self.metadata.result != "*" or self.board.is_game_over():
-            raise InvalidGameStateError(
-                f"Cannot resign: game already ended (result={self.metadata.result!r})"
-            )
+            raise InvalidGameStateError(refusals.END_GAME_OVER)
         side = self.metadata.resolve_side(by)
         self.metadata.result = "0-1" if side == "white" else "1-0"
         loser = self.metadata.white if side == "white" else self.metadata.black
@@ -267,9 +268,7 @@ class GameState:
         (``decline_draw``) before making a new one.
         """
         if self.metadata.result != "*" or self.board.is_game_over():
-            raise InvalidGameStateError(
-                f"Cannot offer draw: game already ended (result={self.metadata.result!r})"
-            )
+            raise InvalidGameStateError(refusals.END_GAME_OVER)
         side = self.metadata.resolve_side(by)
         pending = self.metadata.draw_offer
         if pending and pending["by"] == side:
@@ -280,10 +279,7 @@ class GameState:
                 "idempotent": True,
             }
         if pending and pending["by"] != side:
-            raise InvalidGameStateError(
-                f"Opposite side ({pending['by']}) already offered draw at "
-                f"ply {pending['ply']}: call agree_draw or decline_draw first"
-            )
+            raise InvalidGameStateError(refusals.END_OPPONENT_OFFERED)
         self.metadata.draw_offer = {"by": side, "ply": self.board.ply()}
         self.save()
         return {
@@ -301,18 +297,13 @@ class GameState:
         game is already over.
         """
         if self.metadata.result != "*" or self.board.is_game_over():
-            raise InvalidGameStateError(
-                f"Cannot agree draw: game already ended (result={self.metadata.result!r})"
-            )
+            raise InvalidGameStateError(refusals.END_GAME_OVER)
         side = self.metadata.resolve_side(by)
         pending = self.metadata.draw_offer
         if not pending:
-            raise InvalidGameStateError("Cannot agree draw: no offer pending")
+            raise InvalidGameStateError(refusals.END_NO_OFFER)
         if pending["by"] == side:
-            raise InvalidGameStateError(
-                f"Cannot agree draw: offer is from same side ({side}) — the "
-                f"other player must accept"
-            )
+            raise InvalidGameStateError(refusals.END_OWN_OFFER)
         self.metadata.result = "1/2-1/2"
         self.metadata.termination_note = "draw agreed"
         self.metadata.termination = "normal"
@@ -334,15 +325,13 @@ class GameState:
         already over.
         """
         if self.metadata.result != "*" or self.board.is_game_over():
-            raise InvalidGameStateError(
-                f"Cannot decline draw: game already ended (result={self.metadata.result!r})"
-            )
+            raise InvalidGameStateError(refusals.END_GAME_OVER)
         side = self.metadata.resolve_side(by)
         pending = self.metadata.draw_offer
         if not pending:
-            raise InvalidGameStateError("Cannot decline draw: no offer pending")
+            raise InvalidGameStateError(refusals.END_NO_OFFER)
         if pending["by"] == side:
-            raise InvalidGameStateError(f"Cannot decline draw: offer is from same side ({side})")
+            raise InvalidGameStateError(refusals.END_OWN_OFFER)
         cleared = dict(pending)
         self.metadata.draw_offer = None
         self.save()

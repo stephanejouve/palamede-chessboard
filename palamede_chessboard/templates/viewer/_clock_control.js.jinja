@@ -1,8 +1,9 @@
-// Starting the clock with a click, or playing without it (#316). Outside
-// tablier.* games the reply to the first move waits for the clock : a player
-// clicks it, or switches it off before the first move, and the opponent reads
-// who did. A tablier.* game's clock starts on its first move : nothing to
-// offer (review Junior #317). The seat and the game come from the game-end band (#275).
+// Starting the clock, or playing without it (FIDE 6.6 and 6.2.1, #330). In a
+// game with a clock, no move is accepted until a participant starts it : the
+// « Lancer la pendule » key, the arbiter's gesture, open to any player whatever
+// their side ; the clocks themselves no longer start anything. A tablier.*
+// game may be started here too, never switched off : until #335 its first move
+// starts it. The seat and the game come from the game-end band (#275).
 const clocksBox = document.getElementById('clocks');
 const clockNote = document.getElementById('clock-note');
 let CLOCK_NOTE = '';
@@ -10,8 +11,7 @@ let CLOCK_NOTE = '';
 function clockSettable() {
   const { colors, data } = GAME_END;
   const live = data && data.result === '*' && !data.is_game_over;
-  return !!(CLOCK && !CLOCK.started && !CLOCK.off_by && colors.length && live
-    && !gameId().startsWith('tablier.'));
+  return !!(CLOCK && !CLOCK.started && !CLOCK.off_by && colors.length && live);
 }
 
 function clockNoteHtml(settable) {
@@ -20,15 +20,16 @@ function clockNoteHtml(settable) {
   }
   if (!settable) return '';
   const firstMove = !(GAME_END.data.san_history || []).length;
-  return 'Cliquez la pendule pour la lancer.'
-    + (firstMove ? ' <button type="button" data-clock="off">Jouer sans pendule</button>' : '');
+  const tablier = gameId().startsWith('tablier.');
+  return '<button type="button" data-clock="start">Lancer la pendule</button>'
+    + (tablier ? ' La pendule part aussi au premier coup posé sur l\'échiquier.'
+      : ' Aucun coup avant le lancement.')
+    + (firstMove && !tablier ? ' <button type="button" data-clock="off">Jouer sans pendule</button>' : '');
 }
 
 function renderClockControl() {
   const settable = clockSettable();
-  clocksBox.classList.toggle('startable', settable);
   clocksBox.classList.toggle('off', !!(CLOCK && CLOCK.off_by));
-  clocksBox.title = settable ? 'Cliquer pour lancer la pendule' : '';
   const html = clockNoteHtml(settable)
     + (CLOCK_NOTE ? ' <span class="clock-error">' + escapeHtml(CLOCK_NOTE) + '</span>' : '');
   clockNote.innerHTML = html;
@@ -52,11 +53,13 @@ async function clockAction(action) {
   await pollClock();  // renders the clock and this note
 }
 
-clocksBox.addEventListener('click', () => {
-  if (clockSettable()) clockAction('start');
-});
 clockNote.addEventListener('click', ev => {
-  if (!ev.target.closest('[data-clock="off"]')) return;
+  const key = ev.target.closest('[data-clock]');
+  if (!key) return;
+  if (key.dataset.clock === 'start') {
+    if (clockSettable()) clockAction('start');
+    return;
+  }
   if (!window.confirm('Jouer cette partie sans pendule ? Ce sera définitif.')) return;
   clockAction('off');
 });

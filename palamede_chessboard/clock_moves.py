@@ -10,23 +10,29 @@ Chessnut board, the mouse, the Maia bot) : two copies would drift apart
   played, like a club clock — the move costs nothing and the other side's
   time starts running. The agents' games (matchmaking, rated) keep the
   arbiter's ``chess_clock_start`` (review Leader #136).
-* **The reply waits for the clock**, other games (owner, 10/11, #316) : the
-  first move may be played with the clock not started, the reply is
-  refused until a player starts it (:func:`start_clock`, the click on the
-  viewer's clock, or ``chess_clock_start``). Unless a player switched it
-  off before the first move (:func:`switch_clock_off`) : the game is then
-  played without it, and ``off_by`` tells the opponent who decided it.
-  Neither applies to ``tablier.*`` games, whose clock starts on the first
-  move (review Junior and Admin #317).
+* **No move before the clock**, other games (FIDE 6.6 and 6.2.1, owner,
+  11/11, #330, replacing the « reply waits » of #316) : with a clock not
+  started, every move is refused, 1.e4 included, until a participant starts
+  it (:func:`start_clock` : the viewer's « Lancer la pendule » key or
+  ``chess_clock_start``, the arbiter's gesture, whatever the side). Unless a
+  player switched it off before the first move (:func:`switch_clock_off`) :
+  the game is then played without it, and ``off_by`` tells the opponent who
+  decided it. ``tablier.*`` games keep the start on the first move as a
+  **transition** until the Tablier has its own way to start it (#335) ; a
+  start from the viewer or ``chess_clock_start`` is accepted there too.
 * **Fischer** afterwards : :meth:`ClockState.on_move_played`, the flag
   checked before the increment (#46).
-* **Flag fall at reading time**, Tablier games only : :func:`settle_flag`
-  ends the game on time when the side to move has run out, without waiting
-  for a move that may never come. Called by ``GET /api/clock`` and
-  ``chess_clock_state``. Only a player of the game or its arbiter may do it
-  (owner, 31/10 ; FIDE 6.8 : the arbiter observes it or a player claims
-  it) : anyone else's read shows the clock and changes nothing, and a
-  spectator's read never ends an agents' game.
+* **Flag fall at reading time**, every game (owner, 11/11, #331 ; Tablier
+  games only before) : :func:`settle_flag` ends the game on time when the
+  side to move has run out, without waiting for a move that may never come.
+  Called by ``GET /api/clock`` and ``chess_clock_state``. Only a player of
+  the game or its arbiter may do it (owner, 31/10 ; FIDE 6.8 : the arbiter
+  observes it or a player claims it) : anyone else's read shows the clock
+  and changes nothing.
+* **No move after the flag** (#331) : a move played once the side to move
+  has run out is refused by :func:`check_move_allowed`, never written in
+  the PGN, and the game ends on time on the position it was played from.
+  The time stored never goes below 0.
 * **Out of time, but no mating material left** (FIDE 6.9) : the game is
   drawn, not lost, when the opponent of the side whose flag fell cannot
   mate by any series of legal moves (:func:`result_on_time`).
@@ -148,31 +154,56 @@ def clock_after_move(state: GameState, mover: str, games_dir: Path) -> ClockStat
     return clock
 
 
-def check_reply_allowed(state: GameState, games_dir: Path) -> None:
-    """The move about to be played on ``state`` may be (#316), under the game lock.
+#: The refusal of a move played before the clock is started (#330), the same
+#: for every medium : the viewer, the MCP, the Tablier.
+CLOCK_NOT_STARTED = "Pendule non lancée : lancez la pendule des Blancs pour commencer"
 
-    :class:`InvalidGameStateError` when a move was already played and the
-    clock is neither started nor switched off. ``tablier.*`` games start it
-    on the first move : never refused.
+
+class FlagFellError(InvalidGameStateError):
+    """A move played after the flag fell (#331) : refused, the game ended on time."""
+
+
+def time_out_message(result: str, flag_fall: str) -> str:
+    """The refusal of a move played after the flag fell (#331), the same for every medium."""
+    if result == "1/2-1/2":
+        return "Temps écoulé : nulle au temps"
+    side = "Blancs" if flag_fall == "white" else "Noirs"
+    return f"Temps écoulé : les {side} ont perdu au temps"
+
+
+def check_move_allowed(state: GameState, games_dir: Path) -> None:
+    """The move about to be played on ``state`` may be (FIDE 6.6, #330), under the game lock.
+
+    :class:`InvalidGameStateError` when the game has a clock neither started
+    nor switched off, first move included. ``tablier.*`` games start it on
+    the first move, until #335 : never refused for that.
+
+    :class:`FlagFellError` when the side to move has run out (#331), every
+    game : the game ends on time first, on the position before the move.
     """
-    if not state.san_history or state.metadata.game_id.startswith(TABLIER):
-        return
     clock = load_clock(state.metadata.game_id, games_dir=games_dir)
-    if clock is not None and not clock.started and clock.off_by is None:
-        raise InvalidGameStateError("Pendule non démarrée : un joueur la lance avant la réponse")
+    if clock is None:
+        return
+    tablier = state.metadata.game_id.startswith(TABLIER)
+    if not tablier and not clock.started and clock.off_by is None:
+        raise InvalidGameStateError(CLOCK_NOT_STARTED)
+    if state.metadata.result == "*" and not state.board.is_game_over() and _out_of_time(clock):
+        _drop_flag(state, clock, games_dir)
+        raise FlagFellError(time_out_message(state.metadata.result, clock.flag_fall or ""))
 
 
 class NoClockError(InvalidGameStateError):
     """The game has no clock (``TimeControl`` unrated) : nothing to start or switch off."""
 
 
-def _clock_to_set(state: GameState, games_dir: Path) -> ClockState:
+def _clock_to_set(state: GameState, games_dir: Path, *, tablier_ok: bool = False) -> ClockState:
     """The clock of a live game, for a start or a switch-off (#316).
 
-    Not for a ``tablier.*`` game : its first move starts it (owner, 29/10).
+    A ``tablier.*`` game may be started from another medium (#330), never
+    switched off : its first move starts it until #335.
     """
-    if state.metadata.game_id.startswith(TABLIER):
-        raise InvalidGameStateError("Partie du Tablier : la pendule part au premier coup")
+    if state.metadata.game_id.startswith(TABLIER) and not tablier_ok:
+        raise InvalidGameStateError("Partie du Tablier : la pendule ne se coupe pas")
     if state.metadata.result != "*" or state.board.is_game_over():
         raise InvalidGameStateError("La partie est terminée")
     clock = load_clock(state.metadata.game_id, games_dir=games_dir)
@@ -182,14 +213,18 @@ def _clock_to_set(state: GameState, games_dir: Path) -> ClockState:
 
 
 def start_clock(game_id: str, games_dir: Path) -> ClockState:
-    """Start the clock of a live game, against the side to move (#316).
+    """Start the clock of a live game : the arbiter's gesture (FIDE 6.2.1, #330).
 
+    Any participant may do it, whatever their side. Before the first move,
+    the side to move is White (Black only from a ``starting_fen``) ; a game
+    played before #330 with moves and no clock starts its side to move.
+    ``tablier.*`` games too, from the viewer or ``chess_clock_start``.
     Already started : left as it is, a second click restarts nothing.
     Switched off : :class:`InvalidGameStateError`, the game goes on without.
     """
     with game_lock(game_id, games_dir):
         state = GameState.load(game_id, games_dir=games_dir)
-        clock = _clock_to_set(state, games_dir)
+        clock = _clock_to_set(state, games_dir, tablier_ok=True)
         if clock.started:
             return clock
         if clock.off_by is not None:
@@ -268,12 +303,10 @@ def settle_flag(game_id: str, games_dir: Path, headers: Any = None) -> ClockStat
     ``headers`` carry the caller's ``Authorization: Bearer`` token : only a
     player of the game or its arbiter may end it on time (owner, 31/10),
     under the same rule as ``chess_clock_start``. Anyone else, or no token,
-    reads the clock unchanged. Nothing changes either for a game other than
-    ``tablier.*``, without clock, a clock not started, a flag already down,
-    or a game already over.
+    reads the clock unchanged. Nothing changes either for a game without
+    clock, a clock not started, a flag already down, or a game already over.
+    Every game since #331 (owner, 11/11), ``tablier.*`` only before.
     """
-    if not game_id.startswith(TABLIER):
-        return _stopped_if_over(game_id, load_clock(game_id, games_dir=games_dir), games_dir)
     try:
         with game_lock(game_id, games_dir):
             clock = _settle_flag_locked(game_id, games_dir, headers)
@@ -282,14 +315,34 @@ def settle_flag(game_id: str, games_dir: Path, headers: Any = None) -> ClockStat
     return _stopped_if_over(game_id, clock, games_dir)
 
 
+def _out_of_time(clock: ClockState) -> bool:
+    """The side to move of a running clock has no time left (#331)."""
+    if not clock.started or clock.flag_fall is not None:
+        return False
+    if clock.active not in ("white", "black") or clock.last_move_ts is None:
+        return False
+    left = getattr(clock, f"{clock.active}_seconds") - (clock_module._now() - clock.last_move_ts)
+    return left <= 0
+
+
+def _drop_flag(state: GameState, clock: ClockState, games_dir: Path) -> None:
+    """The side to move's flag falls : its time at 0, the game ends on time.
+
+    The PGN first, then the clock (review Admin #338) : a stop in between
+    leaves a game over whose clock still runs, which :func:`_stopped_if_over`
+    shows stopped, never a fallen flag on a game still ``*``.
+    """
+    clock.flag_fall = clock.active
+    setattr(clock, f"{clock.active}_seconds", 0.0)
+    clock.active = None  # game over : the clock stops
+    clock.held = False
+    _end_on_time(state, clock)
+    save_clock(clock, games_dir=games_dir)
+
+
 def _settle_flag_locked(game_id: str, games_dir: Path, headers: Any) -> ClockState | None:
     clock = load_clock(game_id, games_dir=games_dir)
-    if clock is None or not clock.started or clock.flag_fall is not None:
-        return clock
-    if clock.active not in ("white", "black") or clock.last_move_ts is None:
-        return clock
-    left = getattr(clock, f"{clock.active}_seconds") - (clock_module._now() - clock.last_move_ts)
-    if left > 0:
+    if clock is None or not _out_of_time(clock):
         return clock
     try:
         state = GameState.load(game_id, games_dir=games_dir)
@@ -300,10 +353,7 @@ def _settle_flag_locked(game_id: str, games_dir: Path, headers: Any) -> ClockSta
     _who, refused = authorize_move(headers, state, games_dir, "chess_clock_start")
     if refused is not None:
         return clock  # a spectator, or no token : the clock is shown, nothing more
-    clock.flag_fall = clock.active
-    setattr(clock, f"{clock.active}_seconds", 0.0)
-    save_clock(clock, games_dir=games_dir)
-    _end_on_time(state, clock)
+    _drop_flag(state, clock, games_dir)
     return clock
 
 

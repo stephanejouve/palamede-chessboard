@@ -27,6 +27,7 @@ from palamede_chessboard.chessboard_state import (
     TimeControl,
     list_games,
 )
+from palamede_chessboard.cours import create_lesson
 
 
 async def _handle_chess_create_game(arguments: dict, games_dir: Path) -> dict:
@@ -73,6 +74,19 @@ async def _handle_chess_create_game(arguments: dict, games_dir: Path) -> dict:
         "state": state.to_state_dict(),
         "clock": clock.to_dict() if clock is not None else None,
     }
+
+
+async def _handle_chess_create_lesson(arguments: dict, games_dir: Path) -> dict:
+    """:func:`create_lesson` ; MCP adds only its arbiter gate, like ``chess_create_game``."""
+    _require_arbiter_or_daemon(arguments.get("arbiter"), games_dir)
+    state = create_lesson(
+        games_dir,
+        theme=arguments.get("theme"),
+        white=arguments.get("white"),
+        black=arguments.get("black"),
+        arbiter=arguments.get("arbiter"),
+    )
+    return {"status": "ok", "game_id": state.metadata.game_id, "state": state.to_state_dict()}
 
 
 async def _handle_chess_view_state(arguments: dict, games_dir: Path) -> dict:

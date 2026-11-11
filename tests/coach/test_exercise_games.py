@@ -56,7 +56,7 @@ def test_older_and_other_ids_are_free(game_id: str) -> None:
 
 
 def test_tablier_stays_reserved() -> None:
-    assert set(RESERVED_GAME_ID_PREFIXES) == {"tablier.", "exo."}
+    assert set(RESERVED_GAME_ID_PREFIXES) == {"tablier.", "exo.", "cours."}
 
 
 @pytest.mark.asyncio

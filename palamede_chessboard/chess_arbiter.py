@@ -21,6 +21,7 @@ This module exposes two helpers :
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TypedDict
 
@@ -29,10 +30,20 @@ import chess
 
 @dataclass(frozen=True)
 class ValidationResult:
-    """Outcome of :func:`validate_san_strict`."""
+    """Outcome of :func:`validate_san_strict`.
+
+    ``kind`` names the refusal for the reader's text (#332, review Leader
+    #340) : ``illegal`` (no such move), ``ambiguous``, then the notation of
+    a **legal** move, ``capture`` / ``no_capture`` (``x``), ``check`` /
+    ``no_check`` (``+``), ``mate`` / ``no_mate`` (``#``). ``suggestion`` is
+    the SAN to write instead : the canonical one for a notation slip, the
+    disambiguated candidates (``Nbd2, Nfd2``) for an ambiguous move.
+    """
 
     ok: bool
     reason: str = ""
+    kind: str = ""
+    suggestion: str = ""
 
 
 class MoveRequestContext(TypedDict):
@@ -67,12 +78,11 @@ def validate_san_strict(board: chess.Board, san: str) -> ValidationResult:
     """
     try:
         move = board.parse_san(san)
-    except (
-        chess.IllegalMoveError,
-        chess.InvalidMoveError,
-        chess.AmbiguousMoveError,
-    ) as exc:
-        return ValidationResult(False, f"illegal SAN: {exc}")
+    except chess.AmbiguousMoveError as exc:
+        return ValidationResult(False, f"illegal SAN: {exc}", "ambiguous", _candidates(board, san))
+    except (chess.IllegalMoveError, chess.InvalidMoveError) as exc:
+        return ValidationResult(False, f"illegal SAN: {exc}", "illegal")
+    canonical = board.san(move)
 
     has_x = "x" in san
     has_plus = "+" in san
@@ -88,6 +98,8 @@ def validate_san_strict(board: chess.Board, san: str) -> ValidationResult:
                 if has_x
                 else f"capture réelle sur {target} sans 'x' dans le SAN"
             ),
+            "capture" if has_x else "no_capture",
+            canonical,
         )
 
     gives_check = board.gives_check(move)
@@ -107,6 +119,8 @@ def validate_san_strict(board: chess.Board, san: str) -> ValidationResult:
                 if has_hash
                 else "échec et mat réel sans '#' dans le SAN"
             ),
+            "mate" if has_hash else "no_mate",
+            canonical,
         )
     if has_plus != gives_check and not has_hash:
         # '#' implies '+' in SAN convention ; only enforce '+' when there's
@@ -114,9 +128,36 @@ def validate_san_strict(board: chess.Board, san: str) -> ValidationResult:
         return ValidationResult(
             False,
             ("'+' annoncé sans échec réel" if has_plus else "échec réel sans '+' dans le SAN"),
+            "check" if has_plus else "no_check",
+            canonical,
         )
 
     return ValidationResult(True)
+
+
+#: A piece move in SAN : the piece, an optional departure (file, rank or both),
+#: an optional ``x``, the target square, an optional ``+`` / ``#``.
+_PIECE_SAN = re.compile(r"^([KQRBN])[a-h]?[1-8]?x?([a-h][1-8])[+#]?$")
+
+
+def _candidates(board: chess.Board, san: str) -> str:
+    """The disambiguated SANs an ambiguous ``san`` could mean (``Nbd2, Nfd2``).
+
+    Every legal move of the same piece to the same target square, written the
+    board's canonical way. The departure the player wrote so far is ignored :
+    ``Nbd2`` with knights on b1 and b3 is still ambiguous, and its candidates
+    are ``N1d2`` and ``N3d2`` (reviews Leader and Admin #340).
+    """
+    match = _PIECE_SAN.match(san)
+    if match is None:
+        return ""
+    piece_type = chess.PIECE_SYMBOLS.index(match[1].lower())
+    target = chess.parse_square(match[2])
+    return ", ".join(
+        board.san(move)
+        for move in board.legal_moves
+        if move.to_square == target and board.piece_type_at(move.from_square) == piece_type
+    )
 
 
 def move_request_context(board: chess.Board, last_n: int = 6) -> MoveRequestContext:

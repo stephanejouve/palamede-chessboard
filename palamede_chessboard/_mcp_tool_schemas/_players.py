@@ -55,7 +55,7 @@ SCHEMAS: list[Tool] = [
             "The sides this call's token holds in a game (#266), like "
             "GET /api/games/{id}/seat : ``player`` and ``colors``. Nothing is "
             "played. Errors : UNAUTHENTICATED (no valid token), NOT_A_PLAYER, "
-            "GAME_NOT_FOUND."
+            "GAME_NOT_FOUND ; ``reason`` carries the viewer's French text (#332)."
         ),
         inputSchema={
             "type": "object",

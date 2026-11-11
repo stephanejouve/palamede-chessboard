@@ -23,11 +23,12 @@ DESCRIPTION = (
     "une API REST, et les fichiers statiques (`/assets`, `/vendor`, favicon)."
 )
 
-TAGS = ["parties", "Tablier", "coach", "joueurs", "analyse", "rendu", "viewer"]
+TAGS = ["parties", "cours", "Tablier", "coach", "joueurs", "analyse", "rendu", "viewer"]
 
 TOKEN_ROUTES = {
     ("post", "/api/commentary"),
     ("post", "/api/games"),
+    ("post", "/api/lessons"),
     ("post", "/api/games/{game_id}/move"),
     ("post", "/api/games/{game_id}/resign"),
     ("post", "/api/games/{game_id}/draw/offer"),
@@ -68,11 +69,20 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
         "pour un créateur humain seulement). 5 parties en cours au plus par créateur (429 au-delà).",
         "parties",
     ),
+    ("post", "/api/lessons"): (
+        "Ouvrir un cours",
+        "Cours entre deux joueurs du registre (#323) : identifiant donné par le serveur, "
+        '`cours.<thème>.<blancs>-<noirs>.<AAAAMMJJ>-<NN>`, en-tête `[Mode "cours"]`, sans '
+        "pendule, non classé. La même opération que l'outil MCP `chess_create_lesson`, avec les "
+        "mêmes refus (422). Le joueur du jeton doit être l'un des deux (403 sinon).",
+        "cours",
+    ),
     ("get", "/api/raw"): ("PGN brut", "Le PGN complet de la partie.", "parties"),
     ("post", "/api/games/{game_id}/move"): (
         "Jouer un coup",
         "Coup en `san` ou en `uci` (`e7e8q` pour une promotion). Le joueur du jeton doit avoir le "
-        "trait. `by` sert seulement à l'audit.",
+        "trait. `by` sert seulement à l'audit. 409 : partie terminée, pendule non lancée, ou temps "
+        "écoulé (la partie finit alors au temps, le coup n'est pas joué).",
         "parties",
     ),
     ("post", "/api/games/{game_id}/resign"): (
@@ -98,9 +108,11 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
     ),
     ("post", "/api/games/{game_id}/clock/start"): (
         "Lancer la pendule",
-        "Le clic sur la pendule : elle part contre le camp au trait, et la réponse au premier "
-        "coup l'attend. Déjà lancée : inchangée. 409 si la partie est finie, sans pendule, "
-        "coupée, ou tablier.* (sa pendule part au premier coup).",
+        "La touche « Lancer la pendule », geste de l'arbitre (FIDE 6.2.1, #330) : tout joueur "
+        "de la partie, quel que soit son camp. Elle part pour les Blancs avant le premier coup, "
+        "et aucun coup n'est accepté avant (sauf tablier.*, dont le premier coup la lance "
+        "encore, #335). Déjà lancée : inchangée. 409 si la partie est finie, sans pendule "
+        "ou coupée.",
         "parties",
     ),
     ("post", "/api/games/{game_id}/clock/off"): (
@@ -208,6 +220,7 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
 OK_SCHEMAS = {
     ("get", "/api/games"): "GamesList",
     ("post", "/api/games"): "CreatedGame",
+    ("post", "/api/lessons"): "CreatedLesson",
     ("get", "/api/clock"): "ClockResponse",
     ("get", "/api/positions"): "PositionsResponse",
     ("get", "/api/coach/exercises"): "ExercisesResponse",
@@ -240,6 +253,7 @@ ERRORS = {
 #: Error codes read in the handlers, on top of 401/403/503 for the token routes.
 EXTRA_ERRORS = {
     ("post", "/api/games"): ["400", "422", "429"],
+    ("post", "/api/lessons"): ["422"],
     ("post", "/api/games/{game_id}/move"): ["400", "404", "409", "422"],
     ("post", "/api/games/{game_id}/resign"): ["404", "409"],
     ("post", "/api/games/{game_id}/draw/offer"): ["404", "409"],

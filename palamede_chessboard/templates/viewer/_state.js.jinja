@@ -34,6 +34,23 @@ function applyOrientation() {
   if (window.__cgSetOrientation) window.__cgSetOrientation(boardOrientation());
 }
 
+// The role follows the token's seat in the game shown (#337), read again at
+// each game change : White, Black, or no seat. A player's role is never kept
+// from the previous game ; a role chosen by hand that is not a seat (arbiter,
+// post_mortem) stays as it is.
+function seatRole(colors) {
+  if (colors.length === 1) return 'player_' + colors[0];
+  if (colors.length === 2) return viewerRole() === 'player_black' ? 'player_black' : 'player_white';
+  return viewerRole().startsWith('player_') ? 'spectator' : viewerRole();
+}
+function applySeatRole(colors) {
+  const role = seatRole(colors);
+  if (role === viewerRole()) return;
+  roleSelect.value = role;
+  ORIENT = '';  // a new role resets the orientation to its own side
+  updateUrl(); applyOrientation(); pollEngine();
+}
+
 roleSelect.addEventListener('change', () => {
   ORIENT = '';  // a new role resets the orientation to its own side
   updateUrl(); applyOrientation(); pollEngine();

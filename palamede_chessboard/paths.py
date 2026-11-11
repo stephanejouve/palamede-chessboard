@@ -55,11 +55,14 @@ GAME_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-][a-zA-Z0-9_.-]{0,63}$")
 #: Prefixes only the server gives, and who gives them. ``tablier.`` : the bots
 #: trust that only a human's token opens these games (review Leader #131).
 #: ``exo.`` : an exercise of the coach, judged against a solution (#95) ; the
-#: older ``exo-…`` games (a dash) are not reserved.
+#: older ``exo-…`` games (a dash) are not reserved. ``cours.`` : a lesson,
+#: where a move can be taken back (#323) ; created by ``create_lesson`` only.
 EXERCISE_PREFIX = "exo."
+LESSON_PREFIX = "cours."
 RESERVED_GAME_ID_PREFIXES = {
     "tablier.": "games opened from Tablier",
     EXERCISE_PREFIX: "exercises of the coach",
+    LESSON_PREFIX: "lessons, created by chess_create_lesson or POST /api/lessons",
 }
 
 

@@ -30,7 +30,8 @@ def test_set_never_toggles_view_only() -> None:
 
 
 def test_moves_are_gated_by_movable_color() -> None:
-    assert "color: interactive ? turn : undefined" in _board_js()
+    """Both colours at the live position : the server judges and says why (#332)."""
+    assert "color: interactive ? 'both' : undefined" in _board_js()
 
 
 def test_bounds_are_cleared_at_each_gesture() -> None:
@@ -61,8 +62,8 @@ def test_refused_move_restores_the_full_server_state() -> None:
     chessground bascule ``turnColor`` dès le lâcher (``baseUserMove``) ;
     remettre la seule FEN rendait les pièces du joueur inertes, et aucun
     coup suivant ne partait. Le retour arrière réapplique l'état serveur
-    complet (FEN, trait, couleur jouable), annule geste et pré-coup, et
-    efface la surbrillance du coup refusé.
+    complet (FEN, trait, couleur jouable, dernier coup de la partie, #337),
+    annule geste et pré-coup ; sans état serveur, efface la surbrillance.
     """
     js = _board_js()
     restore = _function_body(js, "restoreBoard")
@@ -70,7 +71,8 @@ def test_refused_move_restores_the_full_server_state() -> None:
     assert "cg.cancelMove()" in restore
     assert "cg.cancelPremove()" in restore
     assert "lastMove: undefined" in restore
-    assert "cgLast = [fen, turn, interactive];" in js
+    assert "cgLast = [fen, turn, interactive, lastMove];" in js
+    assert "else cg.set({ lastMove: undefined });" in restore
     drop = _function_body(js, "onUserDrop")
     # Les deux chemins d'échec (réponse refusée, erreur réseau) passent par là.
     assert drop.count("restoreBoard();") == 2

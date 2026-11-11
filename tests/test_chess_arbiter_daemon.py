@@ -120,7 +120,7 @@ def test_a_move_after_a_resignation_is_rejected_not_a_crash(
 ) -> None:
     game.resign(by="black")  # #299 : legal on the board, the game is over
     outcome = daemon.process_message(_msg("admin", "Coup 1 : **e4**"))
-    assert outcome.startswith("reject:") and "already ended" in outcome
+    assert outcome.startswith("reject:") and "la partie est terminée" in outcome  # #332 : French
     assert GameState.load(game.metadata.game_id, games_dir=games_dir).board.ply() == 0
 
 
