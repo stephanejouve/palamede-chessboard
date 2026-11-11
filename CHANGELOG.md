@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.27.2](https://github.com/stephanejouve/palamede-chessboard/compare/v0.27.1...v0.27.2) (2026-11-11)
+
+
+### Bug Fixes
+
+* **mcp:** the refusals in French, the viewer's texts, the codes unchanged ([#332](https://github.com/stephanejouve/palamede-chessboard/issues/332)) ([#340](https://github.com/stephanejouve/palamede-chessboard/issues/340)) ([0f04003](https://github.com/stephanejouve/palamede-chessboard/commit/0f04003daeb55455c106e3a0c924167bafe4c4c8))
+* **viewer:** the role and the last move of the game shown, no silent drop, the domain's refusals ([#337](https://github.com/stephanejouve/palamede-chessboard/issues/337), [#332](https://github.com/stephanejouve/palamede-chessboard/issues/332)) ([#343](https://github.com/stephanejouve/palamede-chessboard/issues/343)) ([e8f10e1](https://github.com/stephanejouve/palamede-chessboard/commit/e8f10e1f9ab09e6de1ddd0cfd892f9ac7afc6b22))
+
 ## [0.27.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.27.0...v0.27.1) (2026-11-11)
 
 
