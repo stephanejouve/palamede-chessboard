@@ -55,7 +55,7 @@ from typing import Any
 import chess
 import chess.pgn
 
-from palamede_chessboard import _atomic
+from palamede_chessboard import _atomic, refusals
 from palamede_chessboard import chessboard_clock as clock_module
 from palamede_chessboard.chessboard_clock import (
     ClockState,
@@ -205,7 +205,7 @@ def _clock_to_set(state: GameState, games_dir: Path, *, tablier_ok: bool = False
     if state.metadata.game_id.startswith(TABLIER) and not tablier_ok:
         raise InvalidGameStateError("Partie du Tablier : la pendule ne se coupe pas")
     if state.metadata.result != "*" or state.board.is_game_over():
-        raise InvalidGameStateError("La partie est terminée")
+        raise InvalidGameStateError(refusals.END_GAME_OVER)
     clock = load_clock(state.metadata.game_id, games_dir=games_dir)
     if clock is None:
         raise NoClockError("Cette partie n'a pas de pendule")

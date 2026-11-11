@@ -4,11 +4,13 @@ One operation, the same refusals, whatever the medium (owner, #328) : the
 domain raises these texts, the viewer's HTTP API returns them as ``detail``,
 the MCP tools as ``reason`` next to a stable ``code``. French, French
 notation (R, D, T, F, C), no UCI, no ply, no internal detail : the technical
-reason goes to the log. A program tests the code (``X-Refusal-Code`` header
-on HTTP, ``code`` on MCP), never the text.
+reason goes to the log. A program tests the code, never the text : ``code``
+on every MCP refusal ; on HTTP, the ``X-Refusal-Code`` header is set by the
+viewer's identity refusals only (``MOVE_REFUSALS``, ``viewer/routers/games.py``),
+the other refusals carry their status alone (#342, extension not decided).
 
-``viewer/refusals.py`` carries the same texts for the viewer today ; the
-parity tests of #332 keep the two equal until it imports from here.
+``viewer/refusals.py`` imports these texts (#343) ; the parity tests of #332
+keep the two media equal.
 """
 
 from __future__ import annotations

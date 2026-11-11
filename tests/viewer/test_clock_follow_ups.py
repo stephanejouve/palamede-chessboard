@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 
 from palamede_chessboard import clock_moves
 from palamede_chessboard._mcp_tool_handlers import _moves
-from palamede_chessboard.chessboard_clock import load_clock
+from palamede_chessboard.chessboard_clock import load_clock, save_clock
 from palamede_chessboard.chessboard_state import GameState
 from palamede_chessboard.mcp_chessboard_server import call_tool
 from palamede_chessboard.viewer.routers import games as games_router
@@ -111,11 +111,17 @@ def test_a_viewer_resignation_after_the_flag_fell_is_refused(
     """The flag fell first : the game is lost on time, the resignation comes too late."""
     game_id = _game(client, tokens)
     _move(client, game_id, tokens["stephane"], "e2e4")
+    held = load_clock(game_id, games_dir=games_dir)
+    assert held is not None
+    held.held = True  # Black's bridge never said its board matched (#164) : the hold outlives it
+    save_clock(held, games_dir=games_dir)
     wall.advance(16 * 60)
     r_clock = client.get(f"/api/clock?game_id={game_id}", headers=_auth(tokens["stephane"])).json()[
         "clock"
     ]
     assert r_clock["flag_fall"] == "black"
+    fallen = load_clock(game_id, games_dir=games_dir)
+    assert fallen is not None and fallen.held is False  # _drop_flag releases the hold (#338)
     r = client.post(f"/api/games/{game_id}/resign", headers=_auth(tokens["bot-maia-1100"]))
     assert r.status_code == 409
     state = GameState.load(game_id, games_dir=games_dir)
