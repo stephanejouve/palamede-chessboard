@@ -62,6 +62,9 @@ def test_the_seat_is_read_for_the_new_game_token_or_not() -> None:
     assert end.index("if (gameId() !== game) return;") < end.index(
         "applySeatRole(GAME_END.colors);"
     )
+    # A read that throws (network down, server restarting) : no seat, for this game only.
+    caught = end[end.index("} catch (_) {") :]
+    assert "if (gameId() === game) applySeatRole([]);" in caught
     assert "refreshGameEnd();" in _function_body(_js("_live.js.jinja"), "startEventStream")
 
 

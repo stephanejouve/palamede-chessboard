@@ -47,7 +47,11 @@ async function refreshGameEnd() {
     GAME_END.colors = r.ok ? ((await r.json()).colors || []) : [];
     applySeatRole(GAME_END.colors);
     renderGameEnd();
-  } catch (_) { /* no buttons : the game still shows */ }
+  } catch (_) {
+    // Seat unreadable (network, restart) : no seat either, never the previous
+    // game's role (review Junior #343). No buttons : the game still shows.
+    if (gameId() === game) applySeatRole([]);
+  }
 }
 
 async function endAction(action) {
