@@ -1,0 +1,34 @@
+---
+name: Fonction
+about: Une fonction nouvelle ou un changement de comportement
+title: ""
+labels: []
+---
+
+## Besoin
+
+<!-- Pour qui, dans quelle situation, et la décision du propriétaire si elle existe. -->
+
+## Opération serveur (docs/regles-de-conception.md, règle 1)
+
+<!-- L'opération du domaine, unique, que chaque média déclenche. Ses règles et
+ses refus (texte français et code stable, règle 2). -->
+
+## Médias
+
+<!-- Pour chaque média : sa modalité (outil MCP, bouton, menu, geste au
+plateau), ou « hors champ : <raison> ». -->
+
+- [ ] MCP (agents) :
+- [ ] viewer :
+- [ ] Tablier avec l'échiquier connecté :
+- [ ] Tablier sans échiquier :
+
+## Tests attendus
+
+<!-- Dont le test de parité entre les façades de la même opération. -->
+
+## Lot
+
+<!-- Fonction décidée par le propriétaire : part seule. Sinon : le lot de sa
+zone, sans mélanger serveur, viewer et Tablier (règle 3). -->
