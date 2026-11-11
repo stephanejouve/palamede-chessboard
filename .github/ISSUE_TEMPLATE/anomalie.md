@@ -15,8 +15,9 @@ labels: []
 
 ## Médias (docs/regles-de-conception.md, règle 1)
 
-<!-- Une opération, les mêmes règles et les mêmes refus partout. Cocher chaque
-média vérifié, ou écrire « hors champ : <raison> ». -->
+<!-- Une opération, les mêmes règles et les mêmes refus partout. Pour chaque
+média : coché s'il est couvert, sinon « issue de suite #<n> » ou « hors champ :
+<raison> ». -->
 
 - [ ] MCP (agents) :
 - [ ] viewer :

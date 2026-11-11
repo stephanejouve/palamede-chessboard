@@ -16,8 +16,9 @@ ses refus (texte français et code stable, règle 2). -->
 
 ## Médias
 
-<!-- Pour chaque média : sa modalité (outil MCP, bouton, menu, geste au
-plateau), ou « hors champ : <raison> ». -->
+<!-- Pour chaque média : coché s'il est couvert, avec sa modalité (outil MCP,
+bouton, menu, geste au plateau) ; sinon « issue de suite #<n> » ou « hors
+champ : <raison> ». -->
 
 - [ ] MCP (agents) :
 - [ ] viewer :

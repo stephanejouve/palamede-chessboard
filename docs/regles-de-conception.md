@@ -2,8 +2,6 @@
 
 Ce document rassemble les décisions déjà prises par le propriétaire sur la conception de palamede et sur la façon d'y contribuer. Chaque règle renvoie à l'issue ou à la PR qui l'a posée. Une règle nouvelle entre ici par PR, avec cette référence.
 
-Une règle convenue entre contributeurs, sans décision écrite du propriétaire, est marquée *(pratique d'équipe)*. Elle entre ici avec sa référence et cède devant une décision du propriétaire.
-
 ## 1. Une opération, les mêmes règles sur tous les médias (#328)
 
 Partie, exercice et cours sont des **types de session**. Ce type ne dépend pas de l'interface qui l'a ouverte. Chaque interface a sa modalité :
@@ -21,7 +19,7 @@ En pratique :
 - La règle vit dans le domaine (`chessboard_state.py`, `clock_moves.py`, `coach/`…), jamais dans une façade. Le routeur HTTP du viewer et le handler MCP appellent la même fonction et relaient son résultat. Exemple : `create_lesson`, appelée par `chess_create_lesson` et par `POST /api/lessons` (#329).
 - Une fonction nouvelle dit, pour chaque média, comment elle s'y déclenche, ou pourquoi elle n'y est pas.
 - Un test de parité vérifie que deux façades d'une même opération donnent le même résultat et les mêmes refus, mot pour mot.
-- *(Pratique d'équipe, revue de #342.)* Une PR qui ne couvre qu'une partie des médias le dit, et renvoie à l'issue de suite pour les autres (par exemple #330 pour le serveur et le viewer, #335 pour le Tablier).
+- Une issue ou une PR qui ne couvre qu'un média le dit, et renvoie à ses issues de suite pour les autres (décision du propriétaire du 11/11 ; exemple : #330 pour le serveur et le viewer, #335 pour le Tablier).
 - Une exception propre à un média est une **transition**, pas une règle durable : elle porte la référence de l'issue qui la retire. Ainsi, les parties `tablier.*` gardent le départ de la pendule au premier coup jusqu'à l'étape 1 de #335 (l'entrée de menu).
 - Le préfixe `tablier.` mêle aujourd'hui l'interface d'origine et des règles de jeu. Le découplage est ouvert dans #328 et sa forme n'est pas encore décidée. Ce document ne la fixe pas.
 
@@ -65,4 +63,4 @@ Quand un média n'est pas atteint par les tests, la revue le dit et le sonde. C'
 
 ## 5. Les issues
 
-Les modèles de `.github/ISSUE_TEMPLATE/` demandent, pour une anomalie comme pour une fonction, chaque média : MCP, viewer, l'entrée de menu du Tablier (toujours), et son bouton ou son geste quand c'est pertinent. Chaque case est cochée, ou déclarée hors champ avec la raison (règle 1).
+Les modèles de `.github/ISSUE_TEMPLATE/` demandent, pour une anomalie comme pour une fonction, chaque média : MCP, viewer, l'entrée de menu du Tablier (toujours), et son bouton ou son geste quand c'est pertinent. Pour chaque média, la case dit : couvert, ou l'issue de suite qui le couvrira, ou hors champ avec la raison (règle 1).
