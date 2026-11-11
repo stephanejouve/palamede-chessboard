@@ -81,7 +81,8 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
     ("post", "/api/games/{game_id}/move"): (
         "Jouer un coup",
         "Coup en `san` ou en `uci` (`e7e8q` pour une promotion). Le joueur du jeton doit avoir le "
-        "trait. `by` sert seulement à l'audit.",
+        "trait. `by` sert seulement à l'audit. 409 : partie terminée, pendule non lancée, ou temps "
+        "écoulé (la partie finit alors au temps, le coup n'est pas joué).",
         "parties",
     ),
     ("post", "/api/games/{game_id}/resign"): (

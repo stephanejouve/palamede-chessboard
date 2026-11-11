@@ -121,8 +121,8 @@ class ClockState:
         that took ≤30s of wall-time consumes 0s of clock ; a 45s
         wall-move consumes 15s of clock.
 
-        Sets :attr:`flag_fall` if the mover's clock goes negative ;
-        callers can read it to translate into a result tag. A move made
+        Sets :attr:`flag_fall` if the mover's clock runs out, its time
+        stored at 0, never below (#331) ; callers can read it to translate into a result tag. A move made
         after the flag fell earns **no** increment (CD 57603, #46) : the
         flag is checked before the increment, which must stay that way.
         """
@@ -134,6 +134,7 @@ class ClockState:
         if mover == "white":
             self.white_seconds -= delta
             if self.white_seconds <= 0:
+                self.white_seconds = 0.0  # never below 0 (#331)
                 self.flag_fall = "white"
             else:
                 self.white_seconds += self.increment_seconds
@@ -141,6 +142,7 @@ class ClockState:
         elif mover == "black":
             self.black_seconds -= delta
             if self.black_seconds <= 0:
+                self.black_seconds = 0.0  # never below 0 (#331)
                 self.flag_fall = "black"
             else:
                 self.black_seconds += self.increment_seconds

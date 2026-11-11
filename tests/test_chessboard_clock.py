@@ -96,7 +96,7 @@ class TestClockProgression:
         clock.on_move_played(mover="white", now=2000.0)  # 1000s elapsed > 300
         assert clock.flag_fall == "white"
         # #46 (CD 57603) : no Fischer increment once the flag has fallen.
-        assert clock.white_seconds == 303 - 1000
+        assert clock.white_seconds == 0.0  # never below 0 (#331), no increment either
 
     def test_flag_fall_on_black(self) -> None:
         clock = self._clock()

@@ -323,7 +323,7 @@
           "parties"
         ],
         "summary": "Jouer un coup",
-        "description": "Coup en `san` ou en `uci` (`e7e8q` pour une promotion). Le joueur du jeton doit avoir le trait. `by` sert seulement à l'audit.",
+        "description": "Coup en `san` ou en `uci` (`e7e8q` pour une promotion). Le joueur du jeton doit avoir le trait. `by` sert seulement à l'audit. 409 : partie terminée, pendule non lancée, ou temps écoulé (la partie finit alors au temps, le coup n'est pas joué).",
         "operationId": "game_move_api_games__game_id__move_post",
         "parameters": [
           {

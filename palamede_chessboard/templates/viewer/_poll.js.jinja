@@ -36,19 +36,34 @@ async function pollPositions() {
     POS = data.positions;
     lastResult = data.result || '*';
     if (ended && game.startsWith('exo.')) rereadCoach(game);
-    const h = data.headers || {};
-    document.getElementById('hdr-meta').innerHTML =
-      '<strong>' + (h.White || '?') + '</strong> vs <strong>' + (h.Black || '?') + '</strong>'
-      + (h.Result && h.Result !== '*' ? ' · <span style="color:var(--accent);font-weight:600;">' + h.Result + '</span>' : '')
-      + (h.ECO ? ' · ' + h.ECO : '')
-      + (h.Date ? ' · ' + h.Date : '');
-    document.title = (h.White || '?') + ' vs ' + (h.Black || '?');
+    renderHeaders(data.headers || {});
     if (wasAtEnd && !userPinned) idx = POS.length - 1;
-    if (POS.length !== oldLen) { draw(); list(); upd(); pollEngine(); }
+    // A game ended without a move (on time at 0:00, #331) : no new position,
+    // but the side to move gives way to the end.
+    if (POS.length !== oldLen || ended) { draw(); list(); upd(); pollEngine(); }
     setOnline();
   } catch (e) {
     setOffline(e.message);
   }
+}
+
+// The end's reason next to the result, when the result alone does not say it (#331).
+const END_REASONS = { 'time forfeit': 'au temps' };
+
+function endReason(termination) {
+  const reason = END_REASONS[termination];
+  return reason ? ' ' + reason : '';
+}
+
+// The players, the result and its reason, the opening, the date ; out of
+// pollPositions, already past its branch budget (#319).
+function renderHeaders(h) {
+  document.getElementById('hdr-meta').innerHTML =
+    '<strong>' + (h.White || '?') + '</strong> vs <strong>' + (h.Black || '?') + '</strong>'
+    + (h.Result && h.Result !== '*' ? ' · <span style="color:var(--accent);font-weight:600;">' + h.Result + endReason(h.Termination) + '</span>' : '')
+    + (h.ECO ? ' · ' + h.ECO : '')
+    + (h.Date ? ' · ' + h.Date : '');
+  document.title = (h.White || '?') + ' vs ' + (h.Black || '?');
 }
 
 async function pollClock() {

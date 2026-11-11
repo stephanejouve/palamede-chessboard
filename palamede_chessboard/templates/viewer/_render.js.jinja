@@ -58,7 +58,9 @@ function upd() {
   // a game that starts with Black to move.
   const t = fenTurn(POS[idx] && POS[idx].fen);
   const next = t === 'w' ? 'blancs' : (t === 'b' ? 'noirs' : '');
-  document.getElementById('trait').textContent = next ? 'Trait aux ' + next : '';
+  // The last position of a finished game has nobody to move (#331).
+  const over = lastResult !== '*' && idx === POS.length - 1;
+  document.getElementById('trait').textContent = over ? 'Partie terminée' : (next ? 'Trait aux ' + next : '');
   renderComments();
   renderCaptures(POS[idx] && POS[idx].fen);
 }
