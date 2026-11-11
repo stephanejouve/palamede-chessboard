@@ -200,3 +200,23 @@ async def test_a_game_already_over_keeps_its_clock(games_dir: Path, wall: list[f
     assert body["status"] == "error" and LOST not in body["reason"]
     clock = load_clock(GAME, games_dir=games_dir)
     assert (clock.flag_fall, clock.active) == (None, "white")
+
+
+@pytest.mark.asyncio
+async def test_the_pgn_ends_before_the_clock_is_written(
+    games_dir: Path, wall: list[float], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review Admin #338 : a stop between the two writes leaves a game over
+    with a running clock (shown stopped, #287), never a flag on a live game."""
+    from palamede_chessboard import clock_moves
+
+    await _started_game(games_dir, wall)
+    wall[0] += 60
+
+    def stop(*_args, **_kwargs) -> None:
+        raise RuntimeError("stopped between the two writes")
+
+    monkeypatch.setattr(clock_moves, "save_clock", stop)
+    await call_tool("chess_play_move", {"game_id": GAME, "move_san": "Nf3"})
+    assert GameState.load(GAME, games_dir=games_dir).metadata.result == "0-1"
+    assert load_clock(GAME, games_dir=games_dir).flag_fall is None

@@ -326,13 +326,18 @@ def _out_of_time(clock: ClockState) -> bool:
 
 
 def _drop_flag(state: GameState, clock: ClockState, games_dir: Path) -> None:
-    """The side to move's flag falls : its time at 0, the game ends on time."""
+    """The side to move's flag falls : its time at 0, the game ends on time.
+
+    The PGN first, then the clock (review Admin #338) : a stop in between
+    leaves a game over whose clock still runs, which :func:`_stopped_if_over`
+    shows stopped, never a fallen flag on a game still ``*``.
+    """
     clock.flag_fall = clock.active
     setattr(clock, f"{clock.active}_seconds", 0.0)
     clock.active = None  # game over : the clock stops
     clock.held = False
-    save_clock(clock, games_dir=games_dir)
     _end_on_time(state, clock)
+    save_clock(clock, games_dir=games_dir)
 
 
 def _settle_flag_locked(game_id: str, games_dir: Path, headers: Any) -> ClockState | None:
