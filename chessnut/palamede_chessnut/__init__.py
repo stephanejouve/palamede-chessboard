@@ -17,4 +17,4 @@ community documented for the Air. This package installs on its own
 is imported only when the board is reached.
 """
 
-__version__ = "0.5.2"  # x-release-please-version
+__version__ = "0.6.0"  # x-release-please-version
