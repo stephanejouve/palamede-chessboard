@@ -10,14 +10,16 @@ Chessnut board, the mouse, the Maia bot) : two copies would drift apart
   played, like a club clock — the move costs nothing and the other side's
   time starts running. The agents' games (matchmaking, rated) keep the
   arbiter's ``chess_clock_start`` (review Leader #136).
-* **The reply waits for the clock**, other games (owner, 10/11, #316) : the
-  first move may be played with the clock not started, the reply is
-  refused until a player starts it (:func:`start_clock`, the click on the
-  viewer's clock, or ``chess_clock_start``). Unless a player switched it
-  off before the first move (:func:`switch_clock_off`) : the game is then
-  played without it, and ``off_by`` tells the opponent who decided it.
-  Neither applies to ``tablier.*`` games, whose clock starts on the first
-  move (review Junior and Admin #317).
+* **No move before the clock**, other games (FIDE 6.6 and 6.2.1, owner,
+  11/11, #330, replacing the « reply waits » of #316) : with a clock not
+  started, every move is refused, 1.e4 included, until a participant starts
+  it (:func:`start_clock` : the viewer's « Lancer la pendule » key or
+  ``chess_clock_start``, the arbiter's gesture, whatever the side). Unless a
+  player switched it off before the first move (:func:`switch_clock_off`) :
+  the game is then played without it, and ``off_by`` tells the opponent who
+  decided it. ``tablier.*`` games keep the start on the first move as a
+  **transition** until the Tablier has its own way to start it (#335) ; a
+  start from the viewer or ``chess_clock_start`` is accepted there too.
 * **Fischer** afterwards : :meth:`ClockState.on_move_played`, the flag
   checked before the increment (#46).
 * **Flag fall at reading time**, Tablier games only : :func:`settle_flag`
@@ -148,31 +150,37 @@ def clock_after_move(state: GameState, mover: str, games_dir: Path) -> ClockStat
     return clock
 
 
-def check_reply_allowed(state: GameState, games_dir: Path) -> None:
-    """The move about to be played on ``state`` may be (#316), under the game lock.
+#: The refusal of a move played before the clock is started (#330), the same
+#: for every medium : the viewer, the MCP, the Tablier.
+CLOCK_NOT_STARTED = "Pendule non lancée : lancez la pendule des Blancs pour commencer"
 
-    :class:`InvalidGameStateError` when a move was already played and the
-    clock is neither started nor switched off. ``tablier.*`` games start it
-    on the first move : never refused.
+
+def check_move_allowed(state: GameState, games_dir: Path) -> None:
+    """The move about to be played on ``state`` may be (FIDE 6.6, #330), under the game lock.
+
+    :class:`InvalidGameStateError` when the game has a clock neither started
+    nor switched off, first move included. ``tablier.*`` games start it on
+    the first move, until #335 : never refused.
     """
-    if not state.san_history or state.metadata.game_id.startswith(TABLIER):
+    if state.metadata.game_id.startswith(TABLIER):
         return
     clock = load_clock(state.metadata.game_id, games_dir=games_dir)
     if clock is not None and not clock.started and clock.off_by is None:
-        raise InvalidGameStateError("Pendule non démarrée : un joueur la lance avant la réponse")
+        raise InvalidGameStateError(CLOCK_NOT_STARTED)
 
 
 class NoClockError(InvalidGameStateError):
     """The game has no clock (``TimeControl`` unrated) : nothing to start or switch off."""
 
 
-def _clock_to_set(state: GameState, games_dir: Path) -> ClockState:
+def _clock_to_set(state: GameState, games_dir: Path, *, tablier_ok: bool = False) -> ClockState:
     """The clock of a live game, for a start or a switch-off (#316).
 
-    Not for a ``tablier.*`` game : its first move starts it (owner, 29/10).
+    A ``tablier.*`` game may be started from another medium (#330), never
+    switched off : its first move starts it until #335.
     """
-    if state.metadata.game_id.startswith(TABLIER):
-        raise InvalidGameStateError("Partie du Tablier : la pendule part au premier coup")
+    if state.metadata.game_id.startswith(TABLIER) and not tablier_ok:
+        raise InvalidGameStateError("Partie du Tablier : la pendule ne se coupe pas")
     if state.metadata.result != "*" or state.board.is_game_over():
         raise InvalidGameStateError("La partie est terminée")
     clock = load_clock(state.metadata.game_id, games_dir=games_dir)
@@ -182,14 +190,18 @@ def _clock_to_set(state: GameState, games_dir: Path) -> ClockState:
 
 
 def start_clock(game_id: str, games_dir: Path) -> ClockState:
-    """Start the clock of a live game, against the side to move (#316).
+    """Start the clock of a live game : the arbiter's gesture (FIDE 6.2.1, #330).
 
+    Any participant may do it, whatever their side. Before the first move,
+    the side to move is White (Black only from a ``starting_fen``) ; a game
+    played before #330 with moves and no clock starts its side to move.
+    ``tablier.*`` games too, from the viewer or ``chess_clock_start``.
     Already started : left as it is, a second click restarts nothing.
     Switched off : :class:`InvalidGameStateError`, the game goes on without.
     """
     with game_lock(game_id, games_dir):
         state = GameState.load(game_id, games_dir=games_dir)
-        clock = _clock_to_set(state, games_dir)
+        clock = _clock_to_set(state, games_dir, tablier_ok=True)
         if clock.started:
             return clock
         if clock.off_by is not None:

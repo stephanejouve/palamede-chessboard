@@ -14,7 +14,7 @@ from palamede_chessboard.chessboard_state import (
 )
 from palamede_chessboard.clock_moves import (
     NoClockError,
-    check_reply_allowed,
+    check_move_allowed,
     clock_after_move,
     game_lock,
     settle_flag,
@@ -29,7 +29,7 @@ async def _handle_chess_play_move(arguments: dict, games_dir: Path) -> dict:
         # The mover is whoever was *to move* before play_move pushed
         # the SAN — capture it before the board flips.
         mover = "white" if state.board.turn else "black"
-        check_reply_allowed(state, games_dir)  # the reply waits for the clock (#316)
+        check_move_allowed(state, games_dir)  # no move before the clock (FIDE 6.6, #330)
         move_result = state.play_move(
             arguments["move_san"],
             by=arguments.get("by"),
@@ -105,7 +105,8 @@ async def _handle_chess_clock_state(arguments: dict, games_dir: Path) -> dict:
 
 
 async def _handle_chess_clock_start(arguments: dict, games_dir: Path) -> dict:
-    # Under the game lock, against the side to move ; started already : unchanged (#316).
+    # Under the game lock, against the side to move, White before the first move ;
+    # any participant ; tablier.* too ; started already : unchanged (#330).
     try:
         clock = start_clock(arguments["game_id"], games_dir)
     except NoClockError:
