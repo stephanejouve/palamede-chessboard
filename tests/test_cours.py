@@ -202,3 +202,11 @@ async def test_mcp_keeps_the_arbiter_gate_of_chess_create_game(games_dir: Path) 
     assert body["status"] == "error"
     assert "Arbiter required" in body["reason"]
     assert not list(games_dir.glob("cours.*.pgn"))
+
+
+def test_http_seat_is_compared_on_normalised_names(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    """« Stephane » in the body is the token's « stephane » (review Junior #329)."""
+    r = _http(client, tokens["stephane"], theme="italienne", white="Stephane", black="cd")
+    assert r.status_code == 201, r.text
