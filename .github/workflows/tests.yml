@@ -75,10 +75,25 @@ jobs:
       # Stockfish via apt — teste l'intégration python-chess ↔ UCI
       # réelle plutôt que de mocker partout. Détecte régressions UCI
       # silencieuses qu'un mock laisserait passer.
+      # Repli seulement si apt échoue (11/11, #329) : le miroir Ubuntu
+      # d'Azure ne se résolvait plus sur les runners, et archive.ubuntu.com
+      # comme security.ubuntu.com, déjà dans apt-mirrors.txt, échouaient
+      # aussi (exit 100, trois tentatives). On prend alors le binaire
+      # officiel Stockfish 16, la version du paquet noble, vérifié par
+      # sha256. Stockfish reste réellement installé et testé.
       - name: Install stockfish (engine)
+        env:
+          SF_URL: https://github.com/official-stockfish/Stockfish/releases/download/sf_16/stockfish-ubuntu-x86-64-modern.tar
+          SF_SHA256: dc94bdfbc0097a7606d3ed13b855cb03ee99184301b6fc8f8d85c68c4726bf8a
         run: |
-          sudo apt-get update
-          sudo apt-get install -y stockfish
+          if ! { sudo apt-get update && sudo apt-get install -y stockfish; }; then
+            echo "::warning::apt n'a pas installé stockfish : repli sur le binaire officiel sf_16"
+            curl -fsSL --retry 3 -o "$RUNNER_TEMP/sf.tar" "$SF_URL"
+            echo "$SF_SHA256  $RUNNER_TEMP/sf.tar" | sha256sum -c -
+            tar -xf "$RUNNER_TEMP/sf.tar" -C "$RUNNER_TEMP"
+            sudo install -m 755 "$RUNNER_TEMP/stockfish/stockfish-ubuntu-x86-64-modern" /usr/local/bin/stockfish
+          fi
+          command -v stockfish
           stockfish --help 2>&1 | head -3 || true
 
       - name: Install poetry
