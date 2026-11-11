@@ -1,0 +1,34 @@
+---
+name: Anomalie
+about: Un comportement observé qui ne correspond pas à ce qui est attendu
+title: ""
+labels: []
+---
+
+## Observé
+
+<!-- Ce qui se passe : version (0.x.y), partie ou session, média, étapes. -->
+
+## Attendu
+
+<!-- Ce qui devrait se passer, et la règle ou la décision qui le dit. -->
+
+## Médias (docs/regles-de-conception.md, règle 1)
+
+<!-- Une opération, les mêmes règles et les mêmes refus partout. Pour chaque
+média : coché s'il est couvert, sinon « issue de suite #<n> » ou « hors champ :
+<raison> ». -->
+
+- [ ] MCP (agents) :
+- [ ] viewer :
+- [ ] Tablier, entrée de menu (toujours) :
+- [ ] Tablier, bouton de fenêtre ou geste au plateau (si pertinent) :
+
+## Refus concernés (règle 2)
+
+<!-- Si un refus est en cause : le texte lu, le code (X-Refusal-Code ou code
+MCP), et le texte attendu. Sinon : « aucun ». -->
+
+## Lot
+
+<!-- Anomalie ou urgence : part seule. Sinon : le lot de sa zone (règle 3). -->
