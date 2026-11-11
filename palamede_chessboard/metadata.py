@@ -122,6 +122,10 @@ class GameMetadata:
     #: Stéphane arbitrage 2026-10-03 : the Elo perimeter is driven by this
     #: dedicated marker, not by the ``Site`` header.
     rated: bool = True
+    #: Kind of session (#323, #328) : ``"cours"`` for a lesson, written ``Mode``.
+    #: A description only : the rules read the id's prefix. ``None`` for the
+    #: games created before, which carry no ``Mode``.
+    mode: str | None = None
 
     def to_pgn_headers(self) -> dict[str, str]:
         """Return the subset of fields that map onto PGN ``[Tag "value"]`` headers."""
@@ -169,6 +173,8 @@ class GameMetadata:
             # through our writer path stays excluded without a dedicated
             # ``rated=False`` opt-out call.
             headers["Rated"] = "true"
+        if self.mode:
+            headers["Mode"] = self.mode
         return headers
 
     def pgn_headers_to_write(self) -> dict[str, str]:

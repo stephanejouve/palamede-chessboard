@@ -34,6 +34,7 @@ from palamede_chessboard.viewer.routers import (
     build_coach_router,
     build_elo_router,
     build_games_router,
+    build_lessons_router,
     build_players_router,
     build_positions_router,
     build_realtime_router,
@@ -166,6 +167,7 @@ def build_app() -> FastAPI:
     app.include_router(build_elo_router())
     app.include_router(build_players_router())
     app.include_router(build_coach_router())
+    app.include_router(build_lessons_router())
     return app
 
 

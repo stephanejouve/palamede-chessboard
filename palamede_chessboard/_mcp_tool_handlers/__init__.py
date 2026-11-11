@@ -26,6 +26,7 @@ from palamede_chessboard._mcp_tool_handlers._analysis import (
 )
 from palamede_chessboard._mcp_tool_handlers._games import (
     _handle_chess_create_game,
+    _handle_chess_create_lesson,
     _handle_chess_get_elo,
     _handle_chess_list_games,
     _handle_chess_view_state,
@@ -53,6 +54,7 @@ __all__ = ["TOOL_HANDLERS", "_resolve_analyze_fen"]
 
 TOOL_HANDLERS: dict[str, Callable[[dict, Path], Awaitable[dict]]] = {
     "chess_create_game": _handle_chess_create_game,
+    "chess_create_lesson": _handle_chess_create_lesson,
     "chess_view_state": _handle_chess_view_state,
     "chess_list_games": _handle_chess_list_games,
     "chess_get_elo": _handle_chess_get_elo,

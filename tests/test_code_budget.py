@@ -66,6 +66,7 @@ def test_tool_order_is_unchanged() -> None:
     """The split of ``_mcp_tool_schemas`` (#46) keeps the historical order."""
     assert [t.name for t in TOOL_SCHEMAS] == [
         "chess_create_game",
+        "chess_create_lesson",
         "chess_view_state",
         "chess_list_games",
         "chess_get_elo",

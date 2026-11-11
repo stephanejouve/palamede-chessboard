@@ -153,6 +153,7 @@ def metadata_from_headers(
         # Rated header stays rated=False after a round-trip, so loading
         # then saving it will NOT suddenly stamp it as rated.
         rated=rated_raw == "true",
+        mode=headers.get("Mode") or None,
     )
 
 
