@@ -2232,6 +2232,83 @@
         ]
       }
     },
+    "/api/lessons": {
+      "post": {
+        "tags": [
+          "cours"
+        ],
+        "summary": "Ouvrir un cours",
+        "operationId": "lesson_create_api_lessons_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LessonPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedLesson"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Cours entre deux joueurs du registre (#323) : identifiant donné par le serveur, `cours.<thème>.<blancs>-<noirs>.<AAAAMMJJ>-<NN>`, en-tête `[Mode \"cours\"]`, sans pendule, non classé. La même opération que l'outil MCP `chess_create_lesson`, avec les mêmes refus (422). Le joueur du jeton doit être l'un des deux (403 sinon).",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
     "/api/games/{game_id}/clock/start": {
       "post": {
         "tags": [
@@ -2502,6 +2579,31 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "LessonPayload": {
+        "properties": {
+          "theme": {
+            "type": "string",
+            "title": "Theme"
+          },
+          "white": {
+            "type": "string",
+            "title": "White"
+          },
+          "black": {
+            "type": "string",
+            "title": "Black"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "theme",
+          "white",
+          "black"
+        ],
+        "title": "LessonPayload",
+        "description": "Body of ``POST /api/lessons`` ; any other field is refused (422)."
       },
       "MovePayload": {
         "properties": {
@@ -3340,6 +3442,30 @@
           "state",
           "clock"
         ]
+      },
+      "CreatedLesson": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "game_id": {
+            "type": "string",
+            "description": "cours.<thème>.<blancs>-<noirs>.<AAAAMMJJ>-<NN>"
+          },
+          "state": {
+            "type": "object",
+            "description": "état de la partie (GameState.to_state_dict)"
+          }
+        },
+        "required": [
+          "status",
+          "game_id",
+          "state"
+        ]
       }
     },
     "securitySchemes": {
@@ -3360,6 +3486,9 @@
   "tags": [
     {
       "name": "parties"
+    },
+    {
+      "name": "cours"
     },
     {
       "name": "Tablier"

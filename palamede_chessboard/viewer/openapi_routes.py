@@ -23,11 +23,12 @@ DESCRIPTION = (
     "une API REST, et les fichiers statiques (`/assets`, `/vendor`, favicon)."
 )
 
-TAGS = ["parties", "Tablier", "coach", "joueurs", "analyse", "rendu", "viewer"]
+TAGS = ["parties", "cours", "Tablier", "coach", "joueurs", "analyse", "rendu", "viewer"]
 
 TOKEN_ROUTES = {
     ("post", "/api/commentary"),
     ("post", "/api/games"),
+    ("post", "/api/lessons"),
     ("post", "/api/games/{game_id}/move"),
     ("post", "/api/games/{game_id}/resign"),
     ("post", "/api/games/{game_id}/draw/offer"),
@@ -67,6 +68,14 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
         "Partie non classée ouverte par le joueur du jeton, contre un agent ou un bot (`bot-*`, "
         "pour un créateur humain seulement). 5 parties en cours au plus par créateur (429 au-delà).",
         "parties",
+    ),
+    ("post", "/api/lessons"): (
+        "Ouvrir un cours",
+        "Cours entre deux joueurs du registre (#323) : identifiant donné par le serveur, "
+        '`cours.<thème>.<blancs>-<noirs>.<AAAAMMJJ>-<NN>`, en-tête `[Mode "cours"]`, sans '
+        "pendule, non classé. La même opération que l'outil MCP `chess_create_lesson`, avec les "
+        "mêmes refus (422). Le joueur du jeton doit être l'un des deux (403 sinon).",
+        "cours",
     ),
     ("get", "/api/raw"): ("PGN brut", "Le PGN complet de la partie.", "parties"),
     ("post", "/api/games/{game_id}/move"): (
@@ -208,6 +217,7 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
 OK_SCHEMAS = {
     ("get", "/api/games"): "GamesList",
     ("post", "/api/games"): "CreatedGame",
+    ("post", "/api/lessons"): "CreatedLesson",
     ("get", "/api/clock"): "ClockResponse",
     ("get", "/api/positions"): "PositionsResponse",
     ("get", "/api/coach/exercises"): "ExercisesResponse",
@@ -240,6 +250,7 @@ ERRORS = {
 #: Error codes read in the handlers, on top of 401/403/503 for the token routes.
 EXTRA_ERRORS = {
     ("post", "/api/games"): ["400", "422", "429"],
+    ("post", "/api/lessons"): ["422"],
     ("post", "/api/games/{game_id}/move"): ["400", "404", "409", "422"],
     ("post", "/api/games/{game_id}/resign"): ["404", "409"],
     ("post", "/api/games/{game_id}/draw/offer"): ["404", "409"],

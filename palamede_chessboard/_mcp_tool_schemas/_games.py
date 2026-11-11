@@ -83,6 +83,29 @@ SCHEMAS: list[Tool] = [
         },
     ),
     Tool(
+        name="chess_create_lesson",
+        description=(
+            "Open a lesson (#323) between two registered players : the server "
+            "gives the id ``cours.<theme>.<white>-<black>.<YYYYMMDD>-<NN>``, "
+            'writes ``[Mode "cours"]``, no clock, unrated. The same operation '
+            "as ``POST /api/lessons`` (viewer, Tablier), with the same refusals. "
+            "Requires an arbiter, like ``chess_create_game``."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "theme": {
+                    "type": "string",
+                    "description": "Opening or motif, a-z, 0-9 and dashes, 24 max (``italienne``)",
+                },
+                "white": {"type": "string"},
+                "black": {"type": "string"},
+                "arbiter": {"type": "string"},
+            },
+            "required": ["theme", "white", "black"],
+        },
+    ),
+    Tool(
         name="chess_view_state",
         description="Read-only snapshot of a game (metadata, FEN, ply, history, result).",
         inputSchema={

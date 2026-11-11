@@ -263,4 +263,18 @@ SCHEMAS: dict[str, dict] = {
         },
         ["status", "game_id", "color", "state", "clock"],
     ),
+    "CreatedLesson": _obj(
+        {
+            "status": {"type": "string", "enum": ["ok"]},
+            "game_id": {
+                "type": "string",
+                "description": "cours.<thème>.<blancs>-<noirs>.<AAAAMMJJ>-<NN>",
+            },
+            "state": {
+                "type": "object",
+                "description": "état de la partie (GameState.to_state_dict)",
+            },
+        },
+        ["status", "game_id", "state"],
+    ),
 }
