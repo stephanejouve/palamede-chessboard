@@ -21,6 +21,7 @@ This module exposes two helpers :
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TypedDict
 
@@ -134,23 +135,29 @@ def validate_san_strict(board: chess.Board, san: str) -> ValidationResult:
     return ValidationResult(True)
 
 
-_SAN_NOISE = str.maketrans("", "", "x+#")
+#: A piece move in SAN : the piece, an optional departure (file, rank or both),
+#: an optional ``x``, the target square, an optional ``+`` / ``#``.
+_PIECE_SAN = re.compile(r"^([KQRBN])[a-h]?[1-8]?x?([a-h][1-8])[+#]?$")
 
 
 def _candidates(board: chess.Board, san: str) -> str:
     """The disambiguated SANs an ambiguous ``san`` could mean (``Nbd2, Nfd2``).
 
-    A legal move is a candidate when its canonical SAN, stripped of its
-    file or rank of departure and of ``x`` ``+`` ``#``, reads as ``san``.
+    Every legal move of the same piece to the same target square, written the
+    board's canonical way. The departure the player wrote so far is ignored :
+    ``Nbd2`` with knights on b1 and b3 is still ambiguous, and its candidates
+    are ``N1d2`` and ``N3d2`` (reviews Leader and Admin #340).
     """
-    wanted = san.translate(_SAN_NOISE)
-    found = []
-    for move in board.legal_moves:
-        canonical = board.san(move)
-        bare = canonical.translate(_SAN_NOISE)
-        if bare[:1].isupper() and len(bare) > 3 and bare[:1] + bare[-2:] == wanted:
-            found.append(canonical)
-    return ", ".join(found)
+    match = _PIECE_SAN.match(san)
+    if match is None:
+        return ""
+    piece_type = chess.PIECE_SYMBOLS.index(match[1].lower())
+    target = chess.parse_square(match[2])
+    return ", ".join(
+        board.san(move)
+        for move in board.legal_moves
+        if move.to_square == target and board.piece_type_at(move.from_square) == piece_type
+    )
 
 
 def move_request_context(board: chess.Board, last_n: int = 6) -> MoveRequestContext:

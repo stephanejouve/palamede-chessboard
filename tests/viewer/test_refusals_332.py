@@ -10,10 +10,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import chess
 import pytest
 from fastapi.testclient import TestClient
 
-from palamede_chessboard import refusals
+from palamede_chessboard import chess_arbiter, refusals
 from palamede_chessboard.chessboard_state import GameMetadata, GameState, TimeControl
 from palamede_chessboard.mcp_chessboard_server import call_tool
 from palamede_chessboard.players import registry
@@ -236,6 +237,10 @@ async def test_chess_seat_refuses_with_the_viewers_text(
 # --- a legal move written wrong is not « impossible » (review Leader #340, point 9.b) ----------
 
 TWO_KNIGHTS_TO_D2 = "rnbqkbnr/pppppppp/8/8/8/5N2/PPP1PPPP/RNBQKB1R w KQkq - 0 1"
+#: Knights on b1 and b3, d2 free : « Nbd2 » is written half way and still ambiguous
+#: (reviews Leader 5866169442 and Admin 5866179128 on #340).
+KNIGHTS_B1_B3_TO_D2 = "rnbqkbnr/pppppppp/8/8/3P4/1N6/PPP1PPPP/RNBQKB1R w KQkq - 0 1"
+_ENGLISH_LETTERS = str.maketrans("RDTFC", "KQRBN")
 
 
 @pytest.mark.asyncio
@@ -259,6 +264,12 @@ TWO_KNIGHTS_TO_D2 = "rnbqkbnr/pppppppp/8/8/8/5N2/PPP1PPPP/RNBQKB1R w KQkq - 0 1"
             TWO_KNIGHTS_TO_D2,
             "Nd2",
             "Coup refusé : Cd2 est ambigu : précisez la case de départ (Cfd2, Cbd2).",
+        ),
+        (
+            [],
+            KNIGHTS_B1_B3_TO_D2,
+            "Nbd2",
+            "Coup refusé : Cbd2 est ambigu : précisez la case de départ (C3d2, C1d2).",
         ),
         ([], None, "Rf1", "Coup refusé : Tf1 n'est pas possible dans cette position."),
     ],
@@ -298,3 +309,28 @@ def test_the_corrected_san_is_then_accepted(games_dir: Path) -> None:
     assert fix == "Cxe5"
     state.play_move(fix.replace("C", "N"))  # the English SAN of the French text
     assert state.san_history[-1] == "Nxe5"
+
+
+@pytest.mark.parametrize(
+    ("fen", "san"), [(TWO_KNIGHTS_TO_D2, "Nd2"), (KNIGHTS_B1_B3_TO_D2, "Nbd2")]
+)
+def test_every_candidate_of_an_ambiguous_san_is_then_accepted(fen: str, san: str) -> None:
+    """The candidates in the text are moves the strict arbiter takes as written."""
+    board = chess.Board(fen)
+    strict = chess_arbiter.validate_san_strict(board, san)
+    assert (strict.ok, strict.kind) == (False, "ambiguous")
+    text = refusals.move_refused(strict.kind, san, strict.suggestion)
+    candidates = text[text.index("(") + 1 : text.index(")")].split(", ")
+    assert len(candidates) == 2
+    for candidate in candidates:
+        assert chess_arbiter.validate_san_strict(board, candidate.translate(_ENGLISH_LETTERS)).ok
+
+
+@pytest.mark.parametrize("kind", sorted(refusals.NOTATION))
+def test_a_notation_refusal_without_suggestion_never_says_impossible(kind: str) -> None:
+    """The safety net : the move is legal, so the text names the fault and stops there."""
+    text = refusals.move_refused(kind, "Nbd2", "")
+    assert text.startswith("Coup refusé : Cbd2 ") and text.endswith(".")
+    assert "n'est pas possible" not in text and "(" not in text and "écrivez" not in text
+    if kind == "ambiguous":
+        assert text == "Coup refusé : Cbd2 est ambigu : précisez la case de départ."
