@@ -30,13 +30,14 @@ function hideMoveError() {
 // it moved the piece, set lastMove and flipped turnColor (board.ts,
 // baseUserMove). Restoring the FEN alone left turnColor on the other side,
 // so every later move of the player's pieces was refused client-side and no
-// POST went out (#67). Re-apply the full last server state instead.
+// POST went out (#67). Re-apply the full last server state instead, its last
+// move highlighted again (#337).
 function restoreBoard() {
   if (!cg) return;
   cg.cancelMove();
   cg.cancelPremove();
   if (cgLast) window.__cgSetFen(...cgLast);
-  cg.set({ lastMove: undefined });
+  else cg.set({ lastMove: undefined });
 }
 
 async function onUserDrop(from, to) {
@@ -81,23 +82,29 @@ async function onUserDrop(from, to) {
 // Public setter used by the classical polling loop's draw() function.
 // ``turn`` may be null; otherwise 'white'|'black'.
 // ``interactive`` toggles drag&drop (true at live position, false in history).
+// ``lastMove`` : the squares of the move that led to ``fen``, from the server
+// (#337) ; a new game starts without one.
 // Drag&drop is gated by ``movable.color`` only, never by ``viewOnly`` :
 // chessground binds its mouse listeners once, at creation, and only when
 // ``viewOnly`` is false ; ``cg.set()`` cannot change ``viewOnly``.
-window.__cgSetFen = function(fen, turn, interactive) {
+// Both colours at the live position, game over included : the server judges
+// every drop and says why it refuses (#332, game over, not your turn,
+// illegal). Locked locally, the piece came back without a word.
+window.__cgSetFen = function(fen, turn, interactive, lastMove) {
   if (!cg) return;
   if (!fen) {
     cgLast = null;
-    cg.set({ fen: 'start', movable: { color: undefined, free: false } });
+    cg.set({ fen: 'start', lastMove: undefined, movable: { color: undefined, free: false } });
     return;
   }
-  cgLast = [fen, turn, interactive];
+  cgLast = [fen, turn, interactive, lastMove];
   cg.set({
     fen,
+    lastMove: lastMove || undefined,
     turnColor: turn || undefined,
     movable: {
       free: true,  // server validates via POST /move ; client is permissive
-      color: interactive ? turn : undefined,
+      color: interactive ? 'both' : undefined,
       showDests: false,
       events: { after: onUserDrop },
     },

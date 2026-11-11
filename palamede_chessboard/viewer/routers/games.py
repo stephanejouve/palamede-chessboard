@@ -355,8 +355,8 @@ def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> di
             move_result = _play(state, who, san_to_play, gdir)
         except IllegalMoveError as exc:
             log.info("viewer move %s refused on %s : %s", san_to_play, game_id, exc)
-            detail = refusals.not_possible(refusals.french_san(san_to_play))
-            raise HTTPException(422, detail) from exc
+            # The domain's text (#340) : a legal move written wrong names its notation.
+            raise HTTPException(422, str(exc)) from exc
         except FlagFellError as exc:  # too late : the game has just ended on time (#331)
             raise HTTPException(409, str(exc)) from exc
         except InvalidGameStateError as exc:  # the game is over (#299), the clock (#330)
@@ -391,13 +391,8 @@ def _play(state: GameState, who: str, san: str, gdir) -> dict:
         raise HTTPException(503, "Exercices illisibles : coup refusé") from exc
 
 
-#: Refusal code → (HTTP status, message shown in the viewer).
-_MOVE_REFUSALS = {
-    "UNAUTHENTICATED": (401, "Jeton de joueur requis ou invalide (bouton 🔑)"),
-    "NOT_YOUR_TURN": (403, "Ce n'est pas votre trait"),
-    "NOT_A_PLAYER": (403, "Vous ne jouez pas dans cette partie"),
-    "REGISTRY_UNREADABLE": (503, "Registre des joueurs illisible : coup refusé"),
-}
+#: Refusal code → (HTTP status, message shown in the viewer), the domain's (#332).
+_MOVE_REFUSALS = refusals.MOVE_REFUSALS
 
 
 def _authorized_mover(
