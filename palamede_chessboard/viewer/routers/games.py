@@ -32,6 +32,7 @@ from palamede_chessboard.chessboard_state import (
     list_games,
 )
 from palamede_chessboard.clock_moves import (
+    FlagFellError,
     check_game,
     check_move_allowed,
     clock_after_move,
@@ -356,6 +357,8 @@ def play_from_viewer(game_id: str, payload: MovePayload, request: Request) -> di
             log.info("viewer move %s refused on %s : %s", san_to_play, game_id, exc)
             detail = refusals.not_possible(refusals.french_san(san_to_play))
             raise HTTPException(422, detail) from exc
+        except FlagFellError as exc:  # too late : the game has just ended on time (#331)
+            raise HTTPException(409, str(exc)) from exc
         except InvalidGameStateError as exc:  # the game is over (#299), the clock (#330)
             over = refusals.is_over(state.board, state.metadata.result)
             raise HTTPException(409, refusals.GAME_OVER if over else str(exc)) from exc

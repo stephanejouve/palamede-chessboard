@@ -2,7 +2,8 @@
 
 A move from the viewer (Chessnut board, mouse, Maia) advances the clock
 like ``chess_play_move`` ; the clock starts on the first move ; a flag
-that fell ends the game when the clock is read, without a move.
+that fell ends the game when the clock is read, without a move, and a move
+played after it is refused (#331).
 """
 
 from __future__ import annotations
@@ -114,9 +115,15 @@ def test_flag_fall_on_a_viewer_move_ends_the_game(
     game_id = _game(client, tokens, fmt="1+0")
     _move(client, game_id, tokens["stephane"], "e2e4")
     wall.advance(61)
-    _move(client, game_id, tokens["bot-maia-1100"], "e7e5")
+    r = _move(client, game_id, tokens["bot-maia-1100"], "e7e5")
+    # Refused, not written (#331) : the game ends on time all the same.
+    assert (r.status_code, r.json()["detail"]) == (
+        409,
+        "Temps écoulé : les Noirs ont perdu au temps",
+    )
     assert load_clock(game_id, games_dir=games_dir).flag_fall == "black"
-    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "1-0"
+    state = GameState.load(game_id, games_dir=games_dir)
+    assert (state.metadata.result, state.san_history) == ("1-0", ["e4"])
 
 
 def _read(client: TestClient, game_id: str, token: str | None = None) -> dict:
@@ -224,7 +231,7 @@ def test_flag_on_a_move_against_no_mating_material_is_a_draw(
     _move(client, game_id, tokens["stephane"], "d1d2")
     _move(client, game_id, tokens["bot-maia-1100"], "c8d7")
     wall.advance(61)
-    _move(client, game_id, tokens["stephane"], "d2d7")  # takes the bishop, too late
+    assert _move(client, game_id, tokens["stephane"], "d2d7").status_code == 409  # too late
     assert load_clock(game_id, games_dir=games_dir).flag_fall == "white"
     assert GameState.load(game_id, games_dir=games_dir).metadata.result == "1/2-1/2"
 
@@ -233,14 +240,16 @@ def test_a_late_move_cannot_take_away_the_mating_material(
     client: TestClient, tokens: dict, games_dir: Path, wall: Clock
 ) -> None:
     """Review Leader #157 : 6.9 is judged when the flag fell, before the late
-    move. White, too late, takes Black's last pawn : still a loss for White."""
+    move. White, too late, takes Black's last pawn : still a loss for White,
+    and the capture is refused, never written (#331)."""
     game_id = _tablier_game(games_dir, "2b1k3/8/8/8/8/8/6p1/3QK3 w - - 0 1")
     _move(client, game_id, tokens["stephane"], "d1d2")
     _move(client, game_id, tokens["bot-maia-1100"], "c8d7")
     wall.advance(61)
-    _move(client, game_id, tokens["stephane"], "d2g2")  # takes the pawn, too late
+    assert _move(client, game_id, tokens["stephane"], "d2g2").status_code == 409  # too late
     assert load_clock(game_id, games_dir=games_dir).flag_fall == "white"
-    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "0-1"
+    state = GameState.load(game_id, games_dir=games_dir)
+    assert (state.metadata.result, state.san_history) == ("0-1", ["Qd2", "Bd7"])
 
 
 def test_no_flag_at_reading_time_once_the_game_is_over(
@@ -314,8 +323,11 @@ async def test_mcp_path_uses_the_same_helper_once_started(games_dir: Path, wall:
 
 
 @pytest.mark.asyncio
-async def test_reading_never_ends_an_agents_game_on_time(games_dir: Path, wall: Clock) -> None:
-    """A spectator's read of /api/clock or chess_clock_state never decides a rated game."""
+async def test_a_spectators_read_never_ends_an_agents_game_on_time(
+    games_dir: Path, wall: Clock
+) -> None:
+    """A read without a player's token never decides a rated game ; a player's
+    read does, since #331 (tests/viewer/test_clock_flag_331.py)."""
     _agents_game(games_dir, "mcp-flag", "1+0")
     await call_tool("chess_clock_start", {"game_id": "mcp-flag"})
     wall.advance(61)
