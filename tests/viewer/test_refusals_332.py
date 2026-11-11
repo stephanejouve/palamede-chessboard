@@ -334,3 +334,31 @@ def test_a_notation_refusal_without_suggestion_never_says_impossible(kind: str) 
     assert "n'est pas possible" not in text and "(" not in text and "écrivez" not in text
     if kind == "ambiguous":
         assert text == "Coup refusé : Cbd2 est ambigu : précisez la case de départ."
+
+
+# --- the clock : the same refusals by the viewer's click and by chess_clock_start ---------------
+
+
+@pytest.mark.asyncio
+async def test_starting_the_clock_of_a_game_over_is_refused_the_same_way(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    """clock_moves raised « La partie est terminée » without its period : the domain's text now."""
+    _game(games_dir, result="1-0")
+    r = _http(client, tokens["stephane"], "clock/start")
+    assert (r.status_code, r.json()["detail"]) == (409, refusals.END_GAME_OVER)
+    body = await _mcp("chess_clock_start")
+    assert (body["code"], body["reason"]) == ("INVALID_STATE", refusals.END_GAME_OVER)
+
+
+@pytest.mark.asyncio
+async def test_a_game_without_clock_says_so_in_french_on_both_media(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    """chess_clock_start answered « Game has no clock (TimeControl=unrated). » : the viewer's text."""
+    _game(games_dir)
+    r = _http(client, tokens["stephane"], "clock/start")
+    assert r.status_code == 409
+    body = await _mcp("chess_clock_start")
+    assert body["code"] == "NO_CLOCK"
+    assert body["reason"] == r.json()["detail"] == "Cette partie n'a pas de pendule"

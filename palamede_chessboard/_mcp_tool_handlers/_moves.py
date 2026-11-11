@@ -109,10 +109,6 @@ async def _handle_chess_clock_start(arguments: dict, games_dir: Path) -> dict:
     # any participant ; tablier.* too ; started already : unchanged (#330).
     try:
         clock = start_clock(arguments["game_id"], games_dir)
-    except NoClockError:
-        return {
-            "status": "error",
-            "code": "NO_CLOCK",
-            "reason": "Game has no clock (TimeControl=unrated).",
-        }
+    except NoClockError as exc:  # the domain's French text, the viewer's 409 (#332)
+        return {"status": "error", "code": "NO_CLOCK", "reason": str(exc)}
     return {"status": "ok", "clock": clock.to_dict()}
