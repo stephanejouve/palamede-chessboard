@@ -7,6 +7,7 @@ not needed here, the solution was computed when the exercise was drawn.
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import chess
@@ -165,6 +166,57 @@ def test_one_exercise_open_at_a_time(client: TestClient, tokens: dict, games_dir
         (first, True, False)
     ]
     assert _stored(games_dir, "attacked-1")["attempts"] == []
+
+
+def _exercise_games(games_dir: Path) -> list[str]:
+    return sorted(p.stem for p in games_dir.glob(f"{play.EXO_PREFIX}{HUMAN}.*.pgn"))
+
+
+def test_a_second_start_returns_the_untouched_game(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    """#347 : two starts two seconds apart made two games, the first « abandoned »."""
+    first = _start(client, tokens[HUMAN])
+    second = _start(client, tokens[HUMAN])
+    assert first.status_code == second.status_code == 201
+    game_id = first.json()["game_id"]
+    assert second.json() == first.json()
+    assert _exercise_games(games_dir) == [game_id]
+    assert GameState.load(game_id, games_dir=games_dir).metadata.result == "*"
+    stored = _stored(games_dir)
+    assert stored["game_ids"] == [game_id] and stored["attempts"] == []
+
+
+def test_a_start_after_a_try_opens_a_new_game(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    """A game with a try is no longer new : starting again abandons it, as before."""
+    first = _start(client, tokens[HUMAN]).json()["game_id"]
+    assert _move(client, tokens[HUMAN], first, "d7d6").status_code == 409  # a wrong try
+    second = _start(client, tokens[HUMAN]).json()["game_id"]
+    assert second != first
+    assert GameState.load(first, games_dir=games_dir).metadata.termination_note == (
+        play.ABANDONED_NOTE
+    )
+    assert _stored(games_dir)["game_ids"] == [first, second]
+
+
+def test_a_start_after_the_end_opens_a_new_game(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    first = _start(client, tokens[HUMAN]).json()["game_id"]
+    client.post(f"/api/games/{first}/resign", headers=_auth(tokens[HUMAN]))
+    second = _start(client, tokens[HUMAN]).json()["game_id"]
+    assert second != first and _exercise_games(games_dir) == sorted([first, second])
+
+
+def test_two_starts_at_once_open_one_game(tokens: dict, games_dir: Path) -> None:
+    """The player's start lock : no twin even when both read « no game » together."""
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(lambda _: play.start(games_dir, HUMAN, "find_move-1"), range(4)))
+    assert len({r["game_id"] for r in results}) == 1
+    assert len(_exercise_games(games_dir)) == 1
+    assert _stored(games_dir)["attempts"] == []
 
 
 # --- the move -------------------------------------------------------------------
