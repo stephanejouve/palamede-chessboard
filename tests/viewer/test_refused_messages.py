@@ -172,10 +172,24 @@ class TestPage:
     def test_the_script_leaves_the_banner_above_the_board(self) -> None:
         """#332 smoke : moved back into #board after chessground, the banner was
         painted under cg-container (absolute, 100 %) : every refusal unseen."""
-        assert not re.search(
-            r"\.(appendChild|insertBefore|append|prepend|replaceChildren|before|after)\([^)]*errorEl",
-            BOARD_JS,
+        # The banner is reached once, by its id, and only shown or hidden then :
+        # no script holds it any other way, so none can move it (allowlist).
+        scripts = "".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted((TEMPLATES_DIR / "viewer").glob("*.js.jinja"))
         )
+        assert scripts.count("move-error") == 1
+        assert "const errorEl = document.getElementById('move-error');" in BOARD_JS
+        uses = re.findall(r"[\w.(!]*errorEl\b[^;)]*", BOARD_JS)
+        allowed = {
+            "errorEl = document.getElementById('move-error'",
+            "(!errorEl",
+            "(errorEl",
+            "errorEl.textContent = msg",
+            "errorEl.hidden = false",
+            "errorEl.hidden = true",
+        }
+        assert set(uses) <= allowed, set(uses) - allowed
 
     def test_the_banner_is_in_the_flow_at_a_normal_size(self) -> None:
         css = (TEMPLATES_DIR / "viewer" / "_styles.css.jinja").read_text(encoding="utf-8")
