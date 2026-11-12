@@ -210,6 +210,27 @@ def test_a_start_after_the_end_opens_a_new_game(
     assert second != first and _exercise_games(games_dir) == sorted([first, second])
 
 
+def test_after_an_earlier_game_the_last_one_is_returned(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    """The S14 exercise had games already : the untouched one is the LAST (review Admin, M5)."""
+    first = _start(client, tokens[HUMAN]).json()["game_id"]
+    client.post(f"/api/games/{first}/resign", headers=_auth(tokens[HUMAN]))
+    second = _start(client, tokens[HUMAN]).json()["game_id"]
+    again = _start(client, tokens[HUMAN]).json()["game_id"]
+    assert again == second != first
+    assert _exercise_games(games_dir) == sorted([first, second])
+    assert _stored(games_dir)["game_ids"] == [first, second]
+
+
+def test_a_vanished_game_is_not_returned(client: TestClient, tokens: dict, games_dir: Path) -> None:
+    """Its PGN gone, the last game is no game : a start opens a new one (review Admin, M6)."""
+    first = _start(client, tokens[HUMAN]).json()["game_id"]
+    (games_dir / f"{first}.pgn").unlink()
+    second = _start(client, tokens[HUMAN]).json()["game_id"]
+    assert second != first and _exercise_games(games_dir) == [second]
+
+
 def test_two_starts_at_once_open_one_game(tokens: dict, games_dir: Path) -> None:
     """The player's start lock : no twin even when both read « no game » together."""
     with ThreadPoolExecutor(max_workers=4) as pool:
