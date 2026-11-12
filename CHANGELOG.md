@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.28.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.27.2...v0.28.0) (2026-11-12)
+
+
+### Features
+
+* **mcp:** docs/mcp-tools.json and the HTTP twin of every tool ; end refusals logged, clock texts of the domain ([#269](https://github.com/stephanejouve/palamede-chessboard/issues/269)) ([#344](https://github.com/stephanejouve/palamede-chessboard/issues/344)) ([d8bd422](https://github.com/stephanejouve/palamede-chessboard/commit/d8bd422160985e069afa1e618660d98a5f759ef6))
+
+
+### Bug Fixes
+
+* **viewer:** the refusal banner stays above the board, seen ([#332](https://github.com/stephanejouve/palamede-chessboard/issues/332)) ([#346](https://github.com/stephanejouve/palamede-chessboard/issues/346)) ([bb34922](https://github.com/stephanejouve/palamede-chessboard/commit/bb34922e2ad3247d0d5ed7414ffaba4a7a6f7d25))
+
 ## [0.27.2](https://github.com/stephanejouve/palamede-chessboard/compare/v0.27.1...v0.27.2) (2026-11-11)
 
 
