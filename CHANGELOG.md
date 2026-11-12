@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.28.0...v0.28.1) (2026-11-12)
+
+
+### Bug Fixes
+
+* **coach:** a second start returns the untouched game, never a twin ([#347](https://github.com/stephanejouve/palamede-chessboard/issues/347)) ([#348](https://github.com/stephanejouve/palamede-chessboard/issues/348)) ([d87d7a7](https://github.com/stephanejouve/palamede-chessboard/commit/d87d7a70d0297958c934c787cd2f8b5e06592169))
+
 ## [0.28.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.27.2...v0.28.0) (2026-11-12)
 
 
