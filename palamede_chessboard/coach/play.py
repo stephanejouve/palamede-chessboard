@@ -22,7 +22,8 @@ move — so start, the move and the answer are refused while a live game,
 not an exercise, went through its position, opening and mirror
 included ; each refusal is in the engine log (review Admin #204).
 
-Locks : a game's lock, then the player's store, never the other way.
+Locks : the player's start lock, then a game's lock, then the player's
+store, never the other way.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ from pathlib import Path
 import chess
 
 from palamede_chessboard import refusals
+from palamede_chessboard._atomic import locked
 from palamede_chessboard.chess_arbiter import validate_san_strict
 from palamede_chessboard.chess_engine_guard import (
     live_game_through,
@@ -42,6 +44,7 @@ from palamede_chessboard.chess_engine_guard import (
 from palamede_chessboard.chessboard_state import (
     GameAlreadyExistsError,
     GameMetadata,
+    GameNotFoundError,
     GameState,
     IllegalMoveError,
     TimeControl,
@@ -50,6 +53,7 @@ from palamede_chessboard.clock_moves import game_lock
 from palamede_chessboard.coach import CALLER
 from palamede_chessboard.coach.store import read_exercises, update_exercise
 from palamede_chessboard.paths import EXERCISE_PREFIX
+from palamede_chessboard.players import registry
 
 EXO_PREFIX = EXERCISE_PREFIX
 EVENT = "Exercice"
@@ -170,14 +174,48 @@ def _close_open_games(games_dir: Path, player_id: str) -> None:
                 record_abandon(games_dir, player_id, pgn.stem)
 
 
+def _untouched_game(games_dir: Path, exercise: dict) -> str | None:
+    """The exercise's last game if still open, without a move nor an attempt.
+
+    Such a game is a new one : a second start returns it rather than
+    abandoning it for a twin (#347, two games two seconds apart counted an
+    abandon and hid the first try).
+    """
+    game_ids = exercise.get("game_ids") or []
+    if not game_ids:
+        return None
+    game_id = game_ids[-1]
+    if any(a.get("game_id") == game_id for a in exercise.get("attempts", [])):
+        return None
+    try:
+        state = GameState.load(game_id, games_dir=games_dir)
+    except GameNotFoundError:
+        return None
+    if state.metadata.result != "*" or state.san_history:
+        return None
+    return game_id
+
+
 def start(games_dir: Path, player_id: str, exercise_id: str) -> dict:
-    """Open a game on the exercise's position ; ``{game_id, exercise}``."""
+    """Open a game on the exercise's position ; ``{game_id, exercise}``.
+
+    Under the player's start lock : two starts at once open one game.
+    """
+    # In the games directory, which always exists ; the registry's id (store).
+    with locked(games_dir / f".coach-start.{registry.player_id_of(player_id)}"):
+        return _start(games_dir, player_id, exercise_id)
+
+
+def _start(games_dir: Path, player_id: str, exercise_id: str) -> dict:
     exercise = next(
         (e for e in read_exercises(games_dir, player_id) if e.get("id") == exercise_id), None
     )
     if exercise is None:
         raise ExerciseError(404, "Exercice inconnu")
     _refuse_if_in_play(games_dir, exercise, "start")
+    untouched = _untouched_game(games_dir, exercise)
+    if untouched is not None:
+        return {"game_id": untouched, "exercise": public_view(exercise)}
     _close_open_games(games_dir, player_id)
     side = exercise["side"]
     white, black = (player_id, OPPONENT) if side == "white" else (OPPONENT, player_id)
