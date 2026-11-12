@@ -129,9 +129,6 @@ cg = Chessground(boardEl, {
   draggable: { showGhost: true },
 });
 
-// Re-attach the error overlay after chessground has taken over the div.
-if (errorEl) boardEl.appendChild(errorEl);
-
 // #67 : chessground mémorise la position du plateau (s.dom.bounds) et ne la
 // recalcule qu'au scroll, au resize de la fenêtre ou si le plateau change de
 // TAILLE. Si la page bouge au-dessus du plateau, un lâcher tombe sur une case

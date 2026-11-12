@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import chess
@@ -167,6 +168,14 @@ class TestPage:
         assert banner in page
         assert '<div id="board"></div>' in page
         assert page.index(banner) < page.index('<div id="board"></div>')
+
+    def test_the_script_leaves_the_banner_above_the_board(self) -> None:
+        """#332 smoke : moved back into #board after chessground, the banner was
+        painted under cg-container (absolute, 100 %) : every refusal unseen."""
+        assert not re.search(
+            r"\.(appendChild|insertBefore|append|prepend|replaceChildren|before|after)\([^)]*errorEl",
+            BOARD_JS,
+        )
 
     def test_the_banner_is_in_the_flow_at_a_normal_size(self) -> None:
         css = (TEMPLATES_DIR / "viewer" / "_styles.css.jinja").read_text(encoding="utf-8")
