@@ -31,7 +31,23 @@ def test_set_never_toggles_view_only() -> None:
 
 def test_moves_are_gated_by_movable_color() -> None:
     """Both colours at the live position : the server judges and says why (#332)."""
-    assert "color: interactive ? 'both' : undefined" in _board_js()
+    assert "color: interactive && !designating() ? 'both' : undefined" in _board_js()
+
+
+def test_a_click_designates_while_the_band_asks_for_squares() -> None:
+    """#350 : a click on a piece was a move attempt, refused off-topic."""
+    js = _board_js()
+    assert "events: { select: onSquareSelect }," in js
+    body = js[js.index("function onSquareSelect(key)") :]
+    body = body[: body.index("\n}\n")]
+    # Only while designating, and only the player's own pieces.
+    assert "if (!side || !cg) return;" in body
+    assert "if (piece && piece.color === side) window.toggleDesignated(key);" in body
+    # The marks are the field's squares, nothing when the band is gone.
+    assert "const marked = designating() ? window.designatedSquares() : [];" in js
+    assert "highlight: { custom: new Map(marked.map(k => [k, 'designated'])) }" in js
+    # A band shown before the module loaded is marked at once.
+    assert js.rstrip().endswith("window.__cgDesignate();")
 
 
 def test_bounds_are_cleared_at_each_gesture() -> None:

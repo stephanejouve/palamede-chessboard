@@ -34,7 +34,7 @@ def test_the_end_is_a_change_seen_on_the_game_shown() -> None:
 
 
 def test_an_accepted_answer_reads_again() -> None:
-    body = _body(COACH_JS, "async function answerExercise(id)")
+    body = _body(COACH_JS, "async function answerExercise(id, confirmed)")
     assert "if (r.ok) { resetAndPoll(); rereadCoach(gameId()); }" in body
     assert body.count("rereadCoach(") == 1
 

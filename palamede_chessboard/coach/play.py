@@ -62,6 +62,8 @@ EVENT = "Exercice"
 OPPONENT = "Coach Palamède"
 SOLVED_NOTE = "exercice réussi"
 ABANDONED_NOTE = "exercice abandonné"
+#: A game left without a move nor a try : closed, never counted (#350).
+LEFT_UNTOUCHED_NOTE = "exercice quitté sans essai"
 NOT_THE_MOVE = "Ce n'est pas le coup"
 FASTER_MATE = "Il y a plus rapide : un mat en moins de coups"
 POSITION_IN_PLAY = "Exercice indisponible : une partie en cours passe par cette position"
@@ -163,15 +165,37 @@ def _refuse_if_in_play(games_dir: Path, exercise: dict, action: str) -> None:
     raise ExerciseError(409, POSITION_IN_PLAY)
 
 
+def _is_untouched(state: GameState, exercise: dict | None) -> bool:
+    """Open, without a move, and no attempt of ``exercise`` in this game."""
+    if state.metadata.result != "*" or state.san_history:
+        return False
+    game_id = state.metadata.game_id
+    attempts = (exercise or {}).get("attempts", [])
+    return not any(a.get("game_id") == game_id for a in attempts)
+
+
 def _close_open_games(games_dir: Path, player_id: str) -> None:
-    """One exercise at a time : an open one is abandoned, never left open."""
+    """One exercise at a time : an open one is closed, never left open.
+
+    A game with a move or a try is abandoned, and counted apart (#95). An
+    untouched one was only looked at : it is closed without an abandon
+    (#350, six exercises opened to find a position made six abandons).
+    """
     for pgn in sorted(games_dir.glob(f"{EXO_PREFIX}{player_id}.*.pgn")):
         with game_lock(pgn.stem, games_dir):
             state = GameState.load(pgn.stem, games_dir=games_dir)
-            if state.metadata.result == "*":
-                winner = "black" if _player_side(state, player_id) == "white" else "white"
-                _finish(state, winner, ABANDONED_NOTE)
-                record_abandon(games_dir, player_id, pgn.stem)
+            if state.metadata.result != "*":
+                continue
+            try:
+                exercise: dict | None = _exercise_of_game(games_dir, player_id, pgn.stem)
+            except ExerciseError:
+                exercise = None
+            winner = "black" if _player_side(state, player_id) == "white" else "white"
+            if _is_untouched(state, exercise):
+                _finish(state, winner, LEFT_UNTOUCHED_NOTE)
+                continue
+            _finish(state, winner, ABANDONED_NOTE)
+            record_abandon(games_dir, player_id, pgn.stem)
 
 
 def _untouched_game(games_dir: Path, exercise: dict) -> str | None:
@@ -184,16 +208,11 @@ def _untouched_game(games_dir: Path, exercise: dict) -> str | None:
     game_ids = exercise.get("game_ids") or []
     if not game_ids:
         return None
-    game_id = game_ids[-1]
-    if any(a.get("game_id") == game_id for a in exercise.get("attempts", [])):
-        return None
     try:
-        state = GameState.load(game_id, games_dir=games_dir)
+        state = GameState.load(game_ids[-1], games_dir=games_dir)
     except GameNotFoundError:
         return None
-    if state.metadata.result != "*" or state.san_history:
-        return None
-    return game_id
+    return game_ids[-1] if _is_untouched(state, exercise) else None
 
 
 def start(games_dir: Path, player_id: str, exercise_id: str) -> dict:

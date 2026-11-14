@@ -219,7 +219,8 @@ const EXERCISE_TEXTS = {
   },
   attacked: {
     title: 'Cases attaquées',
-    rule: 'Tapez les cases de vos pièces en prise, séparées par des espaces, puis Entrée. '
+    rule: 'Cliquez sur vos pièces en prise, ou tapez leurs cases séparées par des espaces, '
+      + 'puis Répondre ou Entrée. '
       + "En prise : l'adversaire gagne du matériel en la prenant, une fois comptés attaquants et défenseurs. "
       + "Votre roi n'est jamais à désigner. Le roi adverse ne compte que contre une pièce non défendue. "
       + 'Donnez toutes les cases, sans en ajouter.',
@@ -236,10 +237,37 @@ const EXERCISE_CONTEXTS = {
 const exerciseBand = document.getElementById('exercise-band');
 let EXERCISE_GAME = '';
 
-function showExerciseBand(id, kind, motif, game) {
+// « Cases attaquées » with the mouse (#350) : a click on one of the
+// player's pieces adds its square to the field, a second click takes it
+// out ; the board marks the squares of the field. The field stays the
+// answer : clicked or typed, the same /answer, as the Tablier's gesture.
+// The board script (module) reads designateSide() and designatedSquares().
+let DESIGNATE_SIDE = null;
+function designateSide() { return DESIGNATE_SIDE; }
+function designatedSquares() {
+  const field = document.getElementById('coach-squares');
+  if (!field) return [];
+  return field.value.toLowerCase().split(/[\s,;]+/).filter(sq => /^[a-h][1-8]$/.test(sq));
+}
+function markDesignated() { if (typeof window.__cgDesignate === 'function') window.__cgDesignate(); }
+function toggleDesignated(square) {
+  const field = document.getElementById('coach-squares');
+  if (!DESIGNATE_SIDE || !field) return;
+  const squares = designatedSquares();
+  const at = squares.indexOf(square);
+  if (at >= 0) squares.splice(at, 1);
+  else squares.push(square);
+  field.value = squares.join(' ');
+  hideEmptyAnswer();
+  markDesignated();
+}
+
+function showExerciseBand(id, kind, motif, game, side) {
   const texts = EXERCISE_TEXTS[kind];
   EXERCISE_GAME = texts ? game : '';
+  DESIGNATE_SIDE = texts && kind === 'attacked' ? (side === 'black' ? 'black' : 'white') : null;
   exerciseBand.hidden = !texts;
+  markDesignated();
   if (!texts) return;
   exerciseBand.dataset.exercise = id;
   const context = EXERCISE_CONTEXTS[motif];
@@ -257,7 +285,12 @@ function showExerciseBand(id, kind, motif, game) {
   if (kind === 'attacked') document.getElementById('coach-squares').focus();
 }
 
-function hideExerciseBand() { EXERCISE_GAME = ''; exerciseBand.hidden = true; }
+function hideExerciseBand() {
+  EXERCISE_GAME = '';
+  DESIGNATE_SIDE = null;
+  exerciseBand.hidden = true;
+  markDesignated();
+}
 
 // Whatever opened the game (« Lancer », the games list, the URL, a reload) :
 // an exo.* game of the token's exercises shows its band (Leader, 05/11).
@@ -272,7 +305,7 @@ async function refreshExerciseBand(game) {
     if (!r.ok) return;
     const list = (await r.json()).exercises || [];
     const e = list.find(x => Array.isArray(x.game_ids) && x.game_ids.includes(game));
-    if (e && gameId() === game && EXERCISE_GAME !== game) showExerciseBand(e.id, e.kind, e.motif, game);
+    if (e && gameId() === game && EXERCISE_GAME !== game) showExerciseBand(e.id, e.kind, e.motif, game, e.side);
   } catch (_) { /* no band : the game still shows */ }
 }
 
@@ -286,11 +319,25 @@ async function startExercise(id, side, kind, motif) {
   ORIENT = side === 'black' ? 'black' : 'white';
   selectGame(body.game_id);
   applyOrientation();
-  showExerciseBand(id, kind, motif, body.game_id);
+  showExerciseBand(id, kind, motif, body.game_id, side);
 }
 
-async function answerExercise(id) {
+// An empty answer is asked again (decided 13/11) : « Oui » sends the empty
+// set, « aucune pièce en prise » ; « Non » goes back, nothing counted.
+const EMPTY_ANSWER = 'Aucune case désignée. Pour répondre, cliquez sur vos pièces en prise, '
+  + 'ou tapez leurs cases (ex. f6 e4). Confirmez-vous qu\'aucune de vos pièces n\'est en prise ?';
+function askEmptyAnswer() {
+  document.getElementById('coach-answer-msg').innerHTML = '<div class="empty-answer">' + escapeHtml(EMPTY_ANSWER)
+    + ' <button type="button" data-empty="yes">Oui</button> <button type="button" data-empty="no">Non</button></div>';
+}
+function hideEmptyAnswer() {
+  const msg = document.getElementById('coach-answer-msg');
+  if (msg && msg.querySelector('.empty-answer')) msg.textContent = '';
+}
+
+async function answerExercise(id, confirmed) {
   const squares = (document.getElementById('coach-squares').value || '').split(/[\s,;]+/).filter(Boolean);
+  if (!squares.length && !confirmed) { askEmptyAnswer(); return; }
   const r = await fetch('/api/coach/exercises/' + encodeURIComponent(id) + '/answer', {
     method: 'POST', headers: { ...coachHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ squares }),
   });
@@ -309,6 +356,19 @@ coachBody.addEventListener('click', ev => {
 });
 // A form : Entrée answers, like the button (nit of Admin, #235).
 exerciseBand.addEventListener('submit', ev => { ev.preventDefault(); answerExercise(exerciseBand.dataset.exercise); });
+exerciseBand.addEventListener('click', ev => {
+  const choice = ev.target.closest('[data-empty]');
+  if (!choice) return;
+  if (choice.dataset.empty === 'yes') { answerExercise(exerciseBand.dataset.exercise, true); return; }
+  hideEmptyAnswer();
+  document.getElementById('coach-squares').focus();
+});
+// Typed squares are marked on the board too, and a typed answer is no longer empty.
+exerciseBand.addEventListener('input', ev => {
+  if (ev.target.id !== 'coach-squares') return;
+  hideEmptyAnswer();
+  markDesignated();
+});
 document.getElementById('key-btn').addEventListener('click', () => {
   if (coachBox.open) loadCoach();
   hideExerciseBand();

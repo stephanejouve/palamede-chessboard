@@ -79,6 +79,33 @@ async function onUserDrop(from, to) {
   }
 }
 
+// « Cases attaquées » (#350) : while the exercise band asks for squares, a
+// click designates instead of moving. The classic script owns the answer
+// field (designateSide, designatedSquares, toggleDesignated) ; here, only
+// the click and the marks. No piece is movable meanwhile : a click was a
+// move attempt, refused with a message that did not fit the question.
+function designating() {
+  return typeof window.designateSide === 'function' ? window.designateSide() : null;
+}
+
+// chessground calls ``select`` on every press, a piece movable or not.
+// Only the player's own pieces : the question is about them.
+function onSquareSelect(key) {
+  const side = designating();
+  if (!side || !cg) return;
+  const piece = cg.state.pieces.get(key);
+  if (piece && piece.color === side) window.toggleDesignated(key);
+}
+
+// Called by the classic script when the band opens or closes, and when the
+// field changes : the squares of the field are marked, the drag is off.
+window.__cgDesignate = function() {
+  if (!cg) return;
+  if (cgLast) window.__cgSetFen(...cgLast);
+  const marked = designating() ? window.designatedSquares() : [];
+  cg.set({ highlight: { custom: new Map(marked.map(k => [k, 'designated'])) } });
+};
+
 // Public setter used by the classical polling loop's draw() function.
 // ``turn`` may be null; otherwise 'white'|'black'.
 // ``interactive`` toggles drag&drop (true at live position, false in history).
@@ -104,7 +131,7 @@ window.__cgSetFen = function(fen, turn, interactive, lastMove) {
     turnColor: turn || undefined,
     movable: {
       free: true,  // server validates via POST /move ; client is permissive
-      color: interactive ? 'both' : undefined,
+      color: interactive && !designating() ? 'both' : undefined,
       showDests: false,
       events: { after: onUserDrop },
     },
@@ -123,6 +150,7 @@ cg = Chessground(boardEl, {
   viewOnly: false,  // listeners are bound at creation only, see __cgSetFen
   animation: { enabled: true, duration: 200 },
   movable: { free: true, color: undefined, events: { after: onUserDrop } },
+  events: { select: onSquareSelect },
   // No premoves : the viewer never plays them (no playPremove), so a premove
   // was only a ghost move that silently did nothing (#67).
   premovable: { enabled: false },
@@ -143,3 +171,5 @@ for (const type of ['pointerdown', 'mousedown', 'touchstart']) {
 // script. ``window.draw`` is populated by the classical <script>
 // (top-level function declarations are globals in non-module scripts).
 if (typeof window.draw === 'function') window.draw();
+// A band already shown before this module loaded (an exo.* game in the URL).
+window.__cgDesignate();

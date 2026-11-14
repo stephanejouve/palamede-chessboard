@@ -147,15 +147,18 @@ def in_games(games: list[dict]) -> dict:
 
 
 def first_try(exercise: dict) -> bool | None:
-    """The first attempt of the first game launched : ok or not, ``None`` when
-    there was none, or the player abandoned before trying (counted apart)."""
-    game_ids = exercise.get("game_ids") or []
-    if not game_ids:
-        return None
-    tries = [a for a in exercise.get("attempts", []) if a.get("game_id") == game_ids[0]]
-    if not tries or tries[0].get("abandoned"):
-        return None
-    return bool(tries[0].get("ok"))
+    """The first attempt of the first game played : ok or not, ``None`` when
+    there was none, or the player abandoned before trying (counted apart).
+
+    A game left untouched holds no attempt and is skipped (#350) : looking
+    at an exercise first does not lose its first try.
+    """
+    attempts = exercise.get("attempts", [])
+    for game_id in exercise.get("game_ids") or []:
+        tries = [a for a in attempts if a.get("game_id") == game_id]
+        if tries:
+            return None if tries[0].get("abandoned") else bool(tries[0].get("ok"))
+    return None
 
 
 def on_exercises(exercises: list[dict]) -> dict:
