@@ -238,13 +238,22 @@ def test_the_first_try_is_on_the_first_presentation() -> None:
     assert first_try(_exercise("e", game_ids=["x1"], attempts=[_try("x1", True)])) is True
 
 
+def test_a_game_left_untouched_is_skipped() -> None:
+    # #350 : opening an exercise to look at it, then leaving, records nothing
+    # in that game. The first try is the first one of the next game.
+    looked_at = _exercise("e", game_ids=["x1", "x2"], attempts=[_try("x2", True)])
+    assert first_try(looked_at) is True
+    looked_twice = _exercise(
+        "e", game_ids=["x1", "x2", "x3"], attempts=[_try("x3", False), _try("x3", True)]
+    )
+    assert first_try(looked_twice) is False
+
+
 @pytest.mark.parametrize(
     "exercise",
     [
         _exercise("never-started"),
         _exercise("started-not-tried", game_ids=["x1"]),
-        # Not tried in its first game : the second game is no first presentation.
-        _exercise("tried-later", game_ids=["x1", "x2"], attempts=[_try("x2", True)]),
         # Abandoned before trying : counted apart (Stéphane, 05/11).
         _exercise(
             "abandoned",

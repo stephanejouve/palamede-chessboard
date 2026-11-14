@@ -6,7 +6,8 @@ registry cannot be read) :
 * ``GET /api/coach/exercises`` — the token's own exercises, no solution
   before one is solved ; ``?state=`` filters.
 * ``POST /api/coach/exercises/{id}/start`` — opens the exercise's game
-  (201) ; an exercise still open is abandoned first.
+  (201) ; an exercise still open is abandoned first, or closed without an
+  abandon if it was left untouched (#350).
 * ``POST /api/coach/exercises/{id}/answer`` — « what is attacked ? »,
   answered with squares.
 * ``GET /api/coach/reports/{game_id}`` — the report of a game, for its

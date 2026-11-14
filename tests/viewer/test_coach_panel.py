@@ -156,13 +156,64 @@ def test_the_band_says_the_family_and_its_rule() -> None:
     assert "title: 'Trouvez le bon coup'," in COACH_JS
     assert "title: 'Cases attaquées'," in COACH_JS
     # An unknown family : no band, rather than an empty one.
-    assert "  exerciseBand.hidden = !texts;\n  if (!texts) return;" in COACH_JS
+    assert "  exerciseBand.hidden = !texts;\n  markDesignated();\n  if (!texts) return;" in COACH_JS
     assert (
         "Votre roi n'est jamais à désigner. Le roi adverse ne compte que contre une pièce non défendue."
         in COACH_JS
     )
     assert "'<div class=\"band-rule\">' + escapeHtml(texts.rule)" in COACH_JS
-    assert "showExerciseBand(id, kind, motif, body.game_id);" in COACH_JS
+    assert "showExerciseBand(id, kind, motif, body.game_id, side);" in COACH_JS
+
+
+def test_the_rule_says_both_ways_to_answer() -> None:
+    # #350 : the click, then the typed squares ; Répondre or Entrée.
+    assert "rule: 'Cliquez sur vos pièces en prise, ou tapez leurs cases" in COACH_JS
+    assert "'puis Répondre ou Entrée. '" in COACH_JS
+    assert "Tapez les cases" not in COACH_JS
+
+
+def test_only_the_attacked_band_designates_with_the_player_s_side() -> None:
+    body = COACH_JS[COACH_JS.index("function showExerciseBand(") :]
+    body = body[: body.index("\n}\n")]
+    assert (
+        "DESIGNATE_SIDE = texts && kind === 'attacked' ? (side === 'black' ? 'black' : 'white') : null;"
+        in body
+    )
+    assert body.index("DESIGNATE_SIDE =") < body.index("markDesignated();")
+    hide = COACH_JS[COACH_JS.index("function hideExerciseBand()") :]
+    hide = hide[: hide.index("\n}\n")]
+    assert "DESIGNATE_SIDE = null;" in hide and "markDesignated();" in hide
+    # The side comes from the exercise, whatever opened its game.
+    assert "showExerciseBand(e.id, e.kind, e.motif, game, e.side);" in COACH_JS
+
+
+def test_a_click_toggles_its_square_in_the_field() -> None:
+    body = COACH_JS[COACH_JS.index("function toggleDesignated(square)") :]
+    body = body[: body.index("\n}\n")]
+    assert "if (!DESIGNATE_SIDE || !field) return;" in body
+    assert "if (at >= 0) squares.splice(at, 1);\n  else squares.push(square);" in body
+    assert "field.value = squares.join(' ');" in body
+    # Only squares are marked, whatever was typed.
+    assert "filter(sq => /^[a-h][1-8]$/.test(sq))" in COACH_JS
+    # Typed squares are marked too.
+    assert "if (ev.target.id !== 'coach-squares') return;" in COACH_JS
+
+
+def test_an_empty_answer_is_asked_again() -> None:
+    # Decided 13/11 : Oui sends the empty set, Non goes back without counting.
+    body = COACH_JS[COACH_JS.index("async function answerExercise(id, confirmed)") :]
+    body = body[: body.index("\n}\n")]
+    assert "if (!squares.length && !confirmed) { askEmptyAnswer(); return; }" in body
+    assert body.index("askEmptyAnswer()") < body.index("await fetch(")
+    assert "cliquez sur vos pièces en prise, '\n  + 'ou tapez leurs cases (ex. f6 e4)" in COACH_JS
+    assert "escapeHtml(EMPTY_ANSWER)" in COACH_JS
+    click = COACH_JS[COACH_JS.index("exerciseBand.addEventListener('click'") :]
+    click = click[: click.index("\n});\n")]
+    assert (
+        "if (choice.dataset.empty === 'yes') { answerExercise(exerciseBand.dataset.exercise, true); return; }"
+        in click
+    )
+    assert "hideEmptyAnswer();\n  document.getElementById('coach-squares').focus();" in click
 
 
 def test_the_rule_of_en_prise_counts_the_exchange() -> None:

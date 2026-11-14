@@ -22,6 +22,7 @@ from palamede_chessboard.coach.store import (
     read_exercises,
     write_report,
 )
+from palamede_chessboard.paths import _commentary_path
 from palamede_chessboard.players import registry
 
 HUMAN, OTHER, AGENT = "human-player", "other-player", "agent-player"
@@ -154,6 +155,7 @@ def test_start_needs_a_token_and_an_own_exercise(client: TestClient, tokens: dic
 
 def test_one_exercise_open_at_a_time(client: TestClient, tokens: dict, games_dir: Path) -> None:
     first = _start(client, tokens[HUMAN]).json()["game_id"]
+    assert _move(client, tokens[HUMAN], first, "d7d6").status_code == 409  # a wrong try
     second = _start(client, tokens[HUMAN], "attacked-1").json()["game_id"]
     assert first != second
     closed = GameState.load(first, games_dir=games_dir).metadata
@@ -161,11 +163,56 @@ def test_one_exercise_open_at_a_time(client: TestClient, tokens: dict, games_dir
     assert closed.termination_note == play.ABANDONED_NOTE
     assert GameState.load(second, games_dir=games_dir).metadata.result == "*"
     stored = _stored(games_dir)
-    assert stored["state"] == "proposed"  # an abandon is counted apart (Stéphane, #95)
-    assert [(a["game_id"], a["abandoned"], a["ok"]) for a in stored["attempts"]] == [
-        (first, True, False)
+    assert stored["state"] == "failed"  # the wrong try ; the abandon is counted apart (#95)
+    assert [(a["game_id"], a.get("abandoned", False), a["ok"]) for a in stored["attempts"]] == [
+        (first, False, False),
+        (first, True, False),
     ]
     assert _stored(games_dir, "attacked-1")["attempts"] == []
+
+
+def test_an_untouched_game_left_counts_no_abandon(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    """#350 : six exercises opened to find a position made six abandons."""
+    first = _start(client, tokens[HUMAN]).json()["game_id"]
+    commentary = _commentary_path(games_dir, first)
+    commentary.parent.mkdir(parents=True, exist_ok=True)
+    commentary.write_text("{}\n", encoding="utf-8")
+    second = _start(client, tokens[HUMAN], "attacked-1").json()["game_id"]
+    assert first != second
+    # Only looked at : removed, nothing to resume (owner, 14/11). One exercise at a time.
+    assert _exercise_games(games_dir) == [second]
+    assert not (games_dir / f"{first}.pgn").exists() and not commentary.exists()
+    stored = _stored(games_dir)
+    assert stored["state"] == "proposed" and stored["attempts"] == []
+    assert stored["game_ids"] == []
+    # Started again : a new game on the same position.
+    again = _start(client, tokens[HUMAN]).json()["game_id"]
+    assert again not in (first, second)
+    assert GameState.load(again, games_dir=games_dir).metadata.result == "*"
+    assert _stored(games_dir)["game_ids"] == [again]
+    counts = client.get("/api/coach/progress", headers=_auth(tokens[HUMAN])).json()["exercises"]
+    assert counts["ignored_threat"]["abandoned_games"] == 0
+
+
+def test_an_answer_tried_is_no_untouched_game(
+    client: TestClient, tokens: dict, games_dir: Path
+) -> None:
+    # « What is attacked ? » plays no move : the wrong answer alone makes the abandon.
+    first = _start(client, tokens[HUMAN], "attacked-1").json()["game_id"]
+    r = client.post(
+        "/api/coach/exercises/attacked-1/answer",
+        json={"squares": []},
+        headers=_auth(tokens[HUMAN]),
+    )
+    assert r.status_code == 409
+    _start(client, tokens[HUMAN])
+    assert GameState.load(first, games_dir=games_dir).metadata.termination_note == (
+        play.ABANDONED_NOTE
+    )
+    attempts = _stored(games_dir, "attacked-1")["attempts"]
+    assert [a.get("abandoned", False) for a in attempts] == [False, True]
 
 
 def _exercise_games(games_dir: Path) -> list[str]:
