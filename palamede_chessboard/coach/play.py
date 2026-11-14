@@ -52,7 +52,7 @@ from palamede_chessboard.chessboard_state import (
 from palamede_chessboard.clock_moves import game_lock
 from palamede_chessboard.coach import CALLER
 from palamede_chessboard.coach.store import read_exercises, update_exercise
-from palamede_chessboard.paths import EXERCISE_PREFIX
+from palamede_chessboard.paths import EXERCISE_PREFIX, _commentary_path, _pgn_path
 from palamede_chessboard.players import registry
 
 EXO_PREFIX = EXERCISE_PREFIX
@@ -62,8 +62,6 @@ EVENT = "Exercice"
 OPPONENT = "Coach Palamède"
 SOLVED_NOTE = "exercice réussi"
 ABANDONED_NOTE = "exercice abandonné"
-#: A game left without a move nor a try : closed, never counted (#350).
-LEFT_UNTOUCHED_NOTE = "exercice quitté sans essai"
 NOT_THE_MOVE = "Ce n'est pas le coup"
 FASTER_MATE = "Il y a plus rapide : un mat en moins de coups"
 POSITION_IN_PLAY = "Exercice indisponible : une partie en cours passe par cette position"
@@ -174,11 +172,28 @@ def _is_untouched(state: GameState, exercise: dict | None) -> bool:
     return not any(a.get("game_id") == game_id for a in attempts)
 
 
+def _drop_untouched(games_dir: Path, player_id: str, game_id: str, exercise: dict | None) -> None:
+    """Remove a game only looked at : its PGN, its commentary, its id in the exercise.
+
+    Nothing was played nor tried in it, so nothing is lost : starting the
+    exercise again opens the same position (owner, 14/11, #350).
+    """
+    for path in (_pgn_path(games_dir, game_id), _commentary_path(games_dir, game_id)):
+        path.unlink(missing_ok=True)
+    if exercise is None:
+        return
+
+    def forget(e: dict) -> None:
+        e["game_ids"] = [g for g in e.get("game_ids", []) if g != game_id]
+
+    update_exercise(games_dir, player_id, exercise["id"], forget)
+
+
 def _close_open_games(games_dir: Path, player_id: str) -> None:
     """One exercise at a time : an open one is closed, never left open.
 
     A game with a move or a try is abandoned, and counted apart (#95). An
-    untouched one was only looked at : it is closed without an abandon
+    untouched one was only looked at : it is removed, without an abandon
     (#350, six exercises opened to find a position made six abandons).
     """
     for pgn in sorted(games_dir.glob(f"{EXO_PREFIX}{player_id}.*.pgn")):
@@ -190,10 +205,10 @@ def _close_open_games(games_dir: Path, player_id: str) -> None:
                 exercise: dict | None = _exercise_of_game(games_dir, player_id, pgn.stem)
             except ExerciseError:
                 exercise = None
-            winner = "black" if _player_side(state, player_id) == "white" else "white"
             if _is_untouched(state, exercise):
-                _finish(state, winner, LEFT_UNTOUCHED_NOTE)
+                _drop_untouched(games_dir, player_id, pgn.stem, exercise)
                 continue
+            winner = "black" if _player_side(state, player_id) == "white" else "white"
             _finish(state, winner, ABANDONED_NOTE)
             record_abandon(games_dir, player_id, pgn.stem)
 

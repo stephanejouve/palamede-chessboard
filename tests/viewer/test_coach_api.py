@@ -22,6 +22,7 @@ from palamede_chessboard.coach.store import (
     read_exercises,
     write_report,
 )
+from palamede_chessboard.paths import _commentary_path
 from palamede_chessboard.players import registry
 
 HUMAN, OTHER, AGENT = "human-player", "other-player", "agent-player"
@@ -175,14 +176,22 @@ def test_an_untouched_game_left_counts_no_abandon(
 ) -> None:
     """#350 : six exercises opened to find a position made six abandons."""
     first = _start(client, tokens[HUMAN]).json()["game_id"]
+    commentary = _commentary_path(games_dir, first)
+    commentary.parent.mkdir(parents=True, exist_ok=True)
+    commentary.write_text("{}\n", encoding="utf-8")
     second = _start(client, tokens[HUMAN], "attacked-1").json()["game_id"]
     assert first != second
-    closed = GameState.load(first, games_dir=games_dir).metadata
-    assert closed.result != "*"  # closed all the same : one exercise at a time
-    assert closed.termination_note == play.LEFT_UNTOUCHED_NOTE
+    # Only looked at : removed, nothing to resume (owner, 14/11). One exercise at a time.
+    assert _exercise_games(games_dir) == [second]
+    assert not (games_dir / f"{first}.pgn").exists() and not commentary.exists()
     stored = _stored(games_dir)
     assert stored["state"] == "proposed" and stored["attempts"] == []
-    assert stored["game_ids"] == [first]
+    assert stored["game_ids"] == []
+    # Started again : a new game on the same position.
+    again = _start(client, tokens[HUMAN]).json()["game_id"]
+    assert again not in (first, second)
+    assert GameState.load(again, games_dir=games_dir).metadata.result == "*"
+    assert _stored(games_dir)["game_ids"] == [again]
     counts = client.get("/api/coach/progress", headers=_auth(tokens[HUMAN])).json()["exercises"]
     assert counts["ignored_threat"]["abandoned_games"] == 0
 
