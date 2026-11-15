@@ -56,7 +56,7 @@ def test_the_seat_sets_the_role_at_each_game_change() -> None:
 def test_the_seat_is_read_for_the_new_game_token_or_not() -> None:
     """refreshGameEnd runs at each game change (startEventStream) : it decides the role."""
     end = _function_body(_js("_game_end.js.jinja"), "refreshGameEnd")
-    assert "if (!playerToken()) { applySeatRole([]); return; }" in end
+    assert "if (!signedIn()) { applySeatRole([]); return; }" in end
     # A refused or failed seat read is no seat either, never the previous game's.
     assert "GAME_END.colors = r.ok ? ((await r.json()).colors || []) : [];" in end
     assert end.index("if (gameId() !== game) return;") < end.index(

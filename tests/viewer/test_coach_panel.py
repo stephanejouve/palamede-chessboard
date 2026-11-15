@@ -31,8 +31,9 @@ def test_the_progress_is_read_when_the_panel_opens_never_polled() -> None:
     assert "setInterval" not in COACH_JS
 
 
-def test_the_token_goes_as_a_header_never_in_the_url() -> None:
-    assert "'Authorization': 'Bearer ' + token" in COACH_JS
+def test_no_token_in_the_page_nor_in_a_url() -> None:
+    # #351 : the session cookie says who asks ; no Authorization header.
+    assert "Authorization': 'Bearer" not in COACH_JS and "coachHeaders" not in COACH_JS
     for url in re.findall(r"fetch\('([^']*)'", COACH_JS):
         assert "token" not in url
 
@@ -238,19 +239,23 @@ def test_the_band_follows_the_game_whatever_opened_it() -> None:
     games_js = (TEMPLATES_DIR / "viewer" / "_games_list.js.jinja").read_text(encoding="utf-8")
     assert "  resetAndPoll();\n  refreshExerciseBand(id);\n}" in games_js
     # At load, for the game of the URL.
-    assert COACH_JS.rstrip().endswith("\n});\nif (gameId()) refreshExerciseBand(gameId());")
+    # At load, for the game of the URL : once the session is known (#351).
+    assert COACH_JS.rstrip().endswith(
+        "document.addEventListener('palamede-session', () => {\n  if (coachBox.open) loadCoach();\n"
+        "  hideExerciseBand();\n  if (gameId()) refreshExerciseBand(gameId());\n});"
+    )
     body = COACH_JS[COACH_JS.index("async function refreshExerciseBand(game)") :]
     body = body[: body.index("\n}\n")]
     assert "  if (game === EXERCISE_GAME) return;\n  hideExerciseBand();" in body
-    assert "if (!game.startsWith('exo.') || !playerToken()) return;" in body
-    assert "headers: coachHeaders()" in body
+    assert "if (!game.startsWith('exo.') || !signedIn()) return;" in body
+    assert "fetch('/api/coach/exercises', { cache: 'no-store' })" in body
     assert "x.game_ids.includes(game)" in body
     # Still this game, and not shown meanwhile by « Lancer » : the typed field stays.
     assert "if (e && gameId() === game && EXERCISE_GAME !== game) showExerciseBand(" in body
 
 
-def test_a_new_token_reads_the_band_again() -> None:
-    block = COACH_JS[COACH_JS.index("document.getElementById('key-btn')") :]
+def test_a_new_session_reads_the_band_again() -> None:
+    block = COACH_JS[COACH_JS.index("document.addEventListener('palamede-session'") :]
     assert "  hideExerciseBand();\n  if (gameId()) refreshExerciseBand(gameId());" in block
 
 

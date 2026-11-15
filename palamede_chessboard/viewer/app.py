@@ -39,6 +39,7 @@ from palamede_chessboard.viewer.routers import (
     build_positions_router,
     build_realtime_router,
 )
+from palamede_chessboard.viewer.session import SessionMiddleware
 
 log = logging.getLogger(__name__)
 
@@ -168,6 +169,8 @@ def build_app() -> FastAPI:
     app.include_router(build_players_router())
     app.include_router(build_coach_router())
     app.include_router(build_lessons_router())
+    # The session cookie as the Bearer token every route reads (#351).
+    app.add_middleware(SessionMiddleware)
     return app
 
 

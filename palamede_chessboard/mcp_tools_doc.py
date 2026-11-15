@@ -61,6 +61,10 @@ _OWN_TOKENS = (
     "#351 : gérer ses jetons demande une identité, et le MCP n'authentifie pas encore (#34) ; "
     "un agent gère les siens par la commande palamede-players."
 )
+_BROWSER_SESSION = (
+    "#351 : le cookie de session d'un navigateur ; un agent envoie son jeton en Bearer à "
+    "chaque appel."
+)
 
 #: HTTP route without an MCP tool → why.
 ROUTES_WITHOUT_TOOL: dict[tuple[str, str], str] = {
@@ -89,6 +93,8 @@ ROUTES_WITHOUT_TOOL: dict[tuple[str, str], str] = {
     ("get", "/api/coach/reports/{game_id}"): _COACH,
     ("get", "/api/me/tokens"): _OWN_TOKENS,
     ("delete", "/api/me/tokens/{token_id}"): _OWN_TOKENS,
+    ("post", "/api/session"): _BROWSER_SESSION,
+    ("post", "/api/session/logout"): _BROWSER_SESSION,
 }
 
 #: MCP tool without an HTTP route → why.

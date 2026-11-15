@@ -268,6 +268,7 @@ SCHEMAS: dict[str, dict] = {
         },
         ["player", "tokens"],
     ),
+    "SignedOut": _obj({"signed_out": {"type": "boolean"}}, ["signed_out"]),
     "RevokedToken": _obj(
         {"player": {"type": "string"}, "revoked": {"type": "string"}},
         ["player", "revoked"],

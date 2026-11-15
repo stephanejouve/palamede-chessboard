@@ -39,9 +39,7 @@ function renderClockControl() {
 async function clockAction(action) {
   CLOCK_NOTE = '';
   try {
-    const r = await fetch('/api/games/' + encodeURIComponent(gameId()) + '/clock/' + action, {
-      method: 'POST', headers: { 'Authorization': 'Bearer ' + playerToken() },
-    });
+    const r = await fetch('/api/games/' + encodeURIComponent(gameId()) + '/clock/' + action, { method: 'POST' });
     if (!r.ok) {
       let body = {};
       try { body = await r.json(); } catch (_) { /* no body */ }

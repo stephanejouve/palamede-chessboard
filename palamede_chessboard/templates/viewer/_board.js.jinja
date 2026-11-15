@@ -53,12 +53,11 @@ async function onUserDrop(from, to) {
     (to.endsWith('8') || to.endsWith('1')));
   if (isPromoRank) uci = uci + 'q';
   try {
-    const headers = {'Content-Type': 'application/json'};
-    const token = window.playerToken();  // #34 : the move is played by the token's player
-    if (token) headers['Authorization'] = 'Bearer ' + token;
+    // #34 : the move is played by the session's player, whose cookie goes
+    // with the request (#351) ; the page holds no token.
     const r = await fetch('/api/games/' + encodeURIComponent(gid) + '/move', {
       method: 'POST',
-      headers,
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uci }),
     });
     if (!r.ok) {
