@@ -238,6 +238,40 @@ SCHEMAS: dict[str, dict] = {
         },
         ["player", "kind"],
     ),
+    "MyTokens": _obj(
+        {
+            "player": {"type": "string"},
+            "tokens": {
+                "type": "array",
+                "items": _obj(
+                    {
+                        "id": {"type": "string", "description": "numéro public du jeton"},
+                        "label": {"type": "string"},
+                        "class": {
+                            "type": "string",
+                            "enum": ["api", "browser", "device", "guest", "recovery"],
+                        },
+                        "created": _STR_OR_NULL,
+                        "last_used": {
+                            "anyOf": [{"type": "string"}, {"type": "null"}],
+                            "description": "date du dernier usage, sans l'heure",
+                        },
+                        "revoked": _STR_OR_NULL,
+                        "current": {
+                            "type": "boolean",
+                            "description": "le jeton de cette requête",
+                        },
+                    },
+                    ["id", "label", "class", "created", "last_used", "revoked", "current"],
+                ),
+            },
+        },
+        ["player", "tokens"],
+    ),
+    "RevokedToken": _obj(
+        {"player": {"type": "string"}, "revoked": {"type": "string"}},
+        ["player", "revoked"],
+    ),
     "Seat": _obj(
         {
             "game_id": {"type": "string"},

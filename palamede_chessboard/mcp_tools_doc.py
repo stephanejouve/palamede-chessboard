@@ -57,6 +57,10 @@ _TABLIER = (
     "physique, sans objet pour un agent."
 )
 _SVG = "Rendu SVG pour le navigateur."
+_OWN_TOKENS = (
+    "#351 : gérer ses jetons demande une identité, et le MCP n'authentifie pas encore (#34) ; "
+    "un agent gère les siens par la commande palamede-players."
+)
 
 #: HTTP route without an MCP tool → why.
 ROUTES_WITHOUT_TOOL: dict[tuple[str, str], str] = {
@@ -83,6 +87,8 @@ ROUTES_WITHOUT_TOOL: dict[tuple[str, str], str] = {
     ("post", "/api/coach/exercises/{exercise_id}/answer"): _COACH,
     ("get", "/api/coach/progress"): _COACH,
     ("get", "/api/coach/reports/{game_id}"): _COACH,
+    ("get", "/api/me/tokens"): _OWN_TOKENS,
+    ("delete", "/api/me/tokens/{token_id}"): _OWN_TOKENS,
 }
 
 #: MCP tool without an HTTP route → why.

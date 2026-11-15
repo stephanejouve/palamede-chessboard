@@ -1,5 +1,6 @@
 {
   "routes": [
+    "DELETE /api/me/tokens/{token_id}",
     "GET /",
     "GET /api/board.svg",
     "GET /api/clock",
@@ -14,6 +15,7 @@
     "GET /api/games/{game_id}/stream",
     "GET /api/health",
     "GET /api/me",
+    "GET /api/me/tokens",
     "GET /api/piece.svg",
     "GET /api/positions",
     "GET /api/raw",
@@ -626,6 +628,7 @@
     }
   ],
   "routes_without_tool": {
+    "DELETE /api/me/tokens/{token_id}": "#351 : gérer ses jetons demande une identité, et le MCP n'authentifie pas encore (#34) ; un agent gère les siens par la commande palamede-players.",
     "GET /": "Page HTML du viewer.",
     "GET /api/board.svg": "Rendu SVG pour le navigateur.",
     "GET /api/coach/exercises": "#265 : le domaine coach (exercices, progression, rapports) n'a aucun outil MCP.",
@@ -633,6 +636,7 @@
     "GET /api/coach/reports/{game_id}": "#265 : le domaine coach (exercices, progression, rapports) n'a aucun outil MCP.",
     "GET /api/games/{game_id}/stream": "Server-Sent Events ; le MCP est en requête-réponse, un agent relit chess_view_state.",
     "GET /api/health": "Santé HTTP du viewer ; le serveur MCP répond sur /healthz.",
+    "GET /api/me/tokens": "#351 : gérer ses jetons demande une identité, et le MCP n'authentifie pas encore (#34) ; un agent gère les siens par la commande palamede-players.",
     "GET /api/piece.svg": "Rendu SVG pour le navigateur.",
     "GET /api/positions": "#267 : pas d'équivalent direct ; chess_view_state donne l'historique SAN et les positions sont à recalculer.",
     "POST /api/coach/exercises/{exercise_id}/answer": "#265 : le domaine coach (exercices, progression, rapports) n'a aucun outil MCP.",

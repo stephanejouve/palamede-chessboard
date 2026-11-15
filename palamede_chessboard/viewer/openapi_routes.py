@@ -40,6 +40,8 @@ TOKEN_ROUTES = {
     ("post", "/api/games/{game_id}/board"),
     ("post", "/api/games/{game_id}/synced"),
     ("get", "/api/me"),
+    ("get", "/api/me/tokens"),
+    ("delete", "/api/me/tokens/{token_id}"),
     ("get", "/api/coach/exercises"),
     ("post", "/api/coach/exercises/{exercise_id}/start"),
     ("post", "/api/coach/exercises/{exercise_id}/answer"),
@@ -214,6 +216,18 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
         "Le rapport du coach. Réservé aux joueurs et à l'arbitre de la partie.",
         "coach",
     ),
+    ("get", "/api/me/tokens"): (
+        "Mes jetons",
+        "Les jetons du joueur du jeton : numéro, libellé, classe, dates et révocation, celui de "
+        "la requête marqué `current`. Jamais le secret ni son empreinte (#351).",
+        "joueurs",
+    ),
+    ("delete", "/api/me/tokens/{token_id}"): (
+        "Révoquer un de mes jetons",
+        "Révoque un jeton du joueur du jeton, avec effet immédiat. Le jeton d'un autre joueur "
+        "répond 404, comme un numéro inconnu (#351).",
+        "joueurs",
+    ),
 }
 
 #: Success response schema of the JSON routes.
@@ -228,6 +242,8 @@ OK_SCHEMAS = {
     ("post", "/api/coach/exercises/{exercise_id}/answer"): "ExerciseAnswerResponse",
     ("get", "/api/coach/progress"): "Progress",
     ("get", "/api/me"): "Me",
+    ("get", "/api/me/tokens"): "MyTokens",
+    ("delete", "/api/me/tokens/{token_id}"): "RevokedToken",
     ("get", "/api/games/{game_id}/seat"): "Seat",
 }
 
@@ -274,11 +290,14 @@ EXTRA_ERRORS = {
     ("post", "/api/coach/exercises/{exercise_id}/start"): ["404", "409"],
     ("post", "/api/coach/exercises/{exercise_id}/answer"): ["404", "409", "422"],
     ("get", "/api/coach/reports/{game_id}"): ["400", "404"],
+    ("delete", "/api/me/tokens/{token_id}"): ["404"],
 }
 
 #: Token routes that never answer 403.
 NO_403 = {
     ("get", "/api/me"),
+    ("get", "/api/me/tokens"),
+    ("delete", "/api/me/tokens/{token_id}"),
     ("get", "/api/coach/exercises"),
     ("get", "/api/coach/progress"),
     ("post", "/api/coach/exercises/{exercise_id}/start"),

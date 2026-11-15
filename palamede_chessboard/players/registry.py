@@ -7,7 +7,8 @@ tokens live in ``<games_dir>/.players/players.json`` (override with
     {"version": 1, "players": {"leader": {
         "display_name": "Leader", "kind": "agent", "created": "…",
         "tokens": [{"id": "a1b2c3d4", "sha256": "…", "label": "…",
-                    "created": "…", "revoked": null}],
+                    "class": "api", "created": "…", "last_used": "…",
+                    "revoked": null}],
         "links": {}}}}
 
 * ``player_id`` is the name written in the PGN headers, normalised by
@@ -20,6 +21,21 @@ tokens live in ``<games_dir>/.players/players.json`` (override with
   **unreadable** one raises :class:`RegistryError` : authentication
   must never read a broken file as "no players" or "anyone".
 
+Each token has a ``class`` (#351) : what it may be used for. A token
+written before the classes has none and is read as ``api``.
+
+* ``api``, ``browser``, ``device`` : the account's own tokens, accepted by
+  :func:`verify_token` everywhere a player acts.
+* ``guest`` (one game) and ``recovery`` (opens a browser session only) :
+  never accepted by :func:`verify_token` ; their own routes ask
+  :func:`verify` for them by name. Fail-closed : a route that forgets them
+  refuses them.
+
+``last_used`` is a date, without the hour nor any address : the least
+connection data that tells an active token from a forgotten one. A
+``browser`` token unused for :data:`BROWSER_IDLE_DAYS` days expires
+(owner, 14/11).
+
 This step adds no enforcement : callers are not checked yet (mode
 observation then strict mode come next, #34 §4).
 """
@@ -28,11 +44,13 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import os
 import re
 import stat
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from palamede_chessboard import _atomic
@@ -43,6 +61,13 @@ REGISTRY_DIRNAME = ".players"
 REGISTRY_FILENAME = "players.json"
 REGISTRY_ENV = "PALAMEDE_PLAYERS"
 KINDS = ("agent", "human")
+#: Token classes (#351) ; a token without one is ``api``.
+CLASSES = ("api", "browser", "device", "guest", "recovery")
+DEFAULT_CLASS = "api"
+#: The classes :func:`verify_token` accepts : the account's own tokens.
+ACCOUNT_CLASSES = frozenset({"api", "browser", "device"})
+#: A ``browser`` token unused this many days no longer verifies (owner, 14/11).
+BROWSER_IDLE_DAYS = 90
 _PLAYER_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 _LABEL_MAX = 64
 
@@ -61,8 +86,30 @@ def registry_path(games_dir: Path) -> Path:
     return Path(override) if override else games_dir / REGISTRY_DIRNAME / REGISTRY_FILENAME
 
 
+log = logging.getLogger(__name__)
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+def _today() -> date:
+    return datetime.now(UTC).date()
+
+
+def token_class(entry: dict) -> str:
+    """The token's class ; ``api`` for a token written before the classes."""
+    value = entry.get("class")
+    return value if value in CLASSES else DEFAULT_CLASS
+
+
+@dataclass(frozen=True)
+class TokenUse:
+    """Who a verified token is : its player, its id and its class."""
+
+    player_id: str
+    token_id: str
+    token_class: str
 
 
 def player_id_of(raw: object) -> str:
@@ -144,12 +191,16 @@ def add_player(games_dir: Path, raw_id: object, *, kind: str, display_name: str 
     return public_view(player_id, raw["players"][player_id])
 
 
-def issue_token(games_dir: Path, raw_id: object, *, label: str) -> str:
+def issue_token(
+    games_dir: Path, raw_id: object, *, label: str, token_class: str = DEFAULT_CLASS
+) -> str:
     """Create a token for ``raw_id`` and return it **in plaintext, once**."""
     player_id = player_id_of(raw_id)
     label = label.strip()
     if not label or len(label) > _LABEL_MAX:
         raise RegistryError(f"label must be 1..{_LABEL_MAX} characters")
+    if token_class not in CLASSES:
+        raise RegistryError(f"class must be one of {CLASSES}, got {token_class!r}")
     with _writing(games_dir):
         raw = load(games_dir)
         player = raw["players"].get(player_id)
@@ -162,7 +213,9 @@ def issue_token(games_dir: Path, raw_id: object, *, label: str) -> str:
                 "id": token_id,
                 "sha256": tokens.digest(secret),
                 "label": label,
+                "class": token_class,
                 "created": _now(),
+                "last_used": None,
                 "revoked": None,
             }
         )
@@ -184,9 +237,39 @@ def revoke_token(games_dir: Path, raw_id: object, token_id: str) -> None:
             _save(games_dir, raw)
 
 
-def verify_token(games_dir: Path, token: object) -> str | None:
-    """``player_id`` owning a valid, non-revoked ``token`` ; else ``None``.
+def _idle(entry: dict, today: date) -> bool:
+    """A ``browser`` token unused for :data:`BROWSER_IDLE_DAYS` days."""
+    if token_class(entry) != "browser":
+        return False
+    seen = entry.get("last_used") or str(entry.get("created", ""))[:10]
+    try:
+        last = date.fromisoformat(seen)
+    except ValueError:
+        return True  # no readable date : expired rather than eternal
+    return today - last > timedelta(days=BROWSER_IDLE_DAYS)
 
+
+def _mark_used(games_dir: Path, token_id: str, today: str) -> None:
+    """Write ``last_used`` once a day per token ; a failure never refuses the token."""
+    try:
+        with _writing(games_dir):
+            raw = load(games_dir)
+            for player in raw["players"].values():
+                for entry in player.get("tokens", []):
+                    if entry.get("id") == token_id and entry.get("last_used") != today:
+                        entry["last_used"] = today
+                        _save(games_dir, raw)
+                        return
+    except RegistryError as exc:
+        log.warning("last_used of token %s not written (%s)", token_id, exc)
+
+
+def verify(games_dir: Path, token: object, classes: frozenset[str]) -> TokenUse | None:
+    """The :class:`TokenUse` of a valid ``token`` of one of ``classes`` ; else ``None``.
+
+    Valid : well formed, known, not revoked, the right secret, a class in
+    ``classes``, and for a ``browser`` token, used in the last
+    :data:`BROWSER_IDLE_DAYS` days. The same ``None`` whatever the reason.
     Raises :class:`RegistryError` if the registry cannot be read : the
     caller must then refuse, not let the request through.
     """
@@ -194,13 +277,34 @@ def verify_token(games_dir: Path, token: object) -> str | None:
     if parsed is None:
         return None
     token_id, secret = parsed
+    today = _today()
     for player_id, player in load(games_dir)["players"].items():
         for entry in player.get("tokens", []):
             if entry.get("id") != token_id:
                 continue
-            ok = entry.get("revoked") is None and tokens.matches(secret, str(entry.get("sha256")))
-            return player_id if ok else None
+            ok = (
+                entry.get("revoked") is None
+                and tokens.matches(secret, str(entry.get("sha256")))
+                and token_class(entry) in classes
+                and not _idle(entry, today)
+            )
+            if not ok:
+                return None
+            if entry.get("last_used") != today.isoformat():
+                _mark_used(games_dir, token_id, today.isoformat())
+            return TokenUse(player_id, token_id, token_class(entry))
     return None
+
+
+def verify_token(games_dir: Path, token: object) -> str | None:
+    """``player_id`` owning a valid ``token`` of the account's classes ; else ``None``.
+
+    ``guest`` and ``recovery`` tokens are refused here (#351) : see :func:`verify`.
+    Raises :class:`RegistryError` if the registry cannot be read : the
+    caller must then refuse, not let the request through.
+    """
+    use = verify(games_dir, token, ACCOUNT_CLASSES)
+    return use.player_id if use else None
 
 
 def public_view(player_id: str, player: dict) -> dict:
@@ -210,11 +314,21 @@ def public_view(player_id: str, player: dict) -> dict:
         "display_name": player.get("display_name", player_id),
         "kind": player.get("kind"),
         "created": player.get("created"),
-        "tokens": [
-            {k: t.get(k) for k in ("id", "label", "created", "revoked")}
-            for t in player.get("tokens", [])
-        ],
+        "tokens": [public_token(t) for t in player.get("tokens", [])],
     }
+
+
+def public_token(entry: dict) -> dict:
+    """A token without its digest : id, label, class, dates, revocation."""
+    view = {k: entry.get(k) for k in ("id", "label", "created", "last_used", "revoked")}
+    view["class"] = token_class(entry)
+    return view
+
+
+def tokens_of(games_dir: Path, player_id: str) -> list[dict]:
+    """``player_id``'s tokens, without digests ; ``[]`` for an unknown player."""
+    player = load(games_dir)["players"].get(player_id) or {}
+    return [public_token(t) for t in player.get("tokens", [])]
 
 
 def list_players(games_dir: Path) -> list[dict]:
