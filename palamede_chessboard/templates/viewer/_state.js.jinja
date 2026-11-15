@@ -60,62 +60,87 @@ document.getElementById('flip-btn').addEventListener('click', () => {
   updateUrl(); applyOrientation();
 });
 
-// Player token (#34) : pasted once, kept in sessionStorage — forgotten
-// when the tab closes, never in localStorage nor in the URL. Sent as
-// ``Authorization: Bearer`` with the moves played on the board.
-const TOKEN_KEY = 'palamede-player-token';
-function playerToken() {
-  try { return sessionStorage.getItem(TOKEN_KEY) || ''; } catch (_) { return ''; }
-}
-// Who the token belongs to (#229) : asked to ``/api/me`` at load and after
-// each change, the token in a header. The click reads the last answer
-// without waiting, so the coach panel reloads with the new token.
+// Player session (#351) : the token pasted with 🔑 goes once to
+// /api/session, which answers with a browser token in an HttpOnly cookie,
+// kept after the browser closes (owner, 14/11). The page never holds a
+// token : the cookie goes with every request of this origin, and no script
+// can read it. « Se déconnecter » asks the server to expire the cookie ;
+// the token stays valid until revoked (owner, 14/11).
+const OLD_TOKEN_KEY = 'palamede-player-token';  // sessionStorage, before #351
+// Who the session is (#229) : asked to /api/me at load and after each
+// change ; then the page's other parts hear « palamede-session ».
 const KEY_TITLE = 'Jeton de joueur (pour jouer depuis le viewer)';
-let KEY_WHO = { state: 'none', player: '' };
-async function checkToken() {
-  const token = playerToken();
-  KEY_WHO = { state: token ? 'checking' : 'none', player: '' };
-  showKeyState();
-  if (!token) return;
+let KEY_WHO = { state: 'checking', player: '' };
+function signedIn() { return KEY_WHO.state === 'ok'; }
+let SESSION_CHECK = 0;
+async function checkSession() {
+  const mine = ++SESSION_CHECK;
   let next = { state: 'unknown', player: '' };
   try {
-    const r = await fetch('/api/me', { headers: { 'Authorization': 'Bearer ' + token }, cache: 'no-store' });
+    const r = await fetch('/api/me', { cache: 'no-store' });
     if (r.ok) next = { state: 'ok', player: String((await r.json()).player || '') };
-    else if (r.status === 401) next = { state: 'refused', player: '' };
+    else if (r.status === 401) next = { state: 'none', player: '' };
   } catch (_) { /* viewer unreachable : the player stays unknown */ }
-  if (playerToken() !== token) return;  // changed meanwhile : the newer check answers
+  if (mine !== SESSION_CHECK) return;  // a newer check started meanwhile : it answers
   KEY_WHO = next;
   showKeyState();
+  document.dispatchEvent(new Event('palamede-session'));
+}
+async function openSession(token) {
+  let refused = true;
+  try {
+    const r = await fetch('/api/session', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
+    });
+    refused = !r.ok;
+  } catch (_) { /* unreachable : refused below, the previous session kept */ }
+  await checkSession();
+  // Refused while signed in : the session in place is kept, and said so.
+  if (refused && KEY_WHO.state === 'ok') window.alert('Jeton refusé : toujours connecté comme ' + KEY_WHO.player + '.');
+  else if (refused) { KEY_WHO = { state: 'refused', player: '' }; showKeyState(); }
+}
+async function closeSession() {
+  try { await fetch('/api/session/logout', { method: 'POST' }); } catch (_) { /* checked below */ }
+  await checkSession();
 }
 function keyStatus() {
   if (KEY_WHO.state === 'ok') return 'Connecté comme ' + KEY_WHO.player;
   if (KEY_WHO.state === 'refused') return 'Jeton refusé';
-  if (KEY_WHO.state === 'none') return '';
-  return 'Jeton enregistré, joueur pas encore vérifié';
+  if (KEY_WHO.state === 'unknown') return 'Session non vérifiée (viewer injoignable)';
+  return '';
 }
 function showKeyState() {
   const btn = document.getElementById('key-btn');
   const who = document.getElementById('key-who');
+  const out = document.getElementById('logout-btn');
   if (btn) {
-    btn.classList.toggle('on', KEY_WHO.state !== 'none' && KEY_WHO.state !== 'refused');
+    btn.classList.toggle('on', KEY_WHO.state === 'ok');
     btn.classList.toggle('refused', KEY_WHO.state === 'refused');
     btn.title = keyStatus() || KEY_TITLE;
   }
   if (who) who.textContent = KEY_WHO.state === 'ok' ? KEY_WHO.player
                            : KEY_WHO.state === 'refused' ? 'jeton refusé' : '';
+  if (out) out.hidden = KEY_WHO.state !== 'ok';
 }
 function keyQuestion() {
-  if (KEY_WHO.state === 'none') return 'Coller votre jeton de joueur (plm_…) :';
-  if (KEY_WHO.state === 'refused') return 'Jeton refusé.\nColler un autre jeton, ou vider pour l\'oublier :';
-  return keyStatus() + '.\nColler un nouveau jeton pour changer, ou vider pour l\'oublier :';
+  if (KEY_WHO.state === 'ok') return keyStatus() + '.\nColler un autre jeton pour changer de joueur :';
+  if (KEY_WHO.state === 'refused') return 'Jeton refusé.\nColler un autre jeton de joueur (plm_…) :';
+  return 'Coller votre jeton de joueur (plm_…) :';
 }
 document.getElementById('key-btn').addEventListener('click', () => {
   const value = window.prompt(keyQuestion(), '');
-  if (value === null) return;
-  try {
-    if (value.trim()) sessionStorage.setItem(TOKEN_KEY, value.trim());
-    else sessionStorage.removeItem(TOKEN_KEY);
-  } catch (_) { /* storage unavailable : the move will be refused (401) */ }
-  checkToken();
+  if (value && value.trim()) openSession(value.trim());
 });
-checkToken();
+document.getElementById('logout-btn').addEventListener('click', closeSession);
+// A token left in sessionStorage by an older page is moved once to the
+// cookie, then forgotten : the page holds none any more.
+async function startSession() {
+  let old = '';
+  try {
+    old = sessionStorage.getItem(OLD_TOKEN_KEY) || '';
+    sessionStorage.removeItem(OLD_TOKEN_KEY);
+  } catch (_) { /* storage refused : nothing to move */ }
+  if (old) await openSession(old);
+  else await checkSession();
+}
+startSession();

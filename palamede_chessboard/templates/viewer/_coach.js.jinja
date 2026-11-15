@@ -19,10 +19,8 @@ function num(v) {
 const coachBox = document.getElementById('coach');
 const coachBody = document.getElementById('coach-body');
 
-function coachHeaders() {
-  const token = playerToken();
-  return token ? { 'Authorization': 'Bearer ' + token } : {};
-}
+// Who asks is the session's cookie (#351) : the page holds no token and
+// sends none in a header.
 
 function coachRefusal(status) {
   if (status === 401) return 'Jeton refusé : vérifiez-le avec 🔑.';
@@ -163,7 +161,7 @@ function exercisesHtml(list, progress) {
     + '<div id="coach-all-list">' + filteredHtml(f) + '</div></details>';
 }
 
-// A filter change : kept for the tab (sessionStorage, like the token), and
+// A filter change : kept for the tab (sessionStorage), and
 // the full list redrawn from what was read — nothing is fetched again.
 function onFilterChange(select) {
   const f = COACH_FILTER;
@@ -174,7 +172,7 @@ function onFilterChange(select) {
 }
 
 async function loadCoach(again) {
-  if (!playerToken()) {
+  if (!signedIn()) {
     coachBody.innerHTML = '<div class="empty">Collez votre jeton avec 🔑 pour voir vos exercices.</div>';
     return;
   }
@@ -182,8 +180,8 @@ async function loadCoach(again) {
   if (!again) coachBody.innerHTML = '<div class="empty">Chargement…</div>';
   try {
     const [rp, re] = await Promise.all([
-      fetch('/api/coach/progress', { cache: 'no-store', headers: coachHeaders() }),
-      fetch('/api/coach/exercises', { cache: 'no-store', headers: coachHeaders() }),
+      fetch('/api/coach/progress', { cache: 'no-store' }),
+      fetch('/api/coach/exercises', { cache: 'no-store' }),
     ]);
     if (!rp.ok || !re.ok) { coachBody.innerHTML = '<div class="empty">' + escapeHtml(coachRefusal(rp.ok ? re.status : rp.status)) + '</div>'; return; }
     const progress = await rp.json(), exercises = (await re.json()).exercises || [];
@@ -299,9 +297,9 @@ function hideExerciseBand() {
 async function refreshExerciseBand(game) {
   if (game === EXERCISE_GAME) return;
   hideExerciseBand();
-  if (!game.startsWith('exo.') || !playerToken()) return;
+  if (!game.startsWith('exo.') || !signedIn()) return;
   try {
-    const r = await fetch('/api/coach/exercises', { cache: 'no-store', headers: coachHeaders() });
+    const r = await fetch('/api/coach/exercises', { cache: 'no-store' });
     if (!r.ok) return;
     const list = (await r.json()).exercises || [];
     const e = list.find(x => Array.isArray(x.game_ids) && x.game_ids.includes(game));
@@ -312,7 +310,7 @@ async function refreshExerciseBand(game) {
 // « Lancer » : the exercise's game opens in this page, the player's side at
 // the bottom. « What is attacked ? » is answered with squares, not a move.
 async function startExercise(id, side, kind, motif) {
-  const r = await fetch('/api/coach/exercises/' + encodeURIComponent(id) + '/start', { method: 'POST', headers: coachHeaders() });
+  const r = await fetch('/api/coach/exercises/' + encodeURIComponent(id) + '/start', { method: 'POST' });
   let body = {};
   try { body = await r.json(); } catch (_) { /* no body */ }
   if (!r.ok) { coachBody.insertAdjacentHTML('afterbegin', '<div class="coach-error">' + escapeHtml(body.detail || coachRefusal(r.status)) + '</div>'); return; }
@@ -339,7 +337,7 @@ async function answerExercise(id, confirmed) {
   const squares = (document.getElementById('coach-squares').value || '').split(/[\s,;]+/).filter(Boolean);
   if (!squares.length && !confirmed) { askEmptyAnswer(); return; }
   const r = await fetch('/api/coach/exercises/' + encodeURIComponent(id) + '/answer', {
-    method: 'POST', headers: { ...coachHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ squares }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ squares }),
   });
   let body = {};
   try { body = await r.json(); } catch (_) { /* no body */ }
@@ -369,9 +367,10 @@ exerciseBand.addEventListener('input', ev => {
   hideEmptyAnswer();
   markDesignated();
 });
-document.getElementById('key-btn').addEventListener('click', () => {
+// A session known, opened or closed (#351) : the panel and the band are
+// read again for it, the band of the game of the URL at load included.
+document.addEventListener('palamede-session', () => {
   if (coachBox.open) loadCoach();
   hideExerciseBand();
   if (gameId()) refreshExerciseBand(gameId());
 });
-if (gameId()) refreshExerciseBand(gameId());

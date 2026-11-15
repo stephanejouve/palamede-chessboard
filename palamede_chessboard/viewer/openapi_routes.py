@@ -13,7 +13,10 @@ DESCRIPTION = (
     "(FastAPI, `build_app().openapi()`), puis annotée par "
     "`palamede_chessboard/viewer/openapi_doc.py` : authentification, codes d'erreur, formes "
     "des réponses et types de contenu.\n\n"
-    "**Authentification** : `Authorization: Bearer plm_…`, jeton d'un joueur du registre. "
+    "**Authentification** : `Authorization: Bearer plm_…`, jeton d'un joueur du registre, ou, "
+    "dans le navigateur, le cookie de session `palamede_session` posé par `POST /api/session`. "
+    "Le Bearer l'emporte quand les deux sont là. Une écriture authentifiée par le cookie qui ne "
+    "vient pas de la page du viewer (`Origin`) reçoit 403. "
     "Les lectures (parties, positions, horloge, flux) sont publiques ; les actions d'un joueur "
     "exigent son jeton. Sans jeton ou avec un jeton inconnu : 401, la même réponse quelle que "
     "soit la raison (absent, révoqué, inconnu). Jeton valide mais pas le bon joueur : 403. "
@@ -228,6 +231,20 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
         "répond 404, comme un numéro inconnu (#351).",
         "joueurs",
     ),
+    ("post", "/api/session"): (
+        "Ouvrir une session de navigateur",
+        "Échange le jeton collé (corps `{token}`, classes du compte ou `recovery`) contre un "
+        "nouveau jeton `browser`, posé dans le cookie `palamede_session` (HttpOnly, Secure, "
+        "SameSite=Lax). Réservé à la page du viewer (`Origin`) ; 10 essais par minute et par "
+        "adresse (#351).",
+        "joueurs",
+    ),
+    ("post", "/api/session/logout"): (
+        "Se déconnecter",
+        "Expire le cookie de session. Le jeton reste valide côté serveur ; le révoquer est un "
+        "geste à part (#351).",
+        "joueurs",
+    ),
 }
 
 #: Success response schema of the JSON routes.
@@ -244,6 +261,8 @@ OK_SCHEMAS = {
     ("get", "/api/me"): "Me",
     ("get", "/api/me/tokens"): "MyTokens",
     ("delete", "/api/me/tokens/{token_id}"): "RevokedToken",
+    ("post", "/api/session"): "Me",
+    ("post", "/api/session/logout"): "SignedOut",
     ("get", "/api/games/{game_id}/seat"): "Seat",
 }
 
@@ -291,17 +310,17 @@ EXTRA_ERRORS = {
     ("post", "/api/coach/exercises/{exercise_id}/answer"): ["404", "409", "422"],
     ("get", "/api/coach/reports/{game_id}"): ["400", "404"],
     ("delete", "/api/me/tokens/{token_id}"): ["404"],
+    ("post", "/api/session"): ["401", "403", "422", "429", "503"],
+    ("post", "/api/session/logout"): ["403"],
 }
 
-#: Token routes that never answer 403.
+#: Token routes that never answer 403. Reads only : a write authenticated by
+#: the session cookie is refused (403) when it does not come from the page (#351).
 NO_403 = {
     ("get", "/api/me"),
     ("get", "/api/me/tokens"),
-    ("delete", "/api/me/tokens/{token_id}"),
     ("get", "/api/coach/exercises"),
     ("get", "/api/coach/progress"),
-    ("post", "/api/coach/exercises/{exercise_id}/start"),
-    ("post", "/api/coach/exercises/{exercise_id}/answer"),
 }
 
 CONDITIONAL = {("get", "/api/games"), ("get", "/api/positions")}

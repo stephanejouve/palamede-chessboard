@@ -38,11 +38,10 @@ async function refreshGameEnd() {
   GAME_END = { colors: [], data: null, note: '' };
   renderGameEnd();
   if (!game) return;
-  if (!playerToken()) { applySeatRole([]); return; }  // no token, no seat (#337)
+  if (!signedIn()) { applySeatRole([]); return; }  // no session, no seat (#337)
   try {
-    const r = await fetch('/api/games/' + encodeURIComponent(game) + '/seat', {
-      cache: 'no-store', headers: { 'Authorization': 'Bearer ' + playerToken() },
-    });
+    // The session cookie says who asks (#351) : the page holds no token.
+    const r = await fetch('/api/games/' + encodeURIComponent(game) + '/seat', { cache: 'no-store' });
     if (gameId() !== game) return;
     GAME_END.colors = r.ok ? ((await r.json()).colors || []) : [];
     applySeatRole(GAME_END.colors);
@@ -57,9 +56,7 @@ async function refreshGameEnd() {
 async function endAction(action) {
   GAME_END.note = '';
   try {
-    const r = await fetch('/api/games/' + encodeURIComponent(gameId()) + '/' + action, {
-      method: 'POST', headers: { 'Authorization': 'Bearer ' + playerToken() },
-    });
+    const r = await fetch('/api/games/' + encodeURIComponent(gameId()) + '/' + action, { method: 'POST' });
     if (!r.ok) {
       let body = {};
       try { body = await r.json(); } catch (_) { /* no body */ }
@@ -77,4 +74,5 @@ gameEndBox.addEventListener('click', ev => {
   if (button.dataset.end === 'resign' && !window.confirm('Abandonner cette partie ?')) return;
   endAction(button.dataset.end);
 });
-document.getElementById('key-btn').addEventListener('click', refreshGameEnd);
+// A session opened or closed : the seat is read again, once it is known.
+document.addEventListener('palamede-session', refreshGameEnd);
