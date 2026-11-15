@@ -2508,6 +2508,131 @@
           }
         ]
       }
+    },
+    "/api/me/tokens": {
+      "get": {
+        "tags": [
+          "joueurs"
+        ],
+        "summary": "Mes jetons",
+        "description": "Les jetons du joueur du jeton : numéro, libellé, classe, dates et révocation, celui de la requête marqué `current`. Jamais le secret ni son empreinte (#351).",
+        "operationId": "my_tokens_api_me_tokens_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyTokens"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/me/tokens/{token_id}": {
+      "delete": {
+        "tags": [
+          "joueurs"
+        ],
+        "summary": "Révoquer un de mes jetons",
+        "description": "Révoque un jeton du joueur du jeton, avec effet immédiat. Le jeton d'un autre joueur répond 404, comme un numéro inconnu (#351).",
+        "operationId": "revoke_my_token_api_me_tokens__token_id__delete",
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokedToken"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -3465,6 +3590,102 @@
           "status",
           "game_id",
           "state"
+        ]
+      },
+      "MyTokens": {
+        "type": "object",
+        "properties": {
+          "player": {
+            "type": "string"
+          },
+          "tokens": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "numéro public du jeton"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "class": {
+                  "type": "string",
+                  "enum": [
+                    "api",
+                    "browser",
+                    "device",
+                    "guest",
+                    "recovery"
+                  ]
+                },
+                "created": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "last_used": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "date du dernier usage, sans l'heure"
+                },
+                "revoked": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "current": {
+                  "type": "boolean",
+                  "description": "le jeton de cette requête"
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "class",
+                "created",
+                "last_used",
+                "revoked",
+                "current"
+              ]
+            }
+          }
+        },
+        "required": [
+          "player",
+          "tokens"
+        ]
+      },
+      "RevokedToken": {
+        "type": "object",
+        "properties": {
+          "player": {
+            "type": "string"
+          },
+          "revoked": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "player",
+          "revoked"
         ]
       }
     },
