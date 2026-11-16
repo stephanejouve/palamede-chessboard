@@ -28,6 +28,28 @@
         ]
       }
     },
+    "/appairer": {
+      "get": {
+        "summary": "Appairer un échiquier",
+        "description": "Page HTML où le joueur connecté saisit le code affiché par un échiquier, vérifie le nom annoncé et l'heure de la demande, puis autorise ou refuse (#351). Le code n'est jamais lu dans l'adresse de la page.",
+        "operationId": "pairing_page_appairer_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "viewer"
+        ]
+      }
+    },
     "/api/health": {
       "get": {
         "summary": "Santé",
@@ -2365,6 +2387,254 @@
         }
       }
     },
+    "/api/device/code": {
+      "post": {
+        "tags": [
+          "joueurs"
+        ],
+        "summary": "Demander un code d'appairage",
+        "description": "L'échiquier demande à être appairé (corps `{device_name}`, sans jeton) : `device_code` secret, `user_code` court à afficher (`XXXX-XXXX`, sans 0/O ni 1/I), `verification_uri`, `expires_in` (600 s) et `interval` (5 s), comme RFC 8628. 10 demandes par minute et par adresse (#351, #227).",
+        "operationId": "device_code_api_device_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceCode"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de parties en cours pour ce créateur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/device/token": {
+      "post": {
+        "tags": [
+          "joueurs"
+        ],
+        "summary": "Relever le jeton d'appairage",
+        "description": "L'échiquier interroge avec son `device_code`. 400 `{error}` : `authorization_pending`, `slow_down` (trop tôt : l'intervalle grandit de 5 s), `access_denied` (refusé) ou `expired_token` (expiré, déjà servi ou inconnu). Après le oui du joueur, le jeton `device` une seule fois (#351, #227).",
+        "operationId": "device_token_api_device_token_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceToken"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/device/lookup": {
+      "post": {
+        "tags": [
+          "joueurs"
+        ],
+        "summary": "Voir l'échiquier d'un code",
+        "description": "Pour le joueur connecté (jeton `api` ou `browser`, jamais `device`) : le nom annoncé par l'échiquier et l'heure de sa demande, à vérifier avant d'autoriser. Code faux : 404 ; cinq par minute et par compte, puis 429 (#351).",
+        "operationId": "lookup_api_device_lookup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodeTyped"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairingRequest"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de parties en cours pour ce créateur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/device/approve": {
+      "post": {
+        "tags": [
+          "joueurs"
+        ],
+        "summary": "Autoriser ou refuser un échiquier",
+        "description": "Le oui (`accept: true`) ou le non du joueur ; le code ne sert qu'une fois. Mêmes jetons et même limite que la consultation (#351).",
+        "operationId": "approve_api_device_approve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Answer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairingAnswer"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de parties en cours pour ce créateur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/coach/exercises": {
       "get": {
         "tags": [
@@ -2873,6 +3143,25 @@
   },
   "components": {
     "schemas": {
+      "Answer": {
+        "properties": {
+          "user_code": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "User Code"
+          },
+          "accept": {
+            "type": "boolean",
+            "title": "Accept"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_code",
+          "accept"
+        ],
+        "title": "Answer"
+      },
       "AnswerPayload": {
         "properties": {
           "squares": {
@@ -2904,6 +3193,32 @@
         ],
         "title": "BoardPayload",
         "description": "``POST /api/games/<id>/board`` : the bridge plays on an eBoard, or not (#164)."
+      },
+      "CodeRequest": {
+        "properties": {
+          "device_name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Device Name",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "CodeRequest"
+      },
+      "CodeTyped": {
+        "properties": {
+          "user_code": {
+            "type": "string",
+            "maxLength": 32,
+            "title": "User Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_code"
+        ],
+        "title": "CodeTyped"
       },
       "CommentaryPayload": {
         "properties": {
@@ -3112,6 +3427,20 @@
         "type": "object",
         "title": "TimeControlPayload",
         "description": "Only ``format`` : ``start_seconds`` and the like are refused (422)."
+      },
+      "TokenRequest": {
+        "properties": {
+          "device_code": {
+            "type": "string",
+            "maxLength": 128,
+            "title": "Device Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_code"
+        ],
+        "title": "TokenRequest"
       },
       "ValidationError": {
         "properties": {
@@ -3882,6 +4211,88 @@
           "player",
           "kind",
           "recovery"
+        ]
+      },
+      "DeviceCode": {
+        "type": "object",
+        "properties": {
+          "device_code": {
+            "type": "string",
+            "description": "secret de l'échiquier"
+          },
+          "user_code": {
+            "type": "string",
+            "description": "XXXX-XXXX, à afficher"
+          },
+          "verification_uri": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer"
+          },
+          "interval": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "device_code",
+          "user_code",
+          "verification_uri",
+          "expires_in",
+          "interval"
+        ]
+      },
+      "DeviceToken": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "jeton `device`, servi une fois"
+          },
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "Bearer"
+            ]
+          },
+          "player": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "token_type",
+          "player"
+        ]
+      },
+      "PairingRequest": {
+        "type": "object",
+        "properties": {
+          "device_name": {
+            "type": "string"
+          },
+          "requested_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_name",
+          "requested_at"
+        ]
+      },
+      "PairingAnswer": {
+        "type": "object",
+        "properties": {
+          "device_name": {
+            "type": "string"
+          },
+          "paired": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "device_name",
+          "paired"
         ]
       },
       "SignedOut": {

@@ -59,6 +59,13 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
         "Page HTML de l'échiquier, avec sa Content-Security-Policy.",
         "viewer",
     ),
+    ("get", "/appairer"): (
+        "Appairer un échiquier",
+        "Page HTML où le joueur connecté saisit le code affiché par un échiquier, vérifie le nom "
+        "annoncé et l'heure de la demande, puis autorise ou refuse (#351). Le code n'est jamais "
+        "lu dans l'adresse de la page.",
+        "viewer",
+    ),
     ("get", "/api/health"): ("Santé", 'Répond `{"status": "ok"}`.', "viewer"),
     ("get", "/api/games"): (
         "Liste des parties",
@@ -239,6 +246,35 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
         "adresse (#351).",
         "joueurs",
     ),
+    ("post", "/api/device/code"): (
+        "Demander un code d'appairage",
+        "L'échiquier demande à être appairé (corps `{device_name}`, sans jeton) : `device_code` "
+        "secret, `user_code` court à afficher (`XXXX-XXXX`, sans 0/O ni 1/I), "
+        "`verification_uri`, `expires_in` (600 s) et `interval` (5 s), comme RFC 8628. "
+        "10 demandes par minute et par adresse (#351, #227).",
+        "joueurs",
+    ),
+    ("post", "/api/device/token"): (
+        "Relever le jeton d'appairage",
+        "L'échiquier interroge avec son `device_code`. 400 `{error}` : "
+        "`authorization_pending`, `slow_down` (trop tôt : l'intervalle grandit de 5 s), "
+        "`access_denied` (refusé) ou `expired_token` (expiré, déjà servi ou inconnu). "
+        "Après le oui du joueur, le jeton `device` une seule fois (#351, #227).",
+        "joueurs",
+    ),
+    ("post", "/api/device/lookup"): (
+        "Voir l'échiquier d'un code",
+        "Pour le joueur connecté (jeton `api` ou `browser`, jamais `device`) : le nom annoncé "
+        "par l'échiquier et l'heure de sa demande, à vérifier avant d'autoriser. Code faux : "
+        "404 ; cinq par minute et par compte, puis 429 (#351).",
+        "joueurs",
+    ),
+    ("post", "/api/device/approve"): (
+        "Autoriser ou refuser un échiquier",
+        "Le oui (`accept: true`) ou le non du joueur ; le code ne sert qu'une fois. Mêmes jetons "
+        "et même limite que la consultation (#351).",
+        "joueurs",
+    ),
     ("post", "/api/players"): (
         "S'inscrire",
         "Crée un compte de joueur humain (corps `{player_id, display_name, recovery}`) et pose "
@@ -274,12 +310,17 @@ OK_SCHEMAS = {
     ("post", "/api/session"): "Me",
     ("post", "/api/session/logout"): "SignedOut",
     ("post", "/api/players"): "SignedUp",
+    ("post", "/api/device/code"): "DeviceCode",
+    ("post", "/api/device/token"): "DeviceToken",
+    ("post", "/api/device/lookup"): "PairingRequest",
+    ("post", "/api/device/approve"): "PairingAnswer",
     ("get", "/api/games/{game_id}/seat"): "Seat",
 }
 
 #: Routes whose success is not JSON.
 MEDIA_TYPES = {
     ("get", "/"): ("text/html", {"type": "string"}),
+    ("get", "/appairer"): ("text/html", {"type": "string"}),
     ("get", "/api/piece.svg"): ("image/svg+xml", {"type": "string"}),
     ("get", "/api/board.svg"): ("image/svg+xml", {"type": "string"}),
     ("get", "/api/games/{game_id}/stream"): ("text/event-stream", {"type": "string"}),
@@ -324,6 +365,10 @@ EXTRA_ERRORS = {
     ("post", "/api/session"): ["401", "403", "422", "429", "503"],
     ("post", "/api/session/logout"): ["403"],
     ("post", "/api/players"): ["400", "403", "409", "422", "429", "503"],
+    ("post", "/api/device/code"): ["422", "429", "503"],
+    ("post", "/api/device/token"): ["400", "422", "503"],
+    ("post", "/api/device/lookup"): ["404", "422", "429"],
+    ("post", "/api/device/approve"): ["404", "422", "429"],
 }
 
 #: Token routes that never answer 403. Reads only : a write authenticated by

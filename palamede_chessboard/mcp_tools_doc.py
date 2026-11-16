@@ -61,6 +61,10 @@ _OWN_TOKENS = (
     "#351 : gérer ses jetons demande une identité, et le MCP n'authentifie pas encore (#34) ; "
     "un agent gère les siens par la commande palamede-players."
 )
+_PAIRING = (
+    "#351 : l'appairage d'un échiquier se fait entre l'échiquier et la page /appairer ; un "
+    "agent a déjà son jeton."
+)
 _BROWSER_SESSION = (
     "#351 : le cookie de session d'un navigateur ; un agent envoie son jeton en Bearer à "
     "chaque appel."
@@ -95,6 +99,11 @@ ROUTES_WITHOUT_TOOL: dict[tuple[str, str], str] = {
     ("delete", "/api/me/tokens/{token_id}"): _OWN_TOKENS,
     ("post", "/api/session"): _BROWSER_SESSION,
     ("post", "/api/session/logout"): _BROWSER_SESSION,
+    ("get", "/appairer"): "Page HTML de l'appairage d'un échiquier (#351).",
+    ("post", "/api/device/code"): _PAIRING,
+    ("post", "/api/device/token"): _PAIRING,
+    ("post", "/api/device/lookup"): _PAIRING,
+    ("post", "/api/device/approve"): _PAIRING,
     ("post", "/api/players"): (
         "#351 : l'inscription ouverte se fait depuis la page du viewer, qui reçoit le cookie ; "
         "un compte d'agent est créé par l'exploitant (palamede-players)."

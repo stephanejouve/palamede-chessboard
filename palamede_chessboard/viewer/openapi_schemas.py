@@ -279,6 +279,32 @@ SCHEMAS: dict[str, dict] = {
         },
         ["player", "kind", "recovery"],
     ),
+    "DeviceCode": _obj(
+        {
+            "device_code": {"type": "string", "description": "secret de l'échiquier"},
+            "user_code": {"type": "string", "description": "XXXX-XXXX, à afficher"},
+            "verification_uri": {"type": "string"},
+            "expires_in": {"type": "integer"},
+            "interval": {"type": "integer"},
+        },
+        ["device_code", "user_code", "verification_uri", "expires_in", "interval"],
+    ),
+    "DeviceToken": _obj(
+        {
+            "access_token": {"type": "string", "description": "jeton `device`, servi une fois"},
+            "token_type": {"type": "string", "enum": ["Bearer"]},
+            "player": {"type": "string"},
+        },
+        ["access_token", "token_type", "player"],
+    ),
+    "PairingRequest": _obj(
+        {"device_name": {"type": "string"}, "requested_at": {"type": "string"}},
+        ["device_name", "requested_at"],
+    ),
+    "PairingAnswer": _obj(
+        {"device_name": {"type": "string"}, "paired": {"type": "boolean"}},
+        ["device_name", "paired"],
+    ),
     "SignedOut": _obj({"signed_out": {"type": "boolean"}}, ["signed_out"]),
     "RevokedToken": _obj(
         {"player": {"type": "string"}, "revoked": {"type": "string"}},

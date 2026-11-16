@@ -9,9 +9,11 @@ See each submodule for details :
 * :mod:`palamede_chessboard.viewer.routers.players` — who a token is.
 * :mod:`palamede_chessboard.viewer.routers.coach` — exercises and reports (#95).
 * :mod:`palamede_chessboard.viewer.routers.lessons` — lessons (#323).
+* :mod:`palamede_chessboard.viewer.routers.devices` — pairing a board (#351 §4, #227).
 """
 
 from palamede_chessboard.viewer.routers.coach import build_coach_router
+from palamede_chessboard.viewer.routers.devices import build_devices_router
 from palamede_chessboard.viewer.routers.elo import build_elo_router
 from palamede_chessboard.viewer.routers.games import build_games_router
 from palamede_chessboard.viewer.routers.lessons import build_lessons_router
@@ -21,6 +23,7 @@ from palamede_chessboard.viewer.routers.realtime import build_realtime_router
 
 __all__ = [
     "build_coach_router",
+    "build_devices_router",
     "build_elo_router",
     "build_games_router",
     "build_lessons_router",

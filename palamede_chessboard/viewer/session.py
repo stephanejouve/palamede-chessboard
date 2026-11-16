@@ -151,8 +151,8 @@ class RateLimit:
         self.limit, self.seconds = limit, seconds
         self._calls: dict[str, deque[float]] = {}
 
-    def retry_after(self, key: str, now: float | None = None) -> int | None:
-        """``None`` and the call counted, or the seconds to wait."""
+    def waiting(self, key: str, now: float | None = None) -> int | None:
+        """The seconds to wait, or ``None`` ; the call is **not** counted."""
         now = time.monotonic() if now is None else now
         if len(self._calls) > _MAX_KEYS:  # keys of past windows only : memory stays bounded
             self._calls = {k: c for k, c in self._calls.items() if c and now - c[-1] < self.seconds}
@@ -161,5 +161,12 @@ class RateLimit:
             calls.popleft()
         if len(calls) >= self.limit:
             return max(1, int(self.seconds - (now - calls[0])) + 1)
-        calls.append(now)
         return None
+
+    def retry_after(self, key: str, now: float | None = None) -> int | None:
+        """``None`` and the call counted, or the seconds to wait."""
+        now = time.monotonic() if now is None else now
+        wait = self.waiting(key, now)
+        if wait is None:
+            self._calls[key].append(now)
+        return wait

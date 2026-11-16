@@ -1,0 +1,46 @@
+// Pairing a board (#351 §4, #227) : the signed-in player types the code the
+// board shows, checks the board's announced name and hour, then says yes or
+// no. The code is never read from the page's address (no ?code=) : a link
+// received by message must not do the work (review Admin #351).
+const $ = (id) => document.getElementById(id);
+let CODE = '';
+function say(text) { $('pair-result').textContent = text; }
+async function post(path, body) {
+  const r = await fetch(path, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const data = await r.json().catch(() => ({}));
+  return { ok: r.ok, data, detail: typeof data.detail === 'string' ? data.detail : 'refusé' };
+}
+async function start() {
+  let who = '';
+  try {
+    const r = await fetch('/api/me', { cache: 'no-store' });
+    if (r.ok) who = String((await r.json()).player || '');
+  } catch (_) { /* unreachable : said below */ }
+  if (!who) { $('pair-who').textContent = 'Connectez-vous d\'abord dans le viewer (bouton 🔑), puis revenez ici.'; return; }
+  $('pair-who').textContent = 'Compte : ' + who;
+  $('pair-step-code').hidden = false;
+  $('pair-code').focus();
+}
+$('pair-lookup').addEventListener('click', async () => {
+  CODE = $('pair-code').value.trim();
+  if (!CODE) return;
+  say('');
+  const r = await post('/api/device/lookup', { user_code: CODE });
+  if (!r.ok) { say(r.detail); return; }
+  $('pair-device').textContent = r.data.device_name;
+  $('pair-time').textContent = new Date(r.data.requested_at).toLocaleTimeString();
+  $('pair-step-code').hidden = true;
+  $('pair-step-confirm').hidden = false;
+});
+async function answer(accept) {
+  const r = await post('/api/device/approve', { user_code: CODE, accept });
+  $('pair-step-confirm').hidden = true;
+  if (!r.ok) { say(r.detail); return; }
+  say(accept ? 'Échiquier autorisé : il se connecte dans quelques secondes.' : 'Appairage refusé.');
+}
+$('pair-yes').addEventListener('click', () => answer(true));
+$('pair-no').addEventListener('click', () => answer(false));
+$('pair-code').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pair-lookup').click(); });
+start();

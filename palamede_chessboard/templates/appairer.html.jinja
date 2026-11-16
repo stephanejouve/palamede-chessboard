@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr"><head>
+<meta charset="utf-8">
+<title>Appairer un échiquier</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+{% include "viewer/_styles.css.jinja" %}
+  .pair { max-width: 34em; margin: 2em auto; padding: 0 16px; line-height: 1.5; }
+  .pair .warn { border-left: 4px solid var(--warning); padding: 8px 12px; background: var(--surface); }
+  .pair input { font: 1.4em ui-monospace, monospace; letter-spacing: .15em; width: 10ch; text-transform: uppercase; }
+  .pair .device { font-size: 1.3em; font-weight: bold; }
+  .pair button { padding: 6px 14px; margin-right: 8px; }
+</style>
+</head><body>
+<main class="pair">
+  <h1>Appairer un échiquier</h1>
+  <p class="warn" id="pair-warning">Vous autorisez un <strong>échiquier</strong> à jouer <strong>sur votre compte</strong>.
+    N'entrez un code que pour un échiquier que vous venez de brancher vous-même.</p>
+  <p id="pair-who">Vérification de la session…</p>
+  <section id="pair-step-code" hidden>
+    <label for="pair-code">Code affiché par l'échiquier :</label>
+    <input id="pair-code" autocomplete="off" spellcheck="false" maxlength="9" placeholder="XXXX-XXXX">
+    <button type="button" id="pair-lookup">Continuer</button>
+  </section>
+  <section id="pair-step-confirm" hidden>
+    <p>Échiquier annoncé : <span class="device" id="pair-device"></span><br>
+      demande faite à <span id="pair-time"></span>.</p>
+    <p>Est-ce bien l'échiquier que vous venez de brancher ?</p>
+    <button type="button" id="pair-yes">Oui, l'autoriser sur mon compte</button>
+    <button type="button" id="pair-no">Non, refuser</button>
+  </section>
+  <p id="pair-result" role="status"></p>
+  <p><a href="/">Retour au viewer</a></p>
+</main>
+<script src="{{ assets['appairer.js'] }}"></script>
+</body></html>
