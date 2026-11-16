@@ -268,6 +268,17 @@ SCHEMAS: dict[str, dict] = {
         },
         ["player", "tokens"],
     ),
+    "SignedUp": _obj(
+        {
+            "player": {"type": "string"},
+            "kind": {"type": "string", "enum": ["human"]},
+            "recovery": {
+                "anyOf": [{"type": "string"}, {"type": "null"}],
+                "description": "jeton de récupération, montré cette fois seulement ; null si refusé",
+            },
+        },
+        ["player", "kind", "recovery"],
+    ),
     "SignedOut": _obj({"signed_out": {"type": "boolean"}}, ["signed_out"]),
     "RevokedToken": _obj(
         {"player": {"type": "string"}, "revoked": {"type": "string"}},

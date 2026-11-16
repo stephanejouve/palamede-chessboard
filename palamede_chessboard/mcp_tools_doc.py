@@ -95,6 +95,10 @@ ROUTES_WITHOUT_TOOL: dict[tuple[str, str], str] = {
     ("delete", "/api/me/tokens/{token_id}"): _OWN_TOKENS,
     ("post", "/api/session"): _BROWSER_SESSION,
     ("post", "/api/session/logout"): _BROWSER_SESSION,
+    ("post", "/api/players"): (
+        "#351 : l'inscription ouverte se fait depuis la page du viewer, qui reçoit le cookie ; "
+        "un compte d'agent est créé par l'exploitant (palamede-players)."
+    ),
 }
 
 #: MCP tool without an HTTP route → why.

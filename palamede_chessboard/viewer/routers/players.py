@@ -18,9 +18,14 @@ Endpoints covered :
   The pasted token is never kept by the page.
 * ``POST /api/session/logout`` — expires the cookie. The token stays valid
   on the server : revoking is a separate act (owner, 14/11).
+* ``POST /api/players`` — open sign-up (owner, 14/11) : a ``human``
+  account, its ``browser`` token in the cookie, and unless refused a
+  ``recovery`` token returned **once** (#351 §3, see
+  :mod:`palamede_chessboard.players.signup`). 5 a hour per address, 30 a
+  hour in all.
 
-Both session routes answer only to this page (``Origin``), cookie or not :
-another site cannot sign a browser in nor out.
+These three routes answer only to this page (``Origin``), cookie or not :
+another site cannot sign a browser in nor out, nor sign it up.
 """
 
 from __future__ import annotations
@@ -31,7 +36,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
-from palamede_chessboard.players import registry
+from palamede_chessboard.players import registry, signup
 from palamede_chessboard.players.observe import bearer_token
 from palamede_chessboard.viewer import session
 from palamede_chessboard.viewer.models import _games_dir
@@ -42,15 +47,27 @@ UNAUTHENTICATED = "Jeton de joueur requis ou invalide (bouton 🔑)"
 REGISTRY_UNREADABLE = "Registre des joueurs illisible"
 NO_SUCH_TOKEN = "Aucun jeton de ce numéro pour ce joueur"
 TOO_MANY = "Trop d'essais de connexion : réessayez dans une minute"
+TOO_MANY_SIGNUPS = "Trop d'inscriptions : réessayez plus tard"
 #: The classes that may open a browser session : the account's own, and the
 #: recovery token, whose only use it is (owner, 14/11).
 SESSION_CLASSES = registry.ACCOUNT_CLASSES | {"recovery"}
 #: 10 tries a minute per client address (design #351 §3) : no token guessed in series.
 SESSION_TRIES = session.RateLimit(10, 60)
+#: Sign-ups (design #351 §3) : 5 a hour per client address, and 30 a hour
+#: in all, for when the address cannot be trusted.
+SIGNUPS_PER_ADDRESS = session.RateLimit(5, 3600)
+SIGNUPS_IN_ALL = session.RateLimit(30, 3600)
 
 
 class SessionPayload(BaseModel):
     token: str = Field(max_length=128)
+
+
+class SignupPayload(BaseModel):
+    player_id: str = Field(max_length=64)
+    display_name: str = Field(default="", max_length=256)
+    #: The recovery token, shown once ; ``false`` refuses it (owner, 14/11).
+    recovery: bool = True
 
 
 def build_players_router() -> APIRouter:
@@ -115,6 +132,8 @@ def build_players_router() -> APIRouter:
         session.set_session_cookie(response, browser)
         return {"player": use.player_id, "kind": kind}
 
+    router.post("/api/players", status_code=201)(sign_up)
+
     @router.post("/api/session/logout")
     def close_session(request: Request, response: Response) -> dict:
         """Expire the cookie ; the token stays valid, listed in « Mes jetons »."""
@@ -123,6 +142,33 @@ def build_players_router() -> APIRouter:
         return {"signed_out": True}
 
     return router
+
+
+def sign_up(payload: SignupPayload, request: Request, response: Response) -> dict:
+    """A new ``human`` account, signed in ; its recovery token once."""
+    response.headers["Cache-Control"] = "no-store"
+    _same_page(request)
+    address = request.client.host if request.client else ""
+    wait = SIGNUPS_PER_ADDRESS.retry_after(address) or SIGNUPS_IN_ALL.retry_after("")
+    if wait is not None:
+        raise HTTPException(429, TOO_MANY_SIGNUPS, headers={"Retry-After": str(wait)})
+    try:
+        player_id, browser, recovery = signup.sign_up(
+            _games_dir(),
+            payload.player_id,
+            display_name=payload.display_name,
+            recovery=payload.recovery,
+            label="navigateur " + datetime.now(UTC).strftime("%Y-%m-%d"),
+        )
+    except signup.NameUnavailable as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except signup.SignupError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except (registry.RegistryError, OSError) as exc:
+        log.warning("/api/players : registry or games unreadable (%s)", exc)
+        raise HTTPException(503, REGISTRY_UNREADABLE) from exc
+    session.set_session_cookie(response, browser)
+    return {"player": player_id, "kind": "human", "recovery": recovery}
 
 
 def _same_page(request: Request) -> None:

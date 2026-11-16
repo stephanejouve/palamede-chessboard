@@ -33,6 +33,7 @@
     "POST /api/games/{game_id}/resign",
     "POST /api/games/{game_id}/synced",
     "POST /api/lessons",
+    "POST /api/players",
     "POST /api/session",
     "POST /api/session/logout"
   ],
@@ -646,6 +647,7 @@
     "POST /api/games/{game_id}/board": "Pont du Tablier (eBoard Chessnut) : déclaration et synchronisation d'un échiquier physique, sans objet pour un agent.",
     "POST /api/games/{game_id}/clock/off": "La partie se joue sans pendule, définitivement (#316) : commande du viewer et du Tablier. Un agent crée sa partie sans cadence (chess_create_game) ; couper la pendule d'une partie en cours par MCP reste à décider (#325).",
     "POST /api/games/{game_id}/synced": "Pont du Tablier (eBoard Chessnut) : déclaration et synchronisation d'un échiquier physique, sans objet pour un agent.",
+    "POST /api/players": "#351 : l'inscription ouverte se fait depuis la page du viewer, qui reçoit le cookie ; un compte d'agent est créé par l'exploitant (palamede-players).",
     "POST /api/session": "#351 : le cookie de session d'un navigateur ; un agent envoie son jeton en Bearer à chaque appel.",
     "POST /api/session/logout": "#351 : le cookie de session d'un navigateur ; un agent envoie son jeton en Bearer à chaque appel."
   }
