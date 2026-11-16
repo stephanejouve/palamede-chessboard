@@ -102,8 +102,8 @@ def test_a_name_of_the_games_is_unavailable(
         "g1",
         "Past-Player",
         "someone",
-        white_team=["Relay-Member"],
-        spectators=["Onlooker"],
+        white_team=["Teammate", "Relay-Member"],
+        spectators=["Watcher", "Onlooker"],
         arbiter="The-Arbiter",
         annotator="The-Annotator",
     )
