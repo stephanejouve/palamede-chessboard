@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.29.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.28.1...v0.29.0) (2026-11-16)
+
+
+### Features
+
+* **players:** open sign-up, names of the games kept, the recovery token once ([#351](https://github.com/stephanejouve/palamede-chessboard/issues/351)) ([#356](https://github.com/stephanejouve/palamede-chessboard/issues/356)) ([d3cd052](https://github.com/stephanejouve/palamede-chessboard/commit/d3cd0523f3a69efa873e6345d579c78d35dda10d))
+* **players:** pairing a board by a short code, the device token once ([#351](https://github.com/stephanejouve/palamede-chessboard/issues/351), [#227](https://github.com/stephanejouve/palamede-chessboard/issues/227)) ([#357](https://github.com/stephanejouve/palamede-chessboard/issues/357)) ([c6a9997](https://github.com/stephanejouve/palamede-chessboard/commit/c6a99971e1ad2ce9266d301b35d516acf1808896))
+* **players:** token classes, last use, the idle browser token, a player's own tokens ([#351](https://github.com/stephanejouve/palamede-chessboard/issues/351)) ([#354](https://github.com/stephanejouve/palamede-chessboard/issues/354)) ([e88c92a](https://github.com/stephanejouve/palamede-chessboard/commit/e88c92a4a7dbee1c1c9a0bd616d5bf34defeed20))
+* **viewer:** exercises with the mouse, an empty answer asked again, no abandon for an untouched game ([#350](https://github.com/stephanejouve/palamede-chessboard/issues/350)) ([#352](https://github.com/stephanejouve/palamede-chessboard/issues/352)) ([92b2760](https://github.com/stephanejouve/palamede-chessboard/commit/92b276029cd2cd1f270dcebbde99d11b11ee85a2))
+* **viewer:** the browser session in an HttpOnly cookie, sign-out, cross-site writes refused ([#351](https://github.com/stephanejouve/palamede-chessboard/issues/351), [#350](https://github.com/stephanejouve/palamede-chessboard/issues/350)) ([#355](https://github.com/stephanejouve/palamede-chessboard/issues/355)) ([8d588f1](https://github.com/stephanejouve/palamede-chessboard/commit/8d588f1643fafcc37e9546b6188b664c2ba4c58a))
+
 ## [0.28.1](https://github.com/stephanejouve/palamede-chessboard/compare/v0.28.0...v0.28.1) (2026-11-12)
 
 
