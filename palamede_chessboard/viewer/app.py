@@ -32,6 +32,7 @@ from palamede_chessboard.viewer.models import (
 )
 from palamede_chessboard.viewer.routers import (
     build_coach_router,
+    build_devices_router,
     build_elo_router,
     build_games_router,
     build_lessons_router,
@@ -44,7 +45,7 @@ from palamede_chessboard.viewer.session import SessionMiddleware
 log = logging.getLogger(__name__)
 
 #: Entry templates of the page's scripts, served under /assets/ (#59).
-ASSET_TEMPLATES = ("viewer.js", "board.js")
+ASSET_TEMPLATES = ("viewer.js", "board.js", "appairer.js")
 
 #: Content-Security-Policy of the page (#59) : the page holds the player
 #: token, so scripts and requests are limited to the viewer's own origin.
@@ -132,6 +133,14 @@ def build_app() -> FastAPI:
         response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
         return response
 
+    @app.get("/appairer")
+    def pairing_page(request: Request) -> Response:
+        """Pair a board (#351 §4) : the code typed by hand, never taken from the URL."""
+        response = templates.TemplateResponse(request, "appairer.html.jinja", {"assets": assets})
+        response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     @app.get("/api/health")
     def health() -> dict:
         return {"status": "ok"}
@@ -167,6 +176,7 @@ def build_app() -> FastAPI:
     app.include_router(build_realtime_router())
     app.include_router(build_elo_router())
     app.include_router(build_players_router())
+    app.include_router(build_devices_router())
     app.include_router(build_coach_router())
     app.include_router(build_lessons_router())
     # The session cookie as the Bearer token every route reads (#351).
