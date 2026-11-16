@@ -280,3 +280,20 @@ def test_the_page_never_reads_the_code_from_its_address(board: TestClient) -> No
     )
     js = board.get(script).text
     assert "location" not in js and "URLSearchParams" not in js
+
+
+def test_the_token_is_the_account_s_that_said_yes(board: TestClient, tokens: dict) -> None:
+    asked = _ask(board)
+    other = {"Authorization": f"Bearer {tokens['other']}"}
+    body = {"user_code": asked["user_code"], "accept": True}
+    assert (
+        TestClient(build_app()).post("/api/device/approve", json=body, headers=other).status_code
+        == 200
+    )
+    assert _poll(board, asked["device_code"]).json()["player"] == OTHER
+
+
+def test_no_code_holds_an_ambiguous_character() -> None:
+    store = pairing.Pairings()
+    codes = "".join(store.start("b", now=0.0)["user_code"] for _ in range(300))
+    assert not set(codes) & set("01OI")
