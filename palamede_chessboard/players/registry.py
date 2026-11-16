@@ -252,18 +252,18 @@ def add_player_with_tokens(
         raw = load(games_dir)
         if player_id in raw["players"]:
             raise PlayerExists(f"player {player_id!r} already exists")
-        player = {
+        token_entries: list[dict] = []
+        raw["players"][player_id] = {
             "display_name": display_name.strip() or player_id,
             "kind": kind,
             "created": _now(),
-            "tokens": [],
+            "tokens": token_entries,
             "links": {},
         }
-        raw["players"][player_id] = player
         plaintext = []
         for label, token_class in issued:
             entry, token = _token_entry(raw, label, token_class)
-            player["tokens"].append(entry)
+            token_entries.append(entry)
             plaintext.append(token)
         _save(games_dir, raw)
     return plaintext
