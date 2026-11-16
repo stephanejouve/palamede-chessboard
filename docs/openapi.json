@@ -144,22 +144,22 @@
               }
             }
           },
-          "304": {
-            "description": "Inchangé depuis l'ETag envoyé, sans corps",
-            "headers": {
-              "ETag": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Inchangé depuis l'ETag envoyé, sans corps",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
                 }
               }
             }
@@ -194,6 +194,16 @@
               }
             }
           },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
           "400": {
             "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
             "content": {
@@ -220,16 +230,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -293,22 +293,22 @@
               }
             }
           },
-          "404": {
-            "description": "Partie ou ressource introuvable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -355,6 +355,16 @@
                   "type": "object",
                   "additionalProperties": true,
                   "title": "Response Game Move Api Games  Game Id  Move Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -409,16 +419,6 @@
               }
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
           "503": {
             "description": "Registre, données ou moteur indisponibles côté serveur",
             "content": {
@@ -469,6 +469,16 @@
               }
             }
           },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Jeton absent, révoqué ou inconnu",
             "content": {
@@ -505,16 +515,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -569,6 +569,16 @@
               }
             }
           },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Jeton absent, révoqué ou inconnu",
             "content": {
@@ -605,16 +615,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -669,6 +669,16 @@
               }
             }
           },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Jeton absent, révoqué ou inconnu",
             "content": {
@@ -705,16 +715,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -769,6 +769,16 @@
               }
             }
           },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Jeton absent, révoqué ou inconnu",
             "content": {
@@ -809,12 +819,202 @@
               }
             }
           },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/games/{game_id}/clock/start": {
+      "post": {
+        "tags": [
+          "parties"
+        ],
+        "summary": "Lancer la pendule",
+        "description": "La touche « Lancer la pendule », geste de l'arbitre (FIDE 6.2.1, #330) : tout joueur de la partie, quel que soit son camp. Elle part pour les Blancs avant le premier coup, et aucun coup n'est accepté avant (sauf tablier.*, dont le premier coup la lance encore, #335). Déjà lancée : inchangée. 409 si la partie est finie, sans pendule ou coupée.",
+        "operationId": "game_clock_start_api_games__game_id__clock_start_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Game Clock Start Api Games  Game Id  Clock Start Post"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflit avec l'état de la partie ou de l'exercice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/games/{game_id}/clock/off": {
+      "post": {
+        "tags": [
+          "parties"
+        ],
+        "summary": "Couper la pendule",
+        "description": "La partie se joue sans pendule, définitivement ; off_by dit à l'adversaire qui l'a décidé. 409 après le premier coup, pendule lancée, partie finie, sans pendule ou tablier.*.",
+        "operationId": "game_clock_off_api_games__game_id__clock_off_post",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Game Clock Off Api Games  Game Id  Clock Off Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflit avec l'état de la partie ou de l'exercice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -867,6 +1067,16 @@
               }
             }
           },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Jeton absent, révoqué ou inconnu",
             "content": {
@@ -893,16 +1103,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -966,6 +1166,16 @@
               }
             }
           },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Jeton absent, révoqué ou inconnu",
             "content": {
@@ -992,16 +1202,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1066,6 +1266,16 @@
               }
             }
           },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Jeton absent, révoqué ou inconnu",
             "content": {
@@ -1092,16 +1302,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1184,22 +1384,22 @@
               }
             }
           },
-          "400": {
-            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -1256,22 +1456,22 @@
               }
             }
           },
-          "404": {
-            "description": "Partie ou ressource introuvable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -1326,6 +1526,16 @@
               }
             }
           },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
           "304": {
             "description": "Inchangé depuis l'ETag envoyé, sans corps",
             "headers": {
@@ -1352,16 +1562,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1408,22 +1608,22 @@
               }
             }
           },
-          "400": {
-            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
           "422": {
             "description": "Validation Error",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -1507,6 +1707,16 @@
               }
             }
           },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
           "400": {
             "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
             "content": {
@@ -1533,16 +1743,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1704,6 +1904,16 @@
               }
             }
           },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
           "401": {
             "description": "Jeton absent, révoqué ou inconnu",
             "content": {
@@ -1720,16 +1930,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1802,711 +2002,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Registre, données ou moteur indisponibles côté serveur",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "jetonJoueur": []
-          }
-        ]
-      }
-    },
-    "/api/coach/exercises": {
-      "get": {
-        "tags": [
-          "coach"
-        ],
-        "summary": "Mes exercices",
-        "operationId": "exercises_api_coach_exercises_get",
-        "parameters": [
-          {
-            "name": "state",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "State"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExercisesResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Jeton absent, révoqué ou inconnu",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Registre, données ou moteur indisponibles côté serveur",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "description": "Les exercices du joueur du jeton, sans leur solution tant qu'ils ne sont pas résolus.",
-        "security": [
-          {
-            "jetonJoueur": []
-          }
-        ]
-      }
-    },
-    "/api/coach/exercises/{exercise_id}/start": {
-      "post": {
-        "tags": [
-          "coach"
-        ],
-        "summary": "Commencer un exercice",
-        "operationId": "start_api_coach_exercises__exercise_id__start_post",
-        "parameters": [
-          {
-            "name": "exercise_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Exercise Id"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExerciseStartResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Jeton absent, révoqué ou inconnu",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Partie ou ressource introuvable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflit avec l'état de la partie ou de l'exercice",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Registre, données ou moteur indisponibles côté serveur",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Jeton valide, mais pas autorisé pour cette action",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "description": "Ouvre une partie sur la position de l'exercice, pour le joueur du jeton.",
-        "security": [
-          {
-            "jetonJoueur": []
-          }
-        ]
-      }
-    },
-    "/api/coach/exercises/{exercise_id}/answer": {
-      "post": {
-        "tags": [
-          "coach"
-        ],
-        "summary": "Répondre à un exercice",
-        "operationId": "answer_api_coach_exercises__exercise_id__answer_post",
-        "parameters": [
-          {
-            "name": "exercise_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Exercise Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AnswerPayload"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExerciseAnswerResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Jeton absent, révoqué ou inconnu",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Partie ou ressource introuvable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflit avec l'état de la partie ou de l'exercice",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Registre, données ou moteur indisponibles côté serveur",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Jeton valide, mais pas autorisé pour cette action",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "description": "Réponse en cases (`squares`, 16 au plus), pour un exercice de type `attacked`.",
-        "security": [
-          {
-            "jetonJoueur": []
-          }
-        ]
-      }
-    },
-    "/api/coach/progress": {
-      "get": {
-        "tags": [
-          "coach"
-        ],
-        "summary": "Ma progression",
-        "operationId": "own_progress_api_coach_progress_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Progress"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Jeton absent, révoqué ou inconnu",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Registre, données ou moteur indisponibles côté serveur",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "description": "Compteurs par motif, suggestion, file d'attente et rappel du joueur du jeton.",
-        "security": [
-          {
-            "jetonJoueur": []
-          }
-        ]
-      }
-    },
-    "/api/coach/reports/{game_id}": {
-      "get": {
-        "tags": [
-          "coach"
-        ],
-        "summary": "Rapport de partie",
-        "operationId": "report_api_coach_reports__game_id__get",
-        "parameters": [
-          {
-            "name": "game_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Game Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Report Api Coach Reports  Game Id  Get"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Jeton absent, révoqué ou inconnu",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Jeton valide, mais pas autorisé pour cette action",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Partie ou ressource introuvable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Registre, données ou moteur indisponibles côté serveur",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "description": "Le rapport du coach. Réservé aux joueurs et à l'arbitre de la partie.",
-        "security": [
-          {
-            "jetonJoueur": []
-          }
-        ]
-      }
-    },
-    "/api/lessons": {
-      "post": {
-        "tags": [
-          "cours"
-        ],
-        "summary": "Ouvrir un cours",
-        "operationId": "lesson_create_api_lessons_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LessonPayload"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreatedLesson"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Jeton absent, révoqué ou inconnu",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Jeton valide, mais pas autorisé pour cette action",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Registre, données ou moteur indisponibles côté serveur",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "description": "Cours entre deux joueurs du registre (#323) : identifiant donné par le serveur, `cours.<thème>.<blancs>-<noirs>.<AAAAMMJJ>-<NN>`, en-tête `[Mode \"cours\"]`, sans pendule, non classé. La même opération que l'outil MCP `chess_create_lesson`, avec les mêmes refus (422). Le joueur du jeton doit être l'un des deux (403 sinon).",
-        "security": [
-          {
-            "jetonJoueur": []
-          }
-        ]
-      }
-    },
-    "/api/games/{game_id}/clock/start": {
-      "post": {
-        "tags": [
-          "parties"
-        ],
-        "summary": "Lancer la pendule",
-        "description": "La touche « Lancer la pendule », geste de l'arbitre (FIDE 6.2.1, #330) : tout joueur de la partie, quel que soit son camp. Elle part pour les Blancs avant le premier coup, et aucun coup n'est accepté avant (sauf tablier.*, dont le premier coup la lance encore, #335). Déjà lancée : inchangée. 409 si la partie est finie, sans pendule ou coupée.",
-        "operationId": "game_clock_start_api_games__game_id__clock_start_post",
-        "parameters": [
-          {
-            "name": "game_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Game Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Game Clock Start Api Games  Game Id  Clock Start Post"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Jeton absent, révoqué ou inconnu",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Jeton valide, mais pas autorisé pour cette action",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Partie ou ressource introuvable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflit avec l'état de la partie ou de l'exercice",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Registre, données ou moteur indisponibles côté serveur",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "jetonJoueur": []
-          }
-        ]
-      }
-    },
-    "/api/games/{game_id}/clock/off": {
-      "post": {
-        "tags": [
-          "parties"
-        ],
-        "summary": "Couper la pendule",
-        "description": "La partie se joue sans pendule, définitivement ; off_by dit à l'adversaire qui l'a décidé. 409 après le premier coup, pendule lancée, partie finie, sans pendule ou tablier.*.",
-        "operationId": "game_clock_off_api_games__game_id__clock_off_post",
-        "parameters": [
-          {
-            "name": "game_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Game Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Game Clock Off Api Games  Game Id  Clock Off Post"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Jeton absent, révoqué ou inconnu",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Jeton valide, mais pas autorisé pour cette action",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Partie ou ressource introuvable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflit avec l'état de la partie ou de l'exercice",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -2626,6 +2121,16 @@
               }
             }
           },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Partie ou ressource introuvable",
             "content": {
@@ -2638,16 +2143,6 @@
           },
           "503": {
             "description": "Registre, données ou moteur indisponibles côté serveur",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Jeton valide, mais pas autorisé pour cette action",
             "content": {
               "application/json": {
                 "schema": {
@@ -2746,6 +2241,98 @@
         }
       }
     },
+    "/api/players": {
+      "post": {
+        "tags": [
+          "joueurs"
+        ],
+        "summary": "S'inscrire",
+        "description": "Crée un compte de joueur humain (corps `{player_id, display_name, recovery}`) et pose son jeton `browser` dans le cookie de session. Sauf refus (`recovery: false`), renvoie **une seule fois** un jeton `recovery`, qui ne sait qu'ouvrir une session. Un nom déjà pris (compte, en-têtes des parties, préférences, agents) répond 409 « Nom indisponible », quelle qu'en soit la raison. Réservé à la page du viewer (`Origin`) ; 5 inscriptions par heure et par adresse, 30 en tout (#351).",
+        "operationId": "sign_up_api_players_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedUp"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflit avec l'état de la partie ou de l'exercice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de parties en cours pour ce créateur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/session/logout": {
       "post": {
         "tags": [
@@ -2776,6 +2363,511 @@
             }
           }
         }
+      }
+    },
+    "/api/coach/exercises": {
+      "get": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Mes exercices",
+        "operationId": "exercises_api_coach_exercises_get",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExercisesResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Les exercices du joueur du jeton, sans leur solution tant qu'ils ne sont pas résolus.",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/coach/exercises/{exercise_id}/start": {
+      "post": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Commencer un exercice",
+        "operationId": "start_api_coach_exercises__exercise_id__start_post",
+        "parameters": [
+          {
+            "name": "exercise_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Exercise Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExerciseStartResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflit avec l'état de la partie ou de l'exercice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Ouvre une partie sur la position de l'exercice, pour le joueur du jeton.",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/coach/exercises/{exercise_id}/answer": {
+      "post": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Répondre à un exercice",
+        "operationId": "answer_api_coach_exercises__exercise_id__answer_post",
+        "parameters": [
+          {
+            "name": "exercise_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Exercise Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExerciseAnswerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflit avec l'état de la partie ou de l'exercice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Réponse en cases (`squares`, 16 au plus), pour un exercice de type `attacked`.",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/coach/progress": {
+      "get": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Ma progression",
+        "operationId": "own_progress_api_coach_progress_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Progress"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Compteurs par motif, suggestion, file d'attente et rappel du joueur du jeton.",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/coach/reports/{game_id}": {
+      "get": {
+        "tags": [
+          "coach"
+        ],
+        "summary": "Rapport de partie",
+        "operationId": "report_api_coach_reports__game_id__get",
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Report Api Coach Reports  Game Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Partie ou ressource introuvable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Le rapport du coach. Réservé aux joueurs et à l'arbitre de la partie.",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
+      }
+    },
+    "/api/lessons": {
+      "post": {
+        "tags": [
+          "cours"
+        ],
+        "summary": "Ouvrir un cours",
+        "operationId": "lesson_create_api_lessons_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LessonPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedLesson"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Jeton absent, révoqué ou inconnu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Jeton valide, mais pas autorisé pour cette action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Registre, données ou moteur indisponibles côté serveur",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Cours entre deux joueurs du registre (#323) : identifiant donné par le serveur, `cours.<thème>.<blancs>-<noirs>.<AAAAMMJJ>-<NN>`, en-tête `[Mode \"cours\"]`, sans pendule, non classé. La même opération que l'outil MCP `chess_create_lesson`, avec les mêmes refus (422). Le joueur du jeton doit être l'un des deux (403 sinon).",
+        "security": [
+          {
+            "jetonJoueur": []
+          }
+        ]
       }
     }
   },
@@ -2952,6 +3044,45 @@
         ],
         "title": "NewGamePayload",
         "description": "Body of ``POST /api/games``. ``rated`` is checked by hand : strict bool."
+      },
+      "SessionPayload": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 128,
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "SessionPayload"
+      },
+      "SignupPayload": {
+        "properties": {
+          "player_id": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Player Id"
+          },
+          "display_name": {
+            "type": "string",
+            "maxLength": 256,
+            "title": "Display Name",
+            "default": ""
+          },
+          "recovery": {
+            "type": "boolean",
+            "title": "Recovery",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "player_id"
+        ],
+        "title": "SignupPayload"
       },
       "SyncedPayload": {
         "properties": {
@@ -3199,10 +3330,6 @@
             },
             "description": "camps d'un pont muet (#164a)"
           },
-          "now_ts": {
-            "type": "number",
-            "description": "heure du serveur, pour le décompte"
-          },
           "off_by": {
             "anyOf": [
               {
@@ -3213,6 +3340,10 @@
               }
             ],
             "description": "joueur qui a coupé la pendule avant le premier coup (#316)"
+          },
+          "now_ts": {
+            "type": "number",
+            "description": "heure du serveur, pour le décompte"
           }
         },
         "required": [
@@ -3642,6 +3773,143 @@
           "kind"
         ]
       },
+      "MyTokens": {
+        "type": "object",
+        "properties": {
+          "player": {
+            "type": "string"
+          },
+          "tokens": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "numéro public du jeton"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "class": {
+                  "type": "string",
+                  "enum": [
+                    "api",
+                    "browser",
+                    "device",
+                    "guest",
+                    "recovery"
+                  ]
+                },
+                "created": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "last_used": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "date du dernier usage, sans l'heure"
+                },
+                "revoked": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "current": {
+                  "type": "boolean",
+                  "description": "le jeton de cette requête"
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "class",
+                "created",
+                "last_used",
+                "revoked",
+                "current"
+              ]
+            }
+          }
+        },
+        "required": [
+          "player",
+          "tokens"
+        ]
+      },
+      "SignedUp": {
+        "type": "object",
+        "properties": {
+          "player": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "human"
+            ]
+          },
+          "recovery": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "jeton de récupération, montré cette fois seulement ; null si refusé"
+          }
+        },
+        "required": [
+          "player",
+          "kind",
+          "recovery"
+        ]
+      },
+      "SignedOut": {
+        "type": "object",
+        "properties": {
+          "signed_out": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "signed_out"
+        ]
+      },
+      "RevokedToken": {
+        "type": "object",
+        "properties": {
+          "player": {
+            "type": "string"
+          },
+          "revoked": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "player",
+          "revoked"
+        ]
+      },
       "Seat": {
         "type": "object",
         "properties": {
@@ -3734,127 +4002,6 @@
           "status",
           "game_id",
           "state"
-        ]
-      },
-      "MyTokens": {
-        "type": "object",
-        "properties": {
-          "player": {
-            "type": "string"
-          },
-          "tokens": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "type": "string",
-                  "description": "numéro public du jeton"
-                },
-                "label": {
-                  "type": "string"
-                },
-                "class": {
-                  "type": "string",
-                  "enum": [
-                    "api",
-                    "browser",
-                    "device",
-                    "guest",
-                    "recovery"
-                  ]
-                },
-                "created": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "last_used": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ],
-                  "description": "date du dernier usage, sans l'heure"
-                },
-                "revoked": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "current": {
-                  "type": "boolean",
-                  "description": "le jeton de cette requête"
-                }
-              },
-              "required": [
-                "id",
-                "label",
-                "class",
-                "created",
-                "last_used",
-                "revoked",
-                "current"
-              ]
-            }
-          }
-        },
-        "required": [
-          "player",
-          "tokens"
-        ]
-      },
-      "RevokedToken": {
-        "type": "object",
-        "properties": {
-          "player": {
-            "type": "string"
-          },
-          "revoked": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "player",
-          "revoked"
-        ]
-      },
-      "SessionPayload": {
-        "properties": {
-          "token": {
-            "type": "string",
-            "maxLength": 128,
-            "title": "Token"
-          }
-        },
-        "type": "object",
-        "required": [
-          "token"
-        ],
-        "title": "SessionPayload"
-      },
-      "SignedOut": {
-        "type": "object",
-        "properties": {
-          "signed_out": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "signed_out"
         ]
       }
     },

@@ -195,3 +195,19 @@ def test_existing_dir_is_brought_back_to_0700(tmp_path: Path) -> None:
     folder.chmod(0o755)
     add_player(tmp_path, "leader", kind="agent")
     assert stat.S_IMODE(folder.stat().st_mode) == 0o700
+
+
+def test_a_player_and_its_tokens_are_written_at_once(tmp_path: Path) -> None:
+    """#351 PR 3 : a refused token leaves no account without a way in."""
+    with pytest.raises(registry.RegistryError):
+        registry.add_player_with_tokens(
+            tmp_path, "newcomer", kind="human", issued=[("ok", "browser"), ("bad", "nope")]
+        )
+    assert registry.load(tmp_path)["players"] == {}
+    browser, recovery = registry.add_player_with_tokens(
+        tmp_path, "newcomer", kind="human", issued=[("b", "browser"), ("r", "recovery")]
+    )
+    assert registry.verify_token(tmp_path, browser) == "newcomer"
+    assert registry.verify_token(tmp_path, recovery) is None
+    with pytest.raises(registry.PlayerExists):
+        registry.add_player_with_tokens(tmp_path, "newcomer", kind="human", issued=[])

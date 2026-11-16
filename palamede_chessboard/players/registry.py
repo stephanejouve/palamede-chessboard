@@ -81,6 +81,10 @@ class RegistryError(Exception):
     """
 
 
+class PlayerExists(RegistryError):
+    """The id is already a player's : the request, not the file, is wrong."""
+
+
 def registry_path(games_dir: Path) -> Path:
     override = os.environ.get(REGISTRY_ENV, "").strip()
     return Path(override) if override else games_dir / REGISTRY_DIRNAME / REGISTRY_FILENAME
@@ -179,7 +183,7 @@ def add_player(games_dir: Path, raw_id: object, *, kind: str, display_name: str 
     with _writing(games_dir):
         raw = load(games_dir)
         if player_id in raw["players"]:
-            raise RegistryError(f"player {player_id!r} already exists")
+            raise PlayerExists(f"player {player_id!r} already exists")
         raw["players"][player_id] = {
             "display_name": display_name.strip() or player_id,
             "kind": kind,
@@ -191,36 +195,78 @@ def add_player(games_dir: Path, raw_id: object, *, kind: str, display_name: str 
     return public_view(player_id, raw["players"][player_id])
 
 
-def issue_token(
-    games_dir: Path, raw_id: object, *, label: str, token_class: str = DEFAULT_CLASS
-) -> str:
-    """Create a token for ``raw_id`` and return it **in plaintext, once**."""
-    player_id = player_id_of(raw_id)
+def _token_entry(raw: dict, label: str, token_class: str) -> tuple[dict, str]:
+    """A new token's registry entry, and the token in plaintext."""
     label = label.strip()
     if not label or len(label) > _LABEL_MAX:
         raise RegistryError(f"label must be 1..{_LABEL_MAX} characters")
     if token_class not in CLASSES:
         raise RegistryError(f"class must be one of {CLASSES}, got {token_class!r}")
+    taken = {t["id"] for p in raw["players"].values() for t in p.get("tokens", [])}
+    token_id, secret = tokens.new_token_id(taken), tokens.new_secret()
+    entry = {
+        "id": token_id,
+        "sha256": tokens.digest(secret),
+        "label": label,
+        "class": token_class,
+        "created": _now(),
+        "last_used": None,
+        "revoked": None,
+    }
+    return entry, tokens.format_token(token_id, secret)
+
+
+def issue_token(
+    games_dir: Path, raw_id: object, *, label: str, token_class: str = DEFAULT_CLASS
+) -> str:
+    """Create a token for ``raw_id`` and return it **in plaintext, once**."""
+    player_id = player_id_of(raw_id)
     with _writing(games_dir):
         raw = load(games_dir)
         player = raw["players"].get(player_id)
         if player is None:
             raise RegistryError(f"unknown player {player_id!r}")
-        taken = {t["id"] for p in raw["players"].values() for t in p.get("tokens", [])}
-        token_id, secret = tokens.new_token_id(taken), tokens.new_secret()
-        player.setdefault("tokens", []).append(
-            {
-                "id": token_id,
-                "sha256": tokens.digest(secret),
-                "label": label,
-                "class": token_class,
-                "created": _now(),
-                "last_used": None,
-                "revoked": None,
-            }
-        )
+        entry, token = _token_entry(raw, label, token_class)
+        player.setdefault("tokens", []).append(entry)
         _save(games_dir, raw)
-    return tokens.format_token(token_id, secret)
+    return token
+
+
+def add_player_with_tokens(
+    games_dir: Path,
+    raw_id: object,
+    *,
+    kind: str,
+    display_name: str = "",
+    issued: list[tuple[str, str]],
+) -> list[str]:
+    """Create a player and its tokens ``(label, class)`` in **one** write.
+
+    The tokens in plaintext, in the order asked. A failure leaves no
+    account behind : no player without the token that lets them in.
+    """
+    player_id = player_id_of(raw_id)
+    if kind not in KINDS:
+        raise RegistryError(f"kind must be one of {KINDS}, got {kind!r}")
+    with _writing(games_dir):
+        raw = load(games_dir)
+        if player_id in raw["players"]:
+            raise PlayerExists(f"player {player_id!r} already exists")
+        token_entries: list[dict] = []
+        raw["players"][player_id] = {
+            "display_name": display_name.strip() or player_id,
+            "kind": kind,
+            "created": _now(),
+            "tokens": token_entries,
+            "links": {},
+        }
+        plaintext = []
+        for label, token_class in issued:
+            entry, token = _token_entry(raw, label, token_class)
+            token_entries.append(entry)
+            plaintext.append(token)
+        _save(games_dir, raw)
+    return plaintext
 
 
 def revoke_token(games_dir: Path, raw_id: object, token_id: str) -> None:

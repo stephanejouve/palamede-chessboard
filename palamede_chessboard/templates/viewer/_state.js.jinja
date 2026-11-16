@@ -121,6 +121,8 @@ function showKeyState() {
   if (who) who.textContent = KEY_WHO.state === 'ok' ? KEY_WHO.player
                            : KEY_WHO.state === 'refused' ? 'jeton refusé' : '';
   if (out) out.hidden = KEY_WHO.state !== 'ok';
+  const up = document.getElementById('signup-btn');
+  if (up) up.hidden = KEY_WHO.state !== 'none' && KEY_WHO.state !== 'refused';
 }
 function keyQuestion() {
   if (KEY_WHO.state === 'ok') return keyStatus() + '.\nColler un autre jeton pour changer de joueur :';
@@ -132,6 +134,30 @@ document.getElementById('key-btn').addEventListener('click', () => {
   if (value && value.trim()) openSession(value.trim());
 });
 document.getElementById('logout-btn').addEventListener('click', closeSession);
+// Open sign-up (#351) : a name, then the recovery token, shown once and only
+// if wanted ; the server signs the browser in with its cookie.
+const RECOVERY_OFFER = 'Recevoir un jeton de récupération ?\n'
+  + 'Il permet de retrouver votre compte si vous perdez ce navigateur. '
+  + 'Il ne sera montré qu\'une fois : à garder comme un mot de passe.';
+async function signUp() {
+  const name = window.prompt('Votre nom de joueur (lettres a-z, chiffres, _ et -) :', '');
+  if (!name || !name.trim()) return;
+  const recovery = window.confirm(RECOVERY_OFFER);
+  let answer = null, detail = 'viewer injoignable';
+  try {
+    const r = await fetch('/api/players', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ player_id: name.trim(), display_name: name.trim(), recovery }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (r.ok) answer = body;
+    else detail = typeof body.detail === 'string' ? body.detail : 'inscription refusée';
+  } catch (_) { /* unreachable : said below */ }
+  if (!answer) { window.alert('Inscription refusée : ' + detail + '.'); return; }
+  if (answer.recovery) window.prompt('Jeton de récupération, à copier et garder (il ne sera plus montré) :', answer.recovery);
+  await checkSession();
+}
+document.getElementById('signup-btn').addEventListener('click', signUp);
 // A token left in sessionStorage by an older page is moved once to the
 // cookie, then forgotten : the page holds none any more.
 async function startSession() {

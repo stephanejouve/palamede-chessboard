@@ -239,6 +239,16 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
         "adresse (#351).",
         "joueurs",
     ),
+    ("post", "/api/players"): (
+        "S'inscrire",
+        "Crée un compte de joueur humain (corps `{player_id, display_name, recovery}`) et pose "
+        "son jeton `browser` dans le cookie de session. Sauf refus (`recovery: false`), "
+        "renvoie **une seule fois** un jeton `recovery`, qui ne sait qu'ouvrir une session. "
+        "Un nom déjà pris (compte, en-têtes des parties, préférences, agents) répond 409 "
+        "« Nom indisponible », quelle qu'en soit la raison. Réservé à la page du viewer "
+        "(`Origin`) ; 5 inscriptions par heure et par adresse, 30 en tout (#351).",
+        "joueurs",
+    ),
     ("post", "/api/session/logout"): (
         "Se déconnecter",
         "Expire le cookie de session. Le jeton reste valide côté serveur ; le révoquer est un "
@@ -263,6 +273,7 @@ OK_SCHEMAS = {
     ("delete", "/api/me/tokens/{token_id}"): "RevokedToken",
     ("post", "/api/session"): "Me",
     ("post", "/api/session/logout"): "SignedOut",
+    ("post", "/api/players"): "SignedUp",
     ("get", "/api/games/{game_id}/seat"): "Seat",
 }
 
@@ -312,6 +323,7 @@ EXTRA_ERRORS = {
     ("delete", "/api/me/tokens/{token_id}"): ["404"],
     ("post", "/api/session"): ["401", "403", "422", "429", "503"],
     ("post", "/api/session/logout"): ["403"],
+    ("post", "/api/players"): ["400", "403", "409", "422", "429", "503"],
 }
 
 #: Token routes that never answer 403. Reads only : a write authenticated by
