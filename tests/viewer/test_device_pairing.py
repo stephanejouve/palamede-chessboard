@@ -29,6 +29,7 @@ def games_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(devices, "PAIRINGS", pairing.Pairings())
     monkeypatch.setattr(devices, "CODE_REQUESTS", session.RateLimit(10, 60))
     monkeypatch.setattr(devices, "WRONG_CODES", session.RateLimit(5, 60))
+    monkeypatch.setattr(devices, "POLLS", session.RateLimit(60, 60))
     return tmp_path
 
 
@@ -245,7 +246,7 @@ def test_the_announced_name_is_cleaned_and_short(board: TestClient, player: Test
     assert name["device_name"].startswith("Evil[31mboard") and len(name["device_name"]) == 40
     unnamed = _ask(board, "  ")["user_code"]
     r = player.post("/api/device/lookup", json={"user_code": unnamed}, headers=ORIGIN)
-    assert r.json()["device_name"] == "échiquier"
+    assert r.json()["device_name"] == "sans nom"
 
 
 def test_the_pending_pairings_stay_bounded(
@@ -297,3 +298,71 @@ def test_no_code_holds_an_ambiguous_character() -> None:
     store = pairing.Pairings()
     codes = "".join(store.start("b", now=0.0)["user_code"] for _ in range(300))
     assert not set(codes) & set("01OI")
+
+
+def test_a_board_without_a_name_is_labelled_once(
+    board: TestClient, player: TestClient, clock: list, games_dir: Path
+) -> None:
+    """Review Admin #357 : « échiquier sans nom », never « échiquier échiquier »."""
+    asked = _ask(board, "")
+    body = {"user_code": asked["user_code"], "accept": True}
+    assert player.post("/api/device/approve", json=body, headers=ORIGIN).status_code == 200
+    assert _poll(board, asked["device_code"]).status_code == 200
+    labels = [t["label"] for t in registry.tokens_of(games_dir, OWNER) if t["class"] == "device"]
+    assert "échiquier sans nom" in labels and "échiquier échiquier" not in labels
+
+
+def test_polls_are_limited_per_address(board: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review Admin #357 : the poll costs a digest, so it is bounded per address too."""
+    monkeypatch.setattr(devices, "POLLS", session.RateLimit(3, 60))
+    for _ in range(3):
+        assert _poll(board, "made-up").status_code == 400
+    r = _poll(board, "made-up")
+    assert r.status_code == 429 and int(r.headers["retry-after"]) > 0
+
+
+def test_two_polls_at_once_never_both_get_the_token(
+    board: TestClient, player: TestClient, clock: list, games_dir: Path
+) -> None:
+    """Review Junior #357 : the store's lock, eight threads on one approved code.
+
+    Reading ``last_poll`` takes its value, then waits : that widens the
+    window between the check of the interval and its update. Without the
+    lock, every thread reads « never polled » and gets the player's yes.
+    """
+    import threading
+
+    asked = _ask(board)
+    body = {"user_code": asked["user_code"], "accept": True}
+    assert player.post("/api/device/approve", json=body, headers=ORIGIN).status_code == 200
+    store = devices.PAIRINGS
+    (entry,) = store._by_device.values()
+
+    class SlowRead(type(entry)):  # type: ignore[misc]
+        @property
+        def last_poll(self) -> float | None:
+            value = self.__dict__.get("_last_poll")
+            threading.Event().wait(0.05)
+            return value
+
+        @last_poll.setter
+        def last_poll(self, value: float | None) -> None:
+            self.__dict__["_last_poll"] = value
+
+    entry.__class__ = SlowRead
+    barrier = threading.Barrier(8)
+    won: list[str] = []
+
+    def poll() -> None:
+        barrier.wait()
+        try:
+            won.append(store.poll(asked["device_code"])[0])
+        except pairing.PairingError:
+            pass
+
+    threads = [threading.Thread(target=poll) for _ in range(8)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert won == [OWNER]

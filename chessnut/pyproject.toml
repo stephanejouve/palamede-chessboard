@@ -29,6 +29,7 @@ usb = ["hidapi>=0.14; sys_platform != 'linux'"]
 [project.scripts]
 palamede-chessnut = "palamede_chessnut.cli:main"
 palamede-chessnut-app = "palamede_chessnut.app:main"
+palamede-chessnut-pair = "palamede_chessnut.pair:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["palamede_chessnut"]

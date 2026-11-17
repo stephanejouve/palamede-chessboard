@@ -27,12 +27,16 @@ the pairings under way, and the board asks again.
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import re
 import secrets
+import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from typing import Any, TypeVar
 
 #: Seconds a code lives (design #351 §4).
 EXPIRES_IN = 600
@@ -44,6 +48,7 @@ ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 #: Pairings under way at once : past it, a new one is refused (memory stays bounded).
 MAX_PENDING = 1000
 DEVICE_NAME_MAX = 40
+NO_NAME = "sans nom"
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 _USER_CODE_RE = re.compile(r"^[A-Z0-9]{8}$")
 
@@ -69,9 +74,13 @@ def normalize_user_code(raw: object) -> str | None:
 
 
 def device_name_of(raw: object) -> str:
-    """The name the board announces, without control characters ; « échiquier » if none."""
+    """The name the board announces, without control characters ; :data:`NO_NAME` if none.
+
+    The token's label is « échiquier <name> » : a board without a name is
+    « échiquier sans nom », never « échiquier échiquier » (review Admin #357).
+    """
     name = _CONTROL_RE.sub("", raw).strip() if isinstance(raw, str) else ""
-    return name[:DEVICE_NAME_MAX] or "échiquier"
+    return name[:DEVICE_NAME_MAX] or NO_NAME
 
 
 @dataclass
@@ -88,12 +97,33 @@ class _Pairing:
     answered: bool = field(default=False)
 
 
+_T = TypeVar("_T")
+
+
+def _locked(method: Callable[..., _T]) -> Callable[..., _T]:
+    """Run ``method`` under the store's lock."""
+
+    @functools.wraps(method)
+    def run(self: Pairings, *args: Any, **kwargs: Any) -> _T:
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return run
+
+
 class Pairings:
-    """The pairings under way, in this process."""
+    """The pairings under way, in this process.
+
+    The routes run in FastAPI's thread pool : every public method holds
+    :attr:`_lock`, so two polls of the same approved code at once never
+    both get the player's yes, nor two answers both take the code (review
+    Junior #357).
+    """
 
     def __init__(self) -> None:
         self._by_device: dict[str, _Pairing] = {}
         self._by_user: dict[str, str] = {}
+        self._lock = threading.Lock()
 
     def _drop_expired(self, now: float) -> None:
         for key in [k for k, p in self._by_device.items() if p.expires <= now]:
@@ -104,6 +134,7 @@ class Pairings:
         if pairing is not None:
             self._by_user.pop(pairing.user_code, None)
 
+    @_locked
     def start(self, device_name: object, now: float | None = None) -> dict:
         """A new pairing : the RFC 8628 answer, ``device_code`` in clear this once."""
         now = time.monotonic() if now is None else now
@@ -141,11 +172,13 @@ class Pairings:
             raise PairingError("invalid_code")
         return pairing
 
+    @_locked
     def describe(self, raw_user_code: object, now: float | None = None) -> dict:
         """What the player confirms : the board's announced name and the hour it asked."""
         pairing = self._waiting(raw_user_code, time.monotonic() if now is None else now)
         return {"device_name": pairing.device_name, "requested_at": pairing.requested_at}
 
+    @_locked
     def answer(
         self, raw_user_code: object, player_id: str, *, accept: bool, now: float | None = None
     ) -> dict:
@@ -158,6 +191,7 @@ class Pairings:
             pairing.denied = True
         return {"device_name": pairing.device_name, "paired": accept}
 
+    @_locked
     def poll(self, device_code: object, now: float | None = None) -> tuple[str, str]:
         """``(player_id, device_name)`` once the player said yes ; :class:`PairingError` else.
 
