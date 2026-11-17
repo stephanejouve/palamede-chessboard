@@ -99,6 +99,10 @@ ROUTES_WITHOUT_TOOL: dict[tuple[str, str], str] = {
     ("delete", "/api/me/tokens/{token_id}"): _OWN_TOKENS,
     ("post", "/api/session"): _BROWSER_SESSION,
     ("post", "/api/session/logout"): _BROWSER_SESSION,
+    ("post", "/api/me/recovery"): (
+        "#351 : le jeton de récupération ne sert qu'à rouvrir une session de navigateur ; un "
+        "agent n'en a pas l'usage."
+    ),
     ("get", "/appairer"): "Page HTML de l'appairage d'un échiquier (#351).",
     ("post", "/api/device/code"): _PAIRING,
     ("post", "/api/device/token"): _PAIRING,

@@ -205,3 +205,74 @@ def test_a_new_account_cannot_act_in_another_s_game(browser: TestClient, games_d
     _game(games_dir, "g1", "white-player", "black-player")
     assert _sign_up(browser, NEWCOMER).status_code == 201
     assert browser.post("/api/games/g1/resign", headers=ORIGIN).status_code == 403
+
+
+def test_a_signed_in_player_gets_a_recovery_token_once(
+    browser: TestClient, games_dir: Path
+) -> None:
+    """#351 : the page signs up without it, then offers it once the account exists."""
+    assert _sign_up(browser, NEWCOMER, recovery=False).status_code == 201
+    r = browser.post("/api/me/recovery", headers=ORIGIN)
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
+    spare = r.json()["recovery"]
+    assert r.json()["player"] == NEWCOMER
+    other = TestClient(build_app(), base_url="https://testserver")
+    assert other.post("/api/session", json={"token": spare}, headers=ORIGIN).status_code == 200
+
+
+def test_a_new_recovery_token_revokes_the_previous_one(
+    browser: TestClient, games_dir: Path
+) -> None:
+    first = _sign_up(browser, NEWCOMER).json()["recovery"]
+    second = browser.post("/api/me/recovery", headers=ORIGIN).json()["recovery"]
+    assert first != second
+    listed = [t for t in registry.tokens_of(games_dir, NEWCOMER) if t["class"] == "recovery"]
+    assert [t["revoked"] is None for t in listed] == [False, True]
+    fresh = TestClient(build_app(), base_url="https://testserver")
+    assert fresh.post("/api/session", json={"token": first}, headers=ORIGIN).status_code == 401
+    assert fresh.post("/api/session", json={"token": second}, headers=ORIGIN).status_code == 200
+
+
+@pytest.mark.parametrize("kind", ["device", "recovery", "guest"])
+def test_only_api_and_browser_tokens_ask_a_recovery_token(games_dir: Path, kind: str) -> None:
+    registry.add_player(games_dir, NEWCOMER, kind="human")
+    token = registry.issue_token(games_dir, NEWCOMER, label="t", token_class=kind)
+    bearer = {"Authorization": f"Bearer {token}"}
+    assert TestClient(build_app()).post("/api/me/recovery", headers=bearer).status_code == 401
+    assert registry.tokens_of(games_dir, NEWCOMER)[1:] == []
+
+
+def test_an_api_token_asks_one_too(games_dir: Path) -> None:
+    registry.add_player(games_dir, NEWCOMER, kind="human")
+    api = registry.issue_token(games_dir, NEWCOMER, label="cli")
+    r = TestClient(build_app()).post("/api/me/recovery", headers={"Authorization": f"Bearer {api}"})
+    assert r.status_code == 200 and r.json()["recovery"].startswith("plm_")
+
+
+def test_nobody_signed_in_gets_no_recovery_token(browser: TestClient, games_dir: Path) -> None:
+    assert browser.post("/api/me/recovery", headers=ORIGIN).status_code == 401
+
+
+def test_a_recovery_token_is_not_asked_from_another_site(
+    browser: TestClient, games_dir: Path
+) -> None:
+    assert _sign_up(browser, NEWCOMER, recovery=False).status_code == 201
+    evil = {"Origin": "https://evil.example"}
+    assert browser.post("/api/me/recovery", headers=evil).status_code == 403
+    assert [t["class"] for t in registry.tokens_of(games_dir, NEWCOMER)] == ["browser"]
+
+
+def test_the_page_asks_the_name_before_the_recovery_token() -> None:
+    """Smoke of the owner, 16/11 : a taken name must be refused before any question."""
+    script = (
+        Path(__file__).parents[2] / "palamede_chessboard/templates/viewer/_state.js.jinja"
+    ).read_text(encoding="utf-8")
+    body = script[script.index("async function signUp()") :]
+    body = body[: body.index("\n}\n")]
+    assert "recovery: false" in body
+    assert (
+        body.index("'/api/players'")
+        < body.index("RECOVERY_OFFER")
+        < body.index("'/api/me/recovery'")
+    )
+    assert body.index("if (!created.ok)") < body.index("RECOVERY_OFFER")

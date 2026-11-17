@@ -211,3 +211,15 @@ def test_a_player_and_its_tokens_are_written_at_once(tmp_path: Path) -> None:
     assert registry.verify_token(tmp_path, recovery) is None
     with pytest.raises(registry.PlayerExists):
         registry.add_player_with_tokens(tmp_path, "newcomer", kind="human", issued=[])
+
+
+def test_replace_token_revokes_the_class_s_others_only(tmp_path: Path) -> None:
+    registry.add_player(tmp_path, "newcomer", kind="human")
+    api = registry.issue_token(tmp_path, "newcomer", label="cli")
+    old = registry.issue_token(tmp_path, "newcomer", label="r1", token_class="recovery")
+    new = registry.replace_token(tmp_path, "newcomer", label="r2", token_class="recovery")
+    assert registry.verify(tmp_path, old, frozenset({"recovery"})) is None
+    assert registry.verify(tmp_path, new, frozenset({"recovery"})) is not None
+    assert registry.verify_token(tmp_path, api) == "newcomer"
+    with pytest.raises(registry.RegistryError):
+        registry.replace_token(tmp_path, "nobody", label="r", token_class="recovery")

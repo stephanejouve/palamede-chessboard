@@ -18,6 +18,10 @@ Endpoints covered :
   The pasted token is never kept by the page.
 * ``POST /api/session/logout`` — expires the cookie. The token stays valid
   on the server : revoking is a separate act (owner, 14/11).
+* ``POST /api/me/recovery`` — a new ``recovery`` token for the player of
+  an ``api`` or ``browser`` token, returned **once** ; the previous one is
+  revoked in the same write. Offered by the page right after a sign-up,
+  and the way to replace a lost one (owner, 14/11, question B).
 * ``POST /api/players`` — open sign-up (owner, 14/11) : a ``human``
   account, its ``browser`` token in the cookie, and unless refused a
   ``recovery`` token returned **once** (#351 §3, see
@@ -53,6 +57,9 @@ TOO_MANY_SIGNUPS = "Trop d'inscriptions : réessayez plus tard"
 SESSION_CLASSES = registry.ACCOUNT_CLASSES | {"recovery"}
 #: 10 tries a minute per client address (design #351 §3) : no token guessed in series.
 SESSION_TRIES = session.RateLimit(10, 60)
+#: The tokens that may ask a recovery token : not ``device`` (a stolen board
+#: must not open browser sessions) nor ``recovery`` itself (session only).
+RECOVERY_CLASSES = frozenset({"api", "browser"})
 #: Sign-ups (design #351 §3) : 5 a hour per client address, and 30 a hour
 #: in all, for when the address cannot be trusted.
 SIGNUPS_PER_ADDRESS = session.RateLimit(5, 3600)
@@ -133,6 +140,7 @@ def build_players_router() -> APIRouter:
         return {"player": use.player_id, "kind": kind}
 
     router.post("/api/players", status_code=201)(sign_up)
+    router.post("/api/me/recovery")(new_recovery)
 
     @router.post("/api/session/logout")
     def close_session(request: Request, response: Response) -> dict:
@@ -169,6 +177,24 @@ def sign_up(payload: SignupPayload, request: Request, response: Response) -> dic
         raise HTTPException(503, REGISTRY_UNREADABLE) from exc
     session.set_session_cookie(response, browser)
     return {"player": player_id, "kind": "human", "recovery": recovery}
+
+
+def new_recovery(request: Request, response: Response) -> dict:
+    """A new recovery token, shown this once ; the previous one revoked."""
+    response.headers["Cache-Control"] = "no-store"
+    token = bearer_token(request.headers)
+    gdir = _games_dir()
+    try:
+        use = registry.verify(gdir, token, RECOVERY_CLASSES) if token else None
+        if use is None:
+            raise HTTPException(401, UNAUTHENTICATED, headers={"WWW-Authenticate": "Bearer"})
+        recovery = registry.replace_token(
+            gdir, use.player_id, label="récupération", token_class="recovery"
+        )
+    except registry.RegistryError as exc:
+        log.warning("/api/me/recovery : registry unreadable (%s)", exc)
+        raise HTTPException(503, REGISTRY_UNREADABLE) from exc
+    return {"player": use.player_id, "recovery": recovery}
 
 
 def _same_page(request: Request) -> None:
