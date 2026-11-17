@@ -107,6 +107,10 @@ def token_class(entry: dict) -> str:
     return value if value in CLASSES else DEFAULT_CLASS
 
 
+#: :func:`token_class` under a name the ``token_class`` parameters do not hide.
+_class_of = token_class
+
+
 @dataclass(frozen=True)
 class TokenUse:
     """Who a verified token is : its player, its id and its class."""
@@ -267,6 +271,27 @@ def add_player_with_tokens(
             plaintext.append(token)
         _save(games_dir, raw)
     return plaintext
+
+
+def replace_token(games_dir: Path, raw_id: object, *, label: str, token_class: str) -> str:
+    """A new token of ``token_class`` for ``raw_id``, its others of that class revoked.
+
+    One write : the player is never left with two of them, nor with none
+    while the new one is not saved. The token in plaintext, once.
+    """
+    player_id = player_id_of(raw_id)
+    with _writing(games_dir):
+        raw = load(games_dir)
+        player = raw["players"].get(player_id)
+        if player is None:
+            raise RegistryError(f"unknown player {player_id!r}")
+        entry, token = _token_entry(raw, label, token_class)
+        for old in player.setdefault("tokens", []):
+            if _class_of(old) == token_class and old.get("revoked") is None:
+                old["revoked"] = _now()
+        player["tokens"].append(entry)
+        _save(games_dir, raw)
+    return token
 
 
 def revoke_token(games_dir: Path, raw_id: object, token_id: str) -> None:

@@ -275,6 +275,13 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
         "et même limite que la consultation (#351).",
         "joueurs",
     ),
+    ("post", "/api/me/recovery"): (
+        "Mon jeton de récupération",
+        "Délivre un nouveau jeton `recovery` au joueur du jeton (`api` ou `browser` seulement), "
+        "**une seule fois**, et révoque le précédent dans la même écriture. La page le propose "
+        "juste après l'inscription ; il sert aussi à remplacer un jeton perdu (#351).",
+        "joueurs",
+    ),
     ("post", "/api/players"): (
         "S'inscrire",
         "Crée un compte de joueur humain (corps `{player_id, display_name, recovery}`) et pose "
@@ -310,6 +317,7 @@ OK_SCHEMAS = {
     ("post", "/api/session"): "Me",
     ("post", "/api/session/logout"): "SignedOut",
     ("post", "/api/players"): "SignedUp",
+    ("post", "/api/me/recovery"): "RecoveryToken",
     ("post", "/api/device/code"): "DeviceCode",
     ("post", "/api/device/token"): "DeviceToken",
     ("post", "/api/device/lookup"): "PairingRequest",

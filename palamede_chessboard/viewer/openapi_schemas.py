@@ -305,6 +305,13 @@ SCHEMAS: dict[str, dict] = {
         {"device_name": {"type": "string"}, "paired": {"type": "boolean"}},
         ["device_name", "paired"],
     ),
+    "RecoveryToken": _obj(
+        {
+            "player": {"type": "string"},
+            "recovery": {"type": "string", "description": "montré cette fois seulement"},
+        },
+        ["player", "recovery"],
+    ),
     "SignedOut": _obj({"signed_out": {"type": "boolean"}}, ["signed_out"]),
     "RevokedToken": _obj(
         {"player": {"type": "string"}, "revoked": {"type": "string"}},
