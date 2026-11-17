@@ -2477,7 +2477,7 @@
           "joueurs"
         ],
         "summary": "Relever le jeton d'appairage",
-        "description": "L'échiquier interroge avec son `device_code`. 400 `{error}` : `authorization_pending`, `slow_down` (trop tôt : l'intervalle grandit de 5 s), `access_denied` (refusé) ou `expired_token` (expiré, déjà servi ou inconnu). Après le oui du joueur, le jeton `device` une seule fois (#351, #227).",
+        "description": "L'échiquier interroge avec son `device_code`. 400 `{error}` : `authorization_pending`, `slow_down` (trop tôt : l'intervalle grandit de 5 s), `access_denied` (refusé) ou `expired_token` (expiré, déjà servi ou inconnu). Après le oui du joueur, le jeton `device` une seule fois. 60 relevés par minute et par adresse (#351, #227).",
         "operationId": "device_token_api_device_token_post",
         "requestBody": {
           "content": {
@@ -2512,6 +2512,16 @@
           },
           "400": {
             "description": "Requête invalide (identifiant, coup ou paramètre incohérent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Trop de parties en cours pour ce créateur",
             "content": {
               "application/json": {
                 "schema": {

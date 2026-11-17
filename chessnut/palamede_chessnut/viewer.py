@@ -59,6 +59,26 @@ def post_json(url: str, token: str, payload: dict[str, Any]) -> tuple[int | None
         return None, None
 
 
+def post_json_without_token(url: str, payload: dict[str, Any]) -> tuple[int | None, Any]:
+    """POST without any token, for the pairing (#351) : ``(status, JSON body or None)``.
+
+    The board has no token yet ; a 3xx is reported, not followed.
+    """
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with _OPENER.open(request, timeout=10) as response:
+            return int(response.status), _body(response)
+    except urllib.error.HTTPError as exc:
+        return exc.code, _body(exc)
+    except (OSError, http.client.HTTPException):
+        return None, None
+
+
 def _body(response: Any) -> Any:
     try:
         return json.load(response)

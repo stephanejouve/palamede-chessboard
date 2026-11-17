@@ -259,7 +259,8 @@ DOCS: dict[tuple[str, str], tuple[str, str, str]] = {
         "L'échiquier interroge avec son `device_code`. 400 `{error}` : "
         "`authorization_pending`, `slow_down` (trop tôt : l'intervalle grandit de 5 s), "
         "`access_denied` (refusé) ou `expired_token` (expiré, déjà servi ou inconnu). "
-        "Après le oui du joueur, le jeton `device` une seule fois (#351, #227).",
+        "Après le oui du joueur, le jeton `device` une seule fois. 60 relevés par minute et par "
+        "adresse (#351, #227).",
         "joueurs",
     ),
     ("post", "/api/device/lookup"): (
@@ -374,7 +375,7 @@ EXTRA_ERRORS = {
     ("post", "/api/session/logout"): ["403"],
     ("post", "/api/players"): ["400", "403", "409", "422", "429", "503"],
     ("post", "/api/device/code"): ["422", "429", "503"],
-    ("post", "/api/device/token"): ["400", "422", "503"],
+    ("post", "/api/device/token"): ["400", "422", "429", "503"],
     ("post", "/api/device/lookup"): ["404", "422", "429"],
     ("post", "/api/device/approve"): ["404", "422", "429"],
 }

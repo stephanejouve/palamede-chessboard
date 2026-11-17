@@ -9,7 +9,7 @@ Endpoints covered :
 * ``POST /api/device/token`` — the board polls with its ``device_code`` :
   400 ``authorization_pending``, ``slow_down``, ``access_denied`` or
   ``expired_token`` (RFC 8628 §3.5), then once the ``device`` token of
-  the player who said yes.
+  the player who said yes. 60 polls a minute per address.
 * ``POST /api/device/lookup`` — the signed-in player typed a code : the
   board's announced name and the hour of its request, to check before
   saying yes.
@@ -49,6 +49,10 @@ PAIRING_CLASSES = frozenset({"api", "browser"})
 PAIRINGS = pairing.Pairings()
 #: Codes asked per address (a board asks once per pairing).
 CODE_REQUESTS = session.RateLimit(10, 60)
+#: Polls per address (review Admin #357) : a board polls every 5 s or
+#: slower, 12 a minute ; 60 leave room for a few boards behind one address.
+POLLS = session.RateLimit(60, 60)
+TOO_MANY_POLLS = "Trop de relevés : ralentissez"
 #: Wrong codes typed per account (design #351 §4).
 WRONG_CODES = session.RateLimit(5, 60)
 
@@ -110,8 +114,11 @@ def build_devices_router() -> APIRouter:
     return router
 
 
-def device_token(payload: TokenRequest) -> JSONResponse:
+def device_token(payload: TokenRequest, request: Request) -> JSONResponse:
     """The board's poll : an RFC 8628 error, or the ``device`` token once."""
+    wait = POLLS.retry_after(request.client.host if request.client else "")
+    if wait is not None:
+        raise HTTPException(429, TOO_MANY_POLLS, headers={"Retry-After": str(wait)})
     try:
         player_id, device_name = PAIRINGS.poll(payload.device_code)
     except pairing.PairingError as exc:

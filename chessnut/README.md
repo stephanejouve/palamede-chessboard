@@ -19,6 +19,23 @@ keep the file :
   OneDrive. Rights changed by hand on the file, or a hard link to it, are not
   detected.
 
+## Pairing the board, without copying a token (#351, #227)
+
+```
+palamede-chessnut-pair --viewer https://<viewer>
+```
+
+The command prints a short code (`XXXX-XXXX`, valid 10 minutes) and the
+page to open, `/appairer`. Signed in to the viewer, type the code there,
+check the board's name, say yes : the board receives its own token, of
+class `device`, and writes it to the token file, `0600` in a `0700`
+directory (by default `token` next to the settings file). The token is
+never printed. An existing token file is kept unless `--replace` is given ;
+`--name` sets the name shown on the page. The viewer must be 0.29.0 or newer.
+
+The board's token can be revoked on its own, without signing the browser
+out.
+
 ## Settings file (#90)
 
 `--viewer`, `--token-file` and `--transport` may come from a per-user file,
