@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/stephanejouve/palamede-chessboard/compare/palamede-chessnut-v0.6.0...palamede-chessnut-v0.7.0) (2026-11-17)
+
+
+### Features
+
+* **chessnut:** pairing the board by a short code, the token written 0600 ([#351](https://github.com/stephanejouve/palamede-chessboard/issues/351), [#227](https://github.com/stephanejouve/palamede-chessboard/issues/227)) ([#360](https://github.com/stephanejouve/palamede-chessboard/issues/360)) ([988d4a8](https://github.com/stephanejouve/palamede-chessboard/commit/988d4a801004dfd272682fcc4c8f57ebfbb84a52))
+
 ## [0.6.0](https://github.com/stephanejouve/palamede-chessboard/compare/palamede-chessnut-v0.5.2...palamede-chessnut-v0.6.0) (2026-11-11)
 
 
