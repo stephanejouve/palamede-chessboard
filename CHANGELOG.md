@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.30.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.29.0...v0.30.0) (2026-11-17)
+
+
+### Features
+
+* **chessnut:** pairing the board by a short code, the token written 0600 ([#351](https://github.com/stephanejouve/palamede-chessboard/issues/351), [#227](https://github.com/stephanejouve/palamede-chessboard/issues/227)) ([#360](https://github.com/stephanejouve/palamede-chessboard/issues/360)) ([988d4a8](https://github.com/stephanejouve/palamede-chessboard/commit/988d4a801004dfd272682fcc4c8f57ebfbb84a52))
+
+
+### Bug Fixes
+
+* **viewer:** the sign-up asks the name first, the recovery token once the account exists ([#351](https://github.com/stephanejouve/palamede-chessboard/issues/351)) ([#358](https://github.com/stephanejouve/palamede-chessboard/issues/358)) ([295e94c](https://github.com/stephanejouve/palamede-chessboard/commit/295e94c71d2eded4478be7ae17b2848a94acb08e))
+
 ## [0.29.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.28.1...v0.29.0) (2026-11-16)
 
 
