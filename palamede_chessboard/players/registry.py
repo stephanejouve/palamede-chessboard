@@ -31,6 +31,10 @@ written before the classes has none and is read as ``api``.
   :func:`verify` for them by name. Fail-closed : a route that forgets them
   refuses them.
 
+A **disabled** account (#362) keeps its entry and its name, its tokens
+all revoked : :func:`verify` refuses it, :func:`issue_token` and
+:func:`replace_token` issue nothing until :func:`enable_player`.
+
 ``last_used`` is a date, without the hour nor any address : the least
 connection data that tells an active token from a forgotten one. A
 ``browser`` token unused for :data:`BROWSER_IDLE_DAYS` days expires
@@ -220,6 +224,16 @@ def _token_entry(raw: dict, label: str, token_class: str) -> tuple[dict, str]:
     return entry, tokens.format_token(token_id, secret)
 
 
+def _enabled(raw: dict, player_id: str) -> dict:
+    """``player_id``'s entry, refused if unknown or disabled : no token for it."""
+    player = raw["players"].get(player_id)
+    if player is None:
+        raise RegistryError(f"unknown player {player_id!r}")
+    if player.get("disabled"):
+        raise RegistryError(f"player {player_id!r} is disabled : enable it first")
+    return player
+
+
 def issue_token(
     games_dir: Path, raw_id: object, *, label: str, token_class: str = DEFAULT_CLASS
 ) -> str:
@@ -227,9 +241,7 @@ def issue_token(
     player_id = player_id_of(raw_id)
     with _writing(games_dir):
         raw = load(games_dir)
-        player = raw["players"].get(player_id)
-        if player is None:
-            raise RegistryError(f"unknown player {player_id!r}")
+        player = _enabled(raw, player_id)
         entry, token = _token_entry(raw, label, token_class)
         player.setdefault("tokens", []).append(entry)
         _save(games_dir, raw)
@@ -282,9 +294,7 @@ def replace_token(games_dir: Path, raw_id: object, *, label: str, token_class: s
     player_id = player_id_of(raw_id)
     with _writing(games_dir):
         raw = load(games_dir)
-        player = raw["players"].get(player_id)
-        if player is None:
-            raise RegistryError(f"unknown player {player_id!r}")
+        player = _enabled(raw, player_id)
         entry, token = _token_entry(raw, label, token_class)
         for old in player.setdefault("tokens", []):
             if _class_of(old) == token_class and old.get("revoked") is None:
@@ -306,6 +316,49 @@ def revoke_token(games_dir: Path, raw_id: object, token_id: str) -> None:
         if found[0].get("revoked") is None:
             found[0]["revoked"] = _now()
             _save(games_dir, raw)
+
+
+def disable_player(games_dir: Path, raw_id: object) -> int:
+    """Disable ``raw_id`` (#362) : its live tokens revoked and the account marked, in one write.
+
+    The account and its name stay, its games keep their player. The number
+    of tokens revoked ; a disabled account keeps the date it was disabled.
+    """
+    player_id = player_id_of(raw_id)
+    with _writing(games_dir):
+        raw = load(games_dir)
+        player = raw["players"].get(player_id)
+        if player is None:
+            raise RegistryError(f"unknown player {player_id!r}")
+        live = [t for t in player.get("tokens", []) if t.get("revoked") is None]
+        now = _now()
+        for entry in live:
+            entry["revoked"] = now
+        player["disabled"] = player.get("disabled") or now
+        _save(games_dir, raw)
+    return len(live)
+
+
+def enable_player(games_dir: Path, raw_id: object) -> None:
+    """Undo :func:`disable_player` ; the revoked tokens stay revoked, a new one is issued apart."""
+    player_id = player_id_of(raw_id)
+    with _writing(games_dir):
+        raw = load(games_dir)
+        player = raw["players"].get(player_id)
+        if player is None:
+            raise RegistryError(f"unknown player {player_id!r}")
+        if player.pop("disabled", None) is not None:
+            _save(games_dir, raw)
+
+
+def remove_player(games_dir: Path, raw_id: object) -> None:
+    """Remove ``raw_id``'s entry and its tokens (#362) ; :mod:`.accounts` checks the games first."""
+    player_id = player_id_of(raw_id)
+    with _writing(games_dir):
+        raw = load(games_dir)
+        if raw["players"].pop(player_id, None) is None:
+            raise RegistryError(f"unknown player {player_id!r}")
+        _save(games_dir, raw)
 
 
 def _idle(entry: dict, today: date) -> bool:
@@ -338,9 +391,9 @@ def _mark_used(games_dir: Path, token_id: str, today: str) -> None:
 def verify(games_dir: Path, token: object, classes: frozenset[str]) -> TokenUse | None:
     """The :class:`TokenUse` of a valid ``token`` of one of ``classes`` ; else ``None``.
 
-    Valid : well formed, known, not revoked, the right secret, a class in
-    ``classes``, and for a ``browser`` token, used in the last
-    :data:`BROWSER_IDLE_DAYS` days. The same ``None`` whatever the reason.
+    Valid : well formed, known, of an account not disabled, not revoked,
+    the right secret, a class in ``classes``, and for a ``browser`` token,
+    used in the last :data:`BROWSER_IDLE_DAYS` days. The same ``None`` whatever the reason.
     Raises :class:`RegistryError` if the registry cannot be read : the
     caller must then refuse, not let the request through.
     """
@@ -354,7 +407,8 @@ def verify(games_dir: Path, token: object, classes: frozenset[str]) -> TokenUse 
             if entry.get("id") != token_id:
                 continue
             ok = (
-                entry.get("revoked") is None
+                not player.get("disabled")
+                and entry.get("revoked") is None
                 and tokens.matches(secret, str(entry.get("sha256")))
                 and token_class(entry) in classes
                 and not _idle(entry, today)
@@ -385,6 +439,7 @@ def public_view(player_id: str, player: dict) -> dict:
         "display_name": player.get("display_name", player_id),
         "kind": player.get("kind"),
         "created": player.get("created"),
+        "disabled": player.get("disabled"),
         "tokens": [public_token(t) for t in player.get("tokens", [])],
     }
 

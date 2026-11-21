@@ -178,19 +178,42 @@ def set_max_concurrent(games_dir: Path, player: object, value: object) -> dict:
         if not isinstance(entry, dict):
             entry = raw["players"][name] = {}
         entry["max_concurrent"] = value
-        # mkstemp creates 0600 : keep the existing file's mode (0644 if new).
-        mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
-        fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(raw, f, indent=2, sort_keys=True)
-                f.flush()
-                os.fsync(f.fileno())  # durable before the swap (#46)
-            os.chmod(tmp_name, mode)
-            os.replace(tmp_name, path)
-        except BaseException:
-            with contextlib.suppress(FileNotFoundError):
-                os.unlink(tmp_name)
-            raise
-        fsync_dir(path.parent)  # the rename itself (#246)
+        _write(path, raw)
     return {"player": name, "max_concurrent": value}
+
+
+def forget_player(games_dir: Path, player: str) -> bool:
+    """Drop ``player``'s preferences (#362, an account deleted) ; ``True`` if there were some.
+
+    Same strict read and lock as :func:`set_max_concurrent` : the other
+    players' preferences are kept, an unreadable file is refused.
+    """
+    name = normalize_identity(player)
+    path = prefs_path(games_dir)
+    if not path.exists():
+        return False
+    with _locked(path):
+        raw = _read_for_update(path)
+        if raw["players"].pop(name, None) is None:
+            return False
+        _write(path, raw)
+    return True
+
+
+def _write(path: Path, raw: dict) -> None:
+    """Replace ``path`` by ``raw``, atomically and durably ; the lock is the caller's."""
+    # mkstemp creates 0600 : keep the existing file's mode (0644 if new).
+    mode = path.stat().st_mode & 0o777 if path.exists() else 0o644
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(raw, f, indent=2, sort_keys=True)
+            f.flush()
+            os.fsync(f.fileno())  # durable before the swap (#46)
+        os.chmod(tmp_name, mode)
+        os.replace(tmp_name, path)
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp_name)
+        raise
+    fsync_dir(path.parent)  # the rename itself (#246)

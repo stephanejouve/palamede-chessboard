@@ -7,6 +7,9 @@ Usage ::
     palamede-players show leader
     palamede-players token leader --label "Claude Code Hera" --out /path/leader.token
     palamede-players revoke leader a1b2c3d4
+    palamede-players disable tester
+    palamede-players enable tester
+    palamede-players delete tester --dry-run
     palamede-players relay-teams chessnut-stephane-008g --black leader,admin,junior,cd --dry-run
 
 The games directory comes from ``MCP_CHESSBOARD_GAMES_DIR`` (or
@@ -14,6 +17,10 @@ The games directory comes from ``MCP_CHESSBOARD_GAMES_DIR`` (or
 written to ``--out`` (created ``0600``, an existing file is refused),
 or to stdout only with an explicit ``--stdout``. It cannot be shown
 again afterwards — only its id, label and dates.
+
+``disable`` revokes every token of the account and keeps its name ;
+``enable`` undoes it, a new token being issued apart. ``delete`` removes
+an account that no game names, and frees its name (#362).
 """
 
 from __future__ import annotations
@@ -26,7 +33,9 @@ from pathlib import Path
 
 from palamede_chessboard.errors import ChessboardError
 from palamede_chessboard.paths import resolve_games_dir
+from palamede_chessboard.player_prefs import PlayerPrefsError
 from palamede_chessboard.players import registry
+from palamede_chessboard.players.accounts import delete_account
 from palamede_chessboard.players.relay_backfill import backfill_teams
 
 
@@ -55,6 +64,15 @@ def _build_parser() -> argparse.ArgumentParser:
     rev = sub.add_parser("revoke", help="revoke a token by its id")
     rev.add_argument("player")
     rev.add_argument("token_id")
+
+    for name, text in (
+        ("disable", "revoke every token of an account, keep its name"),
+        ("enable", "undo disable (issue a new token apart)"),
+    ):
+        sub.add_parser(name, help=text).add_argument("player")
+    delete = sub.add_parser("delete", help="delete an account no game names, free its name")
+    delete.add_argument("player")
+    delete.add_argument("--dry-run", action="store_true", help="check only, write nothing")
 
     relay = sub.add_parser(
         "relay-teams", help="arbiter : add the teams of a relay game created before #281, once"
@@ -96,9 +114,8 @@ def _run(args: argparse.Namespace, games_dir: Path) -> None:
     elif args.command == "list":
         for p in registry.list_players(games_dir):
             active = sum(1 for t in p["tokens"] if t["revoked"] is None)
-            print(
-                f"{p['player_id']:<20} {p['kind']:<6} {active} jeton(s) actif(s)  {p['display_name']}"
-            )
+            state = "désactivé" if p["disabled"] else f"{active} jeton(s) actif(s)"
+            print(f"{p['player_id']:<20} {p['kind']:<6} {state}  {p['display_name']}")
     elif args.command == "show":
         players = {p["player_id"]: p for p in registry.list_players(games_dir)}
         player_id = registry.player_id_of(args.player)
@@ -114,6 +131,16 @@ def _run(args: argparse.Namespace, games_dir: Path) -> None:
     elif args.command == "revoke":
         registry.revoke_token(games_dir, args.player, args.token_id)
         print(f"jeton {args.token_id} révoqué", file=sys.stderr)
+    elif args.command == "disable":
+        revoked = registry.disable_player(games_dir, args.player)
+        print(f"compte désactivé, {revoked} jeton(s) révoqué(s)", file=sys.stderr)
+    elif args.command == "enable":
+        registry.enable_player(games_dir, args.player)
+        print("compte réactivé : émettre un nouveau jeton avec token", file=sys.stderr)
+    elif args.command == "delete":
+        player_id = delete_account(games_dir, args.player, dry_run=args.dry_run)
+        outcome = "supprimable (rien écrit)" if args.dry_run else "supprimé, nom libéré"
+        print(f"compte {player_id} {outcome}", file=sys.stderr)
     elif args.command == "relay-teams":
         done = backfill_teams(
             games_dir,
@@ -130,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     games_dir = args.games_dir or resolve_games_dir()
     try:
         _run(args, games_dir)
-    except (registry.RegistryError, ChessboardError, OSError) as exc:
+    except (registry.RegistryError, ChessboardError, PlayerPrefsError, OSError) as exc:
         print(f"Erreur : {exc}", file=sys.stderr)
         return 1
     return 0
