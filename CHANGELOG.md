@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.31.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.30.0...v0.31.0) (2026-11-21)
+
+
+### Features
+
+* **players:** disable an account, delete one no game names ([#362](https://github.com/stephanejouve/palamede-chessboard/issues/362)) ([db59666](https://github.com/stephanejouve/palamede-chessboard/commit/db59666027ec2964a106d7a4306d041395ffbcb1))
+* **players:** disable an account, delete one no game names ([#362](https://github.com/stephanejouve/palamede-chessboard/issues/362)) ([b6a31ea](https://github.com/stephanejouve/palamede-chessboard/commit/b6a31ea51456ef69b28153864c5ad335097d246a))
+
 ## [0.30.0](https://github.com/stephanejouve/palamede-chessboard/compare/v0.29.0...v0.30.0) (2026-11-17)
 
 
