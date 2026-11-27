@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "API palamède (viewer)",
-    "version": "0.30.0",
+    "version": "0.31.0",
     "description": "API HTTP du viewer palamède, servie sur chess.alliancejr.eu. Générée depuis le code (FastAPI, `build_app().openapi()`), puis annotée par `palamede_chessboard/viewer/openapi_doc.py` : authentification, codes d'erreur, formes des réponses et types de contenu.\n\n**Authentification** : `Authorization: Bearer plm_…`, jeton d'un joueur du registre, ou, dans le navigateur, le cookie de session `palamede_session` posé par `POST /api/session`. Le Bearer l'emporte quand les deux sont là. Une écriture authentifiée par le cookie qui ne vient pas de la page du viewer (`Origin`) reçoit 403. Les lectures (parties, positions, horloge, flux) sont publiques ; les actions d'un joueur exigent son jeton. Sans jeton ou avec un jeton inconnu : 401, la même réponse quelle que soit la raison (absent, révoqué, inconnu). Jeton valide mais pas le bon joueur : 403. Registre ou données illisibles : 503.\n\n**Erreurs** : corps `{\"detail\": \"…\"}`, message en français.\n\n**Hors périmètre** : le serveur MCP (`/mcp`, outils `chess_*`, `/healthz`), qui n'est pas une API REST, et les fichiers statiques (`/assets`, `/vendor`, favicon)."
   },
   "paths": {
